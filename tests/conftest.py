@@ -234,6 +234,22 @@ def fake_ytdl(monkeypatch: pytest.MonkeyPatch) -> Iterator[type]:
     yield FakeYoutubeDL
 
 
+@pytest.fixture()
+def daytime(monkeypatch):
+    """Pin BirdTunes' clock to a Wednesday mid-morning.
+
+    Quiet hours default to 20:00-07:00, so any test that expects playback failed
+    depending on what time of day it ran -- green here, red on CI at 21:00 UTC.
+    A test whose result depends on the wall clock is not a test.
+    """
+    import datetime as dt
+
+    from projectos.apps.birdtunes import app as birdtunes_app
+
+    monkeypatch.setattr(birdtunes_app, "_now", lambda: dt.datetime(2026, 1, 7, 10, 0))
+    return dt.datetime(2026, 1, 7, 10, 0)
+
+
 # --------------------------------------------------------------------------- app / client
 
 

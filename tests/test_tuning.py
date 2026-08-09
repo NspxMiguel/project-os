@@ -93,6 +93,10 @@ def test_reading_a_machine_with_none_of_this_still_answers(monkeypatch) -> None:
     """A laptop is not a Pi, and the tuning screen has to say so instead of 500ing."""
     monkeypatch.setattr(tuning, "config_txt_path", lambda: None)
     monkeypatch.setattr(tuning, "_run", lambda argv: None)
+    # Not "whatever this machine happens to have": a CI runner does expose
+    # cooling devices under /sys/class/thermal, and the test then measured the
+    # host instead of the code.
+    monkeypatch.setattr(tuning, "_cooling_devices", lambda: [])
     payload = tuning.snapshot()
     assert payload["fan"]["available"] is False
     assert payload["fan"]["reason"]

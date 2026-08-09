@@ -522,7 +522,7 @@ def test_feedback_route_updates_counters(auth_client, media_dir, sample_tracks):
     assert response.json()["feedback"]["likes"] == 1
 
 
-def test_play_with_no_tracks_reports_a_reason_not_a_bare_stop(auth_client):
+def test_play_with_no_tracks_reports_a_reason_not_a_bare_stop(auth_client, daytime):
     response = auth_client.post("/api/apps/birdtunes/play", json={})
     assert response.status_code == 200
     body = response.json()
@@ -530,7 +530,7 @@ def test_play_with_no_tracks_reports_a_reason_not_a_bare_stop(auth_client):
     assert body["reason"] == "no_tracks"
 
 
-def test_play_pause_stop_round_trip_with_the_null_output(auth_client, media_dir, sample_tracks):
+def test_play_pause_stop_round_trip_with_the_null_output(auth_client, daytime, media_dir, sample_tracks):
     auth_client.post("/api/apps/birdtunes/library/scan")
 
     played = auth_client.post("/api/apps/birdtunes/play", json={})
@@ -696,7 +696,7 @@ def test_play_youtube_route_wants_a_url(auth_client):
     assert response.json()["error"] == "bad_request"
 
 
-def test_play_youtube_says_so_when_the_output_cannot_cast(auth_client):
+def test_play_youtube_says_so_when_the_output_cannot_cast(auth_client, daytime):
     """The null output has no play_youtube; saying "playing" there would be a lie."""
     response = auth_client.post(
         "/api/apps/birdtunes/play/youtube",
