@@ -502,9 +502,22 @@ class PluginManager(object):
         return found
 
     def enabled_ids(self) -> Optional[List[str]]:
-        """``apps.enabled``, or ``None`` meaning "every bundled app"."""
+        """``apps.enabled`` as written, or ``None`` when the key is absent.
+
+        An empty list means *empty*. It used to mean "not configured", and the
+        fallback for "not configured" was to run every bundled app -- so a fresh
+        machine booted with everything on, which is the opposite of the whole
+        idea:
+
+            "ele seria um sistema base, sem nada por padrao, mas dai vc vai
+             conectando coisas nele. igual o homeassist, vc baixa e n tem nada,
+             dai vc vai na loja de app e baixa oq vc quer"
+
+        It is also how a WhatsApp bot nobody installed ended up running on his
+        machine. ``None`` is kept for a config file that predates the key.
+        """
         raw = self.config.get("apps.enabled", None)
-        if not isinstance(raw, list) or not raw:
+        if not isinstance(raw, list):
             return None
         return [str(item) for item in raw]
 

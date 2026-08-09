@@ -39,6 +39,11 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # on what happens to be plugged in at home is not a test. They have their own
     # coverage in tests/test_lan.py, against fed-in bytes.
     monkeypatch.setenv("PROJECTOS__DISCOVERY__EXTRA_SCANNERS", "false")
+    # A real fresh machine now boots with nothing running -- that is the point of
+    # the store. The suite, though, is mostly *about* the two bundled apps, so it
+    # installs them the way the store would instead of relying on a default that
+    # no longer exists.
+    monkeypatch.setenv("PROJECTOS__APPS__ENABLED", '["birdtunes", "whatsapp-bot"]')
     _reset_modules()
     return h
 

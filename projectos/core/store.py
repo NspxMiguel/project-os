@@ -685,6 +685,15 @@ class AppStore(object):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.installed_map)
 
+    def _is_enabled(self, app_id: str) -> bool:
+        plugins = self.plugins
+        if plugins is None or not hasattr(plugins, "is_enabled"):
+            return True
+        try:
+            return bool(plugins.is_enabled(app_id, "builtin"))
+        except Exception:  # pragma: no cover - never let the store fail to render
+            return True
+
     def is_bundled(self, app_id: str) -> bool:
         return (paths.builtin_apps_dir() / app_id).is_dir()
 
@@ -901,7 +910,10 @@ class AppStore(object):
         record = installed.get(item["id"])
         bundled = bool(item.get("bundled")) or (record is not None and record["source"] == "builtin")
         item["bundled"] = bundled
-        item["installed"] = record is not None
+        # A bundled app ships inside the source tree, so it is always on disk --
+        # but a system that "arrives empty" cannot call that installed. For those,
+        # installed means enabled, which is exactly what the store button does.
+        item["installed"] = record is not None and (not bundled or self._is_enabled(item["id"]))
         item["installed_version"] = record["version"] if record else None
         item["installed_source"] = record["source"] if record else None
         item["update_available"] = bool(

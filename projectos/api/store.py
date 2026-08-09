@@ -44,7 +44,14 @@ class InstallBody(BaseModel):
 
 
 def _installed_ids(plugins: Any) -> List[str]:
-    return [item["id"] for item in plugins.list_apps()]
+    """The apps that are actually *on*, not the ones that happen to be on disk.
+
+    A bundled app is always on disk -- it ships inside ProjectOS. Counting that
+    as installed made the store say "Installed" for BirdTunes on a machine where
+    it had never been turned on, and the Install button then answered
+    "already_installed" and did nothing.
+    """
+    return [item["id"] for item in plugins.list_apps() if item.get("state") != "disabled"]
 
 
 def _decorate(entry: Dict[str, Any], installed: List[str]) -> Dict[str, Any]:
