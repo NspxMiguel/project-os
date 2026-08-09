@@ -1,0 +1,101 @@
+name: image
+
+# Builds the card image. pi-gen needs an arm chroot, so this runs on a GitHub
+# runner with binfmt/qemu rather than on anyone's laptop -- and the artefact of a
+# tagged build is the thing you write with Etcher.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Attach the image to a GitHub release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: projectos
+
+      - name: Make room
+        # pi-gen needs more free disk than a runner has by default.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost "${AGENT_TOOLSDIRECTORY}"
+          df -h /
+
+      - uses: docker/setup-qemu-action@v3
+
+      - name: Install pi-gen dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            coreutils quilt parted qemu-user-static debootstrap zerofree zip \
+            dosfstools libarchive-tools libcap2-bin grep rsync xz-utils file git \
+            curl bc gpg pigz xxd arch-test bmap-tools kmod
+
+      - name: Check out pi-gen
+        run: git clone --depth 1 --branch bookworm https://github.com/RPi-Distro/pi-gen.git
+
+      - name: Wire ProjectOS into pi-gen
+        run: |
+          cp projectos/image/config pi-gen/config
+          cp -a projectos/image/stage-projectos pi-gen/stage-projectos
+          # Our stage is the one that exports an image; without this pi-gen also
+          # writes out a plain Raspberry Pi OS Lite, which is not the product.
+          touch pi-gen/stage2/SKIP_IMAGES
+          # The stage list in config points at ./image/stage-projectos as seen
+          # from the repo; inside pi-gen it lives at the top level.
+          sed -i 's#\./image/stage-projectos#./stage-projectos#' pi-gen/config
+          {
+            echo "PROJECTOS_SRC=${GITHUB_WORKSPACE}/projectos"
+            echo "export PROJECTOS_SRC"
+          } >> pi-gen/config
+
+      - name: Build
+        working-directory: pi-gen
+        run: sudo -E ./build.sh
+
+      - name: Name the image
+        id: image
+        run: |
+          set -e
+          file=$(ls pi-gen/deploy/*.img.xz | head -n1)
+          version=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' projectos/projectos/__init__.py | head -n1 | tr -d '"' || true)
+          [ -n "$version" ] || version="${GITHUB_REF_NAME#v}"
+          name="projectos-${version}.img.xz"
+          mv "$file" "pi-gen/deploy/${name}"
+          (cd pi-gen/deploy && sha256sum "${name}" > "${name}.sha256")
+          echo "path=pi-gen/deploy/${name}" >> "$GITHUB_OUTPUT"
+          echo "sha=pi-gen/deploy/${name}.sha256" >> "$GITHUB_OUTPUT"
+          ls -lh pi-gen/deploy
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: projectos-image
+          path: |
+            ${{ steps.image.outputs.path }}
+            ${{ steps.image.outputs.sha }}
+          compression-level: 0
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: projectos
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release view "$tag" >/dev/null 2>&1 || \
+            gh release create "$tag" --title "ProjectOS $tag" --generate-notes
+          gh release upload "$tag" \
+            "${GITHUB_WORKSPACE}/${{ steps.image.outputs.path }}" \
+            "${GITHUB_WORKSPACE}/${{ steps.image.outputs.sha }}" --clobber

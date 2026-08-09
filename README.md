@@ -2,18 +2,24 @@
 
 **The system layer of a Raspberry Pi, driven entirely from a browser.**
 
-Flash Raspberry Pi OS Lite, run one command, and the Pi becomes a headless
-appliance you operate from any machine on your network. Same shape as Home
-Assistant OS — but general purpose. It hosts *your* things.
+Write the image to a card, put the card in a Raspberry Pi, and open its address
+in a browser. No monitor, no keyboard, no terminal. Same shape as Home Assistant
+OS — but general purpose. It hosts *your* things.
 
 > Português: a documentação de conceito está em [docs/CONCEITO.md](docs/CONCEITO.md).
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/NspxMiguel/ProjectOS/main/install.sh | sudo bash
-```
+1. Download `projectos-<version>.img.xz` from
+   [Releases](https://github.com/NspxMiguel/projectos/releases).
+2. Write it to the card with [Balena Etcher](https://etcher.balena.io).
+3. On Wi-Fi only: rename `projectos-wifi.txt.exemplo` to `projectos-wifi.txt` on
+   the boot partition and put your network and password in it.
+4. Boot the Pi and open **http://projectos.local**.
 
-Then open `http://raspberrypi.local:8099` and create the first account. Until
-you do, the system answers nothing else — that is deliberate.
+The first screen creates your account. Until you do, the system answers nothing
+else — that is deliberate.
+
+Already have a Raspberry Pi OS you do not want to reflash? There is an installer
+for that too: see [docs/INSTALL.md](docs/INSTALL.md).
 
 ---
 

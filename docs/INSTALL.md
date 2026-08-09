@@ -1,15 +1,42 @@
 # Instalação
 
-O caminho normal é uma linha:
+O ProjectOS é um sistema, não um programa que você instala por cima de outro.
+O caminho normal é gravar o cartão:
+
+1. Baixe `projectos-<versão>.img.xz` em
+   [Releases](https://github.com/NspxMiguel/projectos/releases).
+2. Grave no cartão com o [Balena Etcher](https://etcher.balena.io) — ele aceita
+   o `.xz` direto, não precisa descompactar.
+3. **Só no Wi-Fi:** com o cartão ainda no computador, abra a partição `bootfs`,
+   renomeie `projectos-wifi.txt.exemplo` para `projectos-wifi.txt` e escreva o
+   nome da rede e a senha lá dentro. No cabo de rede não precisa de nada.
+4. Ponha o cartão na Raspberry Pi e ligue. Sem monitor, sem teclado.
+5. Abra `http://projectos.local` no navegador e crie a sua conta. Se o `.local`
+   não funcionar na sua rede, use o IP que aparece no roteador.
+
+O arquivo do Wi-Fi é lido a cada boot e apagado assim que a rede conecta — ele
+guarda a senha em texto puro, e a partição de boot qualquer computador lê.
+
+Precisando do terminal: `ssh projectos@projectos.local`, senha inicial
+`projectos` — troque assim que entrar; a imagem é pública, a senha inicial
+também.
+
+Depois da primeira instalação você não precisa mais mexer no cartão: as
+atualizações vêm pela própria tela, em **Updates**.
+
+---
+
+## Instalar por cima de um Raspberry Pi OS que já existe
+
+Serve para quem já tem a placa configurada e não quer regravar. Uma linha:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NspxMiguel/ProjectOS/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/NspxMiguel/projectos/main/install.sh | sudo bash
 ```
 
-Depois abra `http://raspberrypi.local:8099` e crie a primeira conta.
-
-Este documento é para quando você quer saber o que aquela linha faz, mudar
-alguma coisa, ou instalar sem ela.
+Depois abra `http://raspberrypi.local:8099`. A diferença para a imagem é só o
+endereço: aqui a porta é 8099, porque a 80 pode já estar ocupada por outra
+coisa que você instalou.
 
 ---
 
