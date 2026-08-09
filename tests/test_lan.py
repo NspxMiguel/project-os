@@ -181,3 +181,31 @@ def test_every_kind_the_lan_scanners_emit_is_known_to_discovery() -> None:
     for kind in kinds:
         assert kind in discovery.KIND_CAPABILITIES, kind
         assert kind in discovery.KIND_PRIORITY, kind
+
+
+def test_multicast_and_broadcast_addresses_are_not_devices():
+    """The ARP table carries the groups mDNS and SSDP talk to.
+
+    Listing them turned "everything on your network" into a screen where real
+    finds sat between rows like "232.17.191.193, unknown, online".
+    """
+    from projectos.core import lan
+
+    assert lan.is_real_host("10.0.0.95")
+    assert lan.is_real_host("127.0.0.1")
+    assert not lan.is_real_host("224.0.0.251")   # mDNS
+    assert not lan.is_real_host("239.255.255.250")  # SSDP
+    assert not lan.is_real_host("255.255.255.255")
+    assert not lan.is_real_host("10.0.0.255")
+    assert not lan.is_real_host("169.254.9.9")
+
+
+def test_neighbours_drops_the_multicast_rows(monkeypatch):
+    from projectos.core import lan
+
+    monkeypatch.setattr(lan, "_read_proc_arp", lambda: [
+        ("10.0.0.95", "3c:e8:75:a5:82:99"),
+        ("224.0.0.251", "01:00:5e:00:00:fb"),
+        ("239.255.255.250", "01:00:5e:7f:ff:fa"),
+    ])
+    assert [ip for ip, _ in lan.neighbours()] == ["10.0.0.95"]

@@ -378,7 +378,54 @@ async function mountList(root, ctx, {updateDevice, removeDevice}) {
     );
   }
 
-  function deviceRow(device) {
+  // One box, one row. The scanners are protocol-shaped, so a single television
+  // legitimately answers as a Chromecast, as an AirPlay speaker and as a bare IP
+  // on the LAN sweep -- three true findings, three rows, and a list where "TV
+  // Suíte" appeared four times. Grouping happens here, in the screen, and not in
+  // the merge: discovery is right to keep those identities apart (a Cast group
+  // shares an address with the speaker leading it), the reader is the one who
+  // does not care.
+  function groupByAddress(list) {
+    const groups = [];
+    const byAddress = {};
+    list.forEach((device) => {
+      const address = (device && device.address) || '';
+      if (!address) { groups.push({primary: device, others: []}); return; }
+      if (!byAddress[address]) {
+        byAddress[address] = {primary: device, others: []};
+        groups.push(byAddress[address]);
+        return;
+      }
+      const group = byAddress[address];
+      if (isBetterPrimary(device, group.primary)) {
+        group.others.push(group.primary);
+        group.primary = device;
+      } else {
+        group.others.push(device);
+      }
+    });
+    return groups;
+  }
+
+  // A named device beats an unnamed one; past that, whichever the backend
+  // ordered first stays -- it already sorts by kind priority.
+  function isBetterPrimary(candidate, current) {
+    const named = (d) => Boolean(d && d.name && d.name !== d.address);
+    if (named(candidate) !== named(current)) return named(candidate);
+    return false;
+  }
+
+  function groupKinds(group) {
+    const kinds = [];
+    [group.primary].concat(group.others).forEach((device) => {
+      const label = fmt.humanize((device && device.kind) || '');
+      if (label && label.toLowerCase() !== 'unknown' && kinds.indexOf(label) === -1) kinds.push(label);
+    });
+    return kinds.length ? kinds : [fmt.humanize('unknown')];
+  }
+
+  function deviceRow(group) {
+    const device = group.primary;
     const busyKey = 'row:' + device.id;
     const isRenaming = state.renamingId === device.id;
 
@@ -389,7 +436,8 @@ async function mountList(root, ctx, {updateDevice, removeDevice}) {
           ? renameField(device)
           : h('a', {class: 'list__title', href: '#/devices/' + encodeURIComponent(device.id)}, deviceName(device)),
         h('span', {class: 'list__sub'},
-          [fmt.humanize(device.kind || 'device'), device.address || '', device.last_seen ? fmt.relativeTime(device.last_seen) : '']
+          [groupKinds(group).join(' · '), device.address || '',
+           device.last_seen ? fmt.relativeTime(device.last_seen) : '']
             .filter(Boolean).join(' · ')),
       ),
       h('span', {class: 'list__aside row'},
@@ -435,7 +483,7 @@ async function mountList(root, ctx, {updateDevice, removeDevice}) {
               icon('search', {size: 15}), t('devices.rescan'))));
       return;
     }
-    mount(listSlot, h('div', {class: 'list'}, devices.map(deviceRow)));
+    mount(listSlot, h('div', {class: 'list'}, groupByAddress(devices).map(deviceRow)));
   }
 
   async function load() {

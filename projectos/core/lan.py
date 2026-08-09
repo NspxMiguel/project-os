@@ -347,13 +347,41 @@ def _read_ip_neigh() -> List[Tuple[str, str]]:
     return []
 
 
+def is_real_host(address: str) -> bool:
+    """False for addresses that are not a machine you could talk to.
+
+    The ARP table holds multicast groups too -- 224.0.0.0/4, which is how mDNS
+    and SSDP work in the first place -- and the neighbour scan listed every one
+    of them as a device. "232.17.191.193, unknown, online" on the Devices screen
+    is noise standing exactly where a real find should be.
+    """
+    parts = address.split(".")
+    if len(parts) != 4:
+        return True  # IPv6 and anything unexpected: not ours to judge here
+    try:
+        octets = [int(part) for part in parts]
+    except ValueError:
+        return False
+    if not all(0 <= octet <= 255 for octet in octets):
+        return False
+    if 224 <= octets[0] <= 239:          # multicast
+        return False
+    if octets[0] == 255 or octets == [0, 0, 0, 0]:   # broadcast / unspecified
+        return False
+    if octets[3] == 255:                 # subnet broadcast, /24 in practice
+        return False
+    if octets[0] == 169 and octets[1] == 254:        # link-local autoconf
+        return False
+    return True
+
+
 def neighbours() -> List[Tuple[str, str]]:
     """Every ``(ip, mac)`` this machine has spoken to recently."""
     pairs = _read_proc_arp() or _read_ip_neigh()
     seen = set()  # type: Set[str]
     unique = []
     for ip, mac in pairs:
-        if ip in seen:
+        if ip in seen or not is_real_host(ip):
             continue
         seen.add(ip)
         unique.append((ip, mac))
