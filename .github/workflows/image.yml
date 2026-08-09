@@ -69,6 +69,8 @@ jobs:
         id: image
         run: |
           set -e
+          # pi-gen runs under sudo, so everything it wrote belongs to root.
+          sudo chown -R "$(id -u):$(id -g)" pi-gen/deploy
           file=$(ls pi-gen/deploy/*.img.xz | head -n1)
           version=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' projectos/projectos/__init__.py | head -n1 | tr -d '"' || true)
           [ -n "$version" ] || version="${GITHUB_REF_NAME#v}"
