@@ -92,7 +92,7 @@ For actual plug-ins, see [docs/APPS.md](docs/APPS.md).
 ## Development
 
 ```bash
-git clone https://github.com/NspxMiguel/ProjectOS.git
+git clone https://github.com/NspxMiguel/projectos.git
 cd ProjectOS
 python3 -m venv .venv
 .venv/bin/pip install -e '.[dev,all]'

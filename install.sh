@@ -2,7 +2,7 @@
 #
 # ProjectOS installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/NspxMiguel/ProjectOS/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/NspxMiguel/projectos/main/install.sh | bash
 #
 # Installs ProjectOS natively: a virtualenv under /opt/projectos and a systemd
 # unit. Not a container. ProjectOS is the layer that runs your things -- it does
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-REPO="${PROJECTOS_REPO:-https://github.com/NspxMiguel/ProjectOS.git}"
+REPO="${PROJECTOS_REPO:-https://github.com/NspxMiguel/projectos.git}"
 BRANCH="${PROJECTOS_BRANCH:-main}"
 PREFIX="${PROJECTOS_PREFIX:-/opt/projectos}"
 STATE="${PROJECTOS_HOME:-/var/lib/projectos}"
@@ -161,7 +161,7 @@ write_unit() {
     cat > "$UNIT" <<UNITFILE
 [Unit]
 Description=ProjectOS
-Documentation=https://github.com/NspxMiguel/ProjectOS
+Documentation=https://github.com/NspxMiguel/projectos
 After=network-online.target
 Wants=network-online.target
 

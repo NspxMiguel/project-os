@@ -104,7 +104,7 @@ sudo systemctl restart projectos
 Sem systemd, ou porque você quer ver cada passo:
 
 ```bash
-git clone https://github.com/NspxMiguel/ProjectOS.git
+git clone https://github.com/NspxMiguel/projectos.git
 cd ProjectOS
 python3 -m venv .venv
 .venv/bin/pip install -e '.[system]'
@@ -117,7 +117,7 @@ Isso é exatamente o que a unidade do systemd faz, só que em primeiro plano.
 ## Atualizar
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NspxMiguel/ProjectOS/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/NspxMiguel/projectos/main/install.sh | sudo bash
 ```
 
 Mesma linha da instalação. O estado vive em `PROJECTOS_HOME`, separado do

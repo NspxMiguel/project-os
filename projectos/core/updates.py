@@ -51,7 +51,7 @@ log = logging.getLogger(__name__)
 #: public repo: no release infrastructure needed to ship the first update, and it
 #: is a plain URL, so pointing this at a domain later changes one setting.
 DEFAULT_MANIFEST_URL = (
-    "https://raw.githubusercontent.com/NspxMiguel/ProjectOS/main/release/latest.json"
+    "https://raw.githubusercontent.com/NspxMiguel/projectos/main/release/latest.json"
 )
 
 NETWORK_TIMEOUT = 30.0
