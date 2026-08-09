@@ -18,8 +18,8 @@ O arquivo do Wi-Fi é lido a cada boot e apagado assim que a rede conecta — el
 guarda a senha em texto puro, e a partição de boot qualquer computador lê.
 
 Precisando do terminal: `ssh projectos@projectos.local`, senha inicial
-`projectos` — troque assim que entrar; a imagem é pública, a senha inicial
-também.
+`projectos`. No primeiro login ele obriga a trocar — a imagem é pública, então
+a senha inicial também é.
 
 Depois da primeira instalação você não precisa mais mexer no cartão: as
 atualizações vêm pela própria tela, em **Updates**.

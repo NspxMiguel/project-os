@@ -22,11 +22,17 @@ done
 on_chroot << 'EOF'
 set -e
 
-# Its own user: the web interface can install packages and run apps, and that is
-# a reason for it not to be root while doing everything else.
+# pi-gen already created "projectos" as the login user (SSH is the only way in
+# when something goes wrong and there is no screen). The service runs as that
+# same user rather than as root: the web interface installs packages and runs
+# apps, and none of that needs to own the machine.
+#
+# The image is public, so its password is public too. Expiring it means the
+# first SSH login has to set a new one before it gives you a shell.
 if ! id -u projectos >/dev/null 2>&1; then
     adduser --system --group --home /var/lib/projectos --shell /usr/sbin/nologin projectos
 fi
+chage -d 0 projectos 2>/dev/null || true
 install -d -m 755 -o projectos -g projectos /var/lib/projectos
 chown -R projectos:projectos /opt/projectos
 
@@ -87,4 +93,6 @@ ProjectOS
 
 Sem monitor em nenhum momento. Se precisar do terminal:
    ssh projectos@projectos.local   (senha inicial: projectos)
+   No primeiro login ele obriga a trocar a senha -- esta imagem e publica,
+   entao a senha inicial tambem e.
 EOF
