@@ -1,0 +1,508 @@
+# O catálogo da loja.
+#
+# Isto é dado, não código: para acrescentar um app não se mexe em Python
+# nenhum, acrescenta-se um bloco aqui. Quem escreve uma receita nova só precisa
+# entender este arquivo.
+#
+# Campos:
+#   id            identificador estável; é o nome da pasta/unidade também.
+#   kind          builtin | service | container | recipe
+#   category      home | media | network | storage | automation | camera |
+#                 productivity | dev | server
+#   ram_mb        RSS ocioso MEDIDO num Raspberry Pi, não número de fabricante.
+#                 É com ele que a loja responde "isso roda na minha placa?".
+#   disk_mb       espaço depois de instalado.
+#   icon          nome de ícone de traço (a interface desenha). Nunca emoji.
+#   requires_usb  precisa de um adaptador espetado.
+#   requires_node versão mínima do Node.js.
+#   install_minutes  quando passa de uns 5 minutos, para a tela poder avisar.
+#   container     só para kind: container. Define o que o instalador roda de
+#                 verdade (docs/CONCEITO.md seção 9). Um único container por
+#                 app -- nada aqui orquestra docker-compose.
+#     image           referência da imagem, com tag.
+#     ports           lista de {host, container}, portas 1-65535.
+#     volumes         lista de {name, path, mode}; name vira uma pasta dentro
+#                     dos dados do app (~/.projectos/data/<id>/<name>), path é
+#                     onde ela é montada dentro do container, mode é rw ou ro.
+#     env             mapa NOME: valor de variáveis de ambiente.
+#   Sem container: aqui, a loja lista o app mas o instalador ainda responde
+#   "installer_pending" -- mais honesto que fingir suporte a compose ou a
+#   passagem de dispositivo (/dev/video*, Coral) que este instalador não faz.
+#
+# Nada aqui vem instalado. Uma instalação limpa do ProjectOS não tem app nenhum.
+
+- id: birdtunes
+  name: BirdTunes
+  icon: bird
+  kind: builtin
+  category: media
+  ram_mb: 8
+  disk_mb: 5
+  summary: Música pros passarinhos, na hora que você marcar.
+  description: >-
+    Toca uma playlist aleatória em Apple TV, HomePod ou Chromecast dentro das
+    janelas de horário que você definir. Aceita arquivos locais (mp3, flac, ogg,
+    wav, m4a) e importa do YouTube.
+  tags: [áudio, airplay, chromecast, agenda]
+
+# --------------------------------------------------------------------- casa
+- id: kasa
+  name: TP-Link Kasa
+  icon: plug
+  kind: builtin
+  category: home
+  ram_mb: 8
+  disk_mb: 4
+  summary: Lâmpadas e tomadas Kasa, direto na LAN.
+  description: >-
+    Controle local de lâmpadas, tomadas e interruptores Kasa. Os modelos antigos
+    não pedem conta nenhuma; Tapo e os Kasa novos (KLAP) precisam do e-mail e
+    senha da conta TP-Link uma vez.
+  tags: [casa, luz, tomada, energia]
+
+- id: tuya
+  name: Tuya local
+  icon: key
+  kind: builtin
+  category: home
+  ram_mb: 10
+  disk_mb: 6
+  summary: Dispositivos Tuya/Smart Life sem passar pela nuvem.
+  description: >-
+    Fala o protocolo local do Tuya na porta 6668. Exige a chave local de cada
+    aparelho, que só se obtém uma vez por um projeto na Tuya IoT. Depois disso
+    funciona com a internet caída.
+  tags: [casa, tuya, smart life]
+
+- id: mqtt
+  name: MQTT
+  icon: broadcast
+  kind: builtin
+  category: home
+  ram_mb: 12
+  disk_mb: 4
+  summary: Fala com qualquer coisa que use MQTT Discovery.
+  description: >-
+    Conecta num broker e entende o padrão de descoberta do Home Assistant, então
+    Zigbee2MQTT, Tasmota e ESPHome aparecem aqui sem ter HA nenhum instalado.
+  tags: [casa, mqtt, zigbee]
+
+- id: mosquitto
+  name: Mosquitto
+  icon: broadcast
+  kind: service
+  category: home
+  ram_mb: 6
+  disk_mb: 15
+  summary: O broker MQTT em si, se você ainda não tem um.
+  description: Broker MQTT leve, instalado pelo apt e supervisionado pelo ProjectOS.
+  tags: [casa, mqtt, infra]
+
+- id: home-assistant
+  name: Home Assistant
+  icon: home
+  kind: service
+  category: home
+  ram_mb: 450
+  disk_mb: 2200
+  install_minutes: 25
+  summary: A central de casa inteligente que fala com quase tudo.
+  description: >-
+    Instalado num venv próprio e supervisionado como serviço, não em container:
+    ele precisa enxergar a rede e o USB da máquina inteira, e um container
+    tiraria isso dele. A interface aparece dentro do ProjectOS. Numa placa de
+    1 GB cabe, mas não sobra muito.
+  tags: [casa, hub, automação]
+
+- id: zigbee2mqtt
+  name: Zigbee2MQTT
+  icon: bulb
+  kind: service
+  category: home
+  ram_mb: 120
+  disk_mb: 400
+  requires_usb: true
+  summary: Zigbee sem a ponte do fabricante.
+  description: >-
+    Precisa de um adaptador Zigbee USB. Publica tudo em MQTT, então funciona com
+    o app MQTT daqui ou com o Home Assistant.
+  tags: [casa, zigbee, mqtt]
+
+- id: esphome
+  name: ESPHome
+  icon: chip
+  kind: service
+  category: home
+  ram_mb: 150
+  disk_mb: 700
+  summary: Firmware pra ESP32/ESP8266, feito por YAML.
+  description: >-
+    Compila e grava firmware nos seus microcontroladores. Compilar num Pi é
+    lento; se houver um ajudante com CPU sobrando, o ProjectOS manda a compilação
+    pra lá.
+  tags: [casa, esp32, diy]
+
+- id: zwave-js-ui
+  name: Z-Wave JS UI
+  icon: broadcast
+  kind: service
+  category: home
+  ram_mb: 130
+  disk_mb: 350
+  requires_usb: true
+  summary: Z-Wave, com adaptador USB.
+  description: Controla uma rede Z-Wave e expõe tudo por MQTT ou websocket.
+  tags: [casa, z-wave]
+
+- id: homebridge
+  name: Homebridge
+  icon: home
+  kind: service
+  category: home
+  ram_mb: 120
+  disk_mb: 300
+  summary: Põe no HomeKit o que o fabricante não pôs.
+  description: >-
+    Ponte para a Casa da Apple. Útil justamente pro que já existe aqui: o que
+    aparecer no ProjectOS pode virar acessório no iPhone.
+  tags: [casa, homekit, apple]
+
+- id: node-red
+  name: Node-RED
+  icon: flow
+  kind: service
+  category: automation
+  ram_mb: 90
+  disk_mb: 300
+  summary: Automações ligando caixinhas com o mouse.
+  description: Editor de fluxos. Precisa de Node.js, que o instalador resolve.
+  tags: [automação, fluxos]
+
+- id: n8n
+  name: n8n
+  icon: flow
+  kind: container
+  category: automation
+  ram_mb: 350
+  disk_mb: 900
+  summary: Automação entre serviços da internet.
+  description: >-
+    O primo do Node-RED virado pra fora de casa: liga API com API, planilha com
+    mensagem. Pesado para uma placa pequena.
+  tags: [automação, integração]
+  container:
+    image: "docker.n8n.io/n8nio/n8n:latest"
+    ports:
+      - host: 5678
+        container: 5678
+    volumes:
+      - name: data
+        path: /home/node/.n8n
+        mode: rw
+    env:
+      TZ: "America/Sao_Paulo"
+      N8N_PORT: "5678"
+
+# -------------------------------------------------------------------- mídia
+- id: jellyfin
+  name: Jellyfin
+  icon: film
+  kind: service
+  category: media
+  ram_mb: 300
+  disk_mb: 900
+  install_minutes: 10
+  summary: Seus filmes e séries em qualquer tela da casa.
+  description: >-
+    Servidor de mídia sem conta e sem assinatura. Um Pi entrega bem quando a TV
+    consegue tocar o arquivo do jeito que ele está; quando precisa converter na
+    hora, engasga. Se houver um ajudante com CPU sobrando, a conversão vai pra
+    ele.
+  tags: [filmes, séries, streaming]
+
+- id: navidrome
+  name: Navidrome
+  icon: music
+  kind: service
+  category: media
+  ram_mb: 80
+  disk_mb: 120
+  summary: Sua discoteca, tocando de qualquer lugar.
+  description: >-
+    Servidor de música compatível com Subsonic; toca no celular, no navegador e
+    dentro do BirdTunes. Leve o suficiente para qualquer placa.
+  tags: [música, flac, subsonic]
+
+- id: audiobookshelf
+  name: Audiobookshelf
+  icon: book
+  kind: container
+  category: media
+  ram_mb: 200
+  disk_mb: 400
+  summary: Audiolivros e podcasts, com o ponto guardado.
+  description: Lembra onde você parou em cada aparelho.
+  tags: [audiolivro, podcast]
+  container:
+    image: "ghcr.io/advplyr/audiobookshelf:latest"
+    ports:
+      - host: 13378
+        container: 80
+    volumes:
+      - name: audiobooks
+        path: /audiobooks
+        mode: rw
+      - name: podcasts
+        path: /podcasts
+        mode: rw
+      - name: config
+        path: /config
+        mode: rw
+      - name: metadata
+        path: /metadata
+        mode: rw
+    env:
+      TZ: "America/Sao_Paulo"
+
+- id: immich
+  name: Immich
+  icon: image
+  kind: container
+  category: media
+  ram_mb: 1400
+  disk_mb: 3000
+  summary: Suas fotos em casa, no lugar do Google Fotos.
+  description: >-
+    Faz backup do celular e reconhece rostos e objetos. Faminto: usa banco de
+    dados e modelos de visão, e numa placa pequena não adianta tentar.
+  tags: [fotos, backup, celular]
+
+# ------------------------------------------------------------------ servidor
+- id: docker
+  name: Motor de containers
+  icon: box
+  kind: service
+  category: server
+  ram_mb: 50
+  disk_mb: 450
+  summary: O que os apps maiores usam para se instalar.
+  description: >-
+    O ProjectOS em si nunca roda em container. Este é o motor que ele usa para
+    instalar apps de terceiros sem espalhar dependência pelo sistema. A loja
+    oferece instalar sozinha quando algum app precisa; aparece aqui só para você
+    poder decidir antes.
+  tags: [infra, container]
+
+- id: caddy
+  name: Caddy
+  icon: globe
+  kind: service
+  category: server
+  ram_mb: 40
+  disk_mb: 60
+  summary: Publica o que roda aqui, com HTTPS de graça.
+  description: >-
+    Servidor web e proxy reverso. Cuida do certificado sozinho e dá um endereço
+    bonito para cada app em vez de um número de porta decorado.
+  tags: [web, proxy, https]
+
+- id: code-server
+  name: code-server
+  icon: code
+  kind: service
+  category: dev
+  ram_mb: 400
+  disk_mb: 700
+  summary: VS Code no navegador, rodando na placa.
+  description: >-
+    Editar os arquivos do Pi de qualquer computador da casa. Numa placa pequena
+    abre, mas cada extensão pesa.
+  tags: [dev, editor]
+
+- id: gitea
+  name: Gitea
+  icon: git
+  kind: service
+  category: dev
+  ram_mb: 200
+  disk_mb: 400
+  summary: Seu próprio GitHub, dentro de casa.
+  description: Repositórios Git com interface, issues e chaves SSH.
+  tags: [dev, git]
+
+- id: minecraft
+  name: Servidor de Minecraft
+  icon: server
+  kind: recipe
+  category: server
+  ram_mb: 1200
+  disk_mb: 1500
+  summary: Um mundo pra jogar com quem estiver na casa.
+  description: >-
+    Servidor Java para poucos jogadores. Come RAM sem pedir licença; num Pi de
+    1 GB não sobe, e num de 4 GB sobe apertado. Instale sabendo disso.
+  tags: [jogos, servidor]
+
+- id: pihole
+  name: Pi-hole
+  icon: shield
+  kind: service
+  category: network
+  ram_mb: 60
+  disk_mb: 120
+  summary: Bloqueia anúncio na rede inteira.
+  description: Servidor DNS com listas de bloqueio. Ocupa a porta 53.
+  tags: [rede, dns]
+
+- id: adguard-home
+  name: AdGuard Home
+  icon: shield
+  kind: service
+  category: network
+  ram_mb: 90
+  disk_mb: 150
+  summary: O mesmo trabalho do Pi-hole, com outra cara.
+  description: >-
+    DNS com bloqueio, DNS-over-HTTPS embutido e regras por aparelho. Disputa a
+    porta 53 com o Pi-hole: escolha um dos dois.
+  tags: [rede, dns, privacidade]
+
+- id: tailscale
+  name: Tailscale
+  icon: link
+  kind: service
+  category: network
+  ram_mb: 40
+  disk_mb: 90
+  summary: Chega em casa de fora sem abrir porta no roteador.
+  description: >-
+    VPN em malha. É também o caminho mais seguro para um ajudante que não está na
+    mesma rede ajudar o Pi.
+  tags: [rede, vpn, remoto]
+
+- id: wireguard
+  name: WireGuard
+  icon: link
+  kind: service
+  category: network
+  ram_mb: 20
+  disk_mb: 40
+  summary: VPN própria, sem depender de serviço nenhum.
+  description: >-
+    Mais leve e mais fechado que o Tailscale, e mais trabalhoso: exige abrir uma
+    porta no roteador e distribuir as chaves na mão.
+  tags: [rede, vpn]
+
+- id: samba
+  name: Compartilhamento de arquivos
+  icon: folder
+  kind: service
+  category: storage
+  ram_mb: 60
+  disk_mb: 80
+  summary: O Pi aparece como pasta de rede no Windows, Mac e Linux.
+  description: >-
+    Samba. É a forma mais direta de jogar filme e música lá dentro sem passar
+    pelo navegador.
+  tags: [arquivos, rede, smb]
+
+- id: syncthing
+  name: Syncthing
+  icon: sync
+  kind: service
+  category: storage
+  ram_mb: 70
+  disk_mb: 60
+  summary: Sincroniza pastas entre suas máquinas.
+  description: Sem nuvem e sem conta. Bom pra levar as músicas do BirdTunes pro Pi.
+  tags: [arquivos, backup]
+
+- id: uptime-kuma
+  name: Uptime Kuma
+  icon: pulse
+  kind: service
+  category: network
+  ram_mb: 110
+  disk_mb: 250
+  summary: Avisa quando algo da casa cai.
+  description: Monitor de disponibilidade com painel e notificações.
+  tags: [rede, monitoramento]
+
+# ------------------------------------------------------------------- câmeras
+- id: scrypted
+  name: Scrypted
+  icon: camera
+  kind: service
+  category: camera
+  ram_mb: 250
+  disk_mb: 600
+  summary: Câmeras no HomeKit, sem caixa de fabricante.
+  description: Ponte de câmeras para HomeKit, Alexa e Google. Pesado, mas cabe.
+  tags: [câmera, homekit]
+
+- id: frigate
+  name: Frigate
+  icon: camera
+  kind: container
+  category: camera
+  ram_mb: 1500
+  disk_mb: 1200
+  summary: Detecção de objetos em câmeras, com IA.
+  description: >-
+    Excelente e faminto: decodifica vídeo o tempo todo e quer um acelerador
+    Coral. Numa placa pequena não adianta tentar.
+  tags: [câmera, ia]
+
+# -------------------------------------------------------------- produtividade
+- id: whatsapp-bot
+  name: Bot de WhatsApp
+  icon: chat
+  kind: builtin
+  category: productivity
+  ram_mb: 180
+  disk_mb: 250
+  summary: Manda mensagem pra sua casa e ela responde.
+  description: >-
+    Conecta pelo WhatsApp Web lendo um QR code, e daí em diante entende comandos
+    ("liga a luz da sala", "o que tá tocando?") e avisa quando algo acontece. A
+    sessão fica só aqui na placa. É um número seu, não uma conta de empresa:
+    use um número separado se puder.
+  tags: [mensagem, bot, avisos]
+
+- id: argos
+  name: Argos
+  icon: eye
+  kind: service
+  category: productivity
+  ram_mb: 60
+  disk_mb: 80
+  requires_node: 22
+  summary: O assistente que persegue você até a tarefa sair.
+  description: >-
+    Precisa de Node 22. Rodando aqui, ganha um endereço fixo na LAN pro PWA e
+    passa a poder falar nos alto-falantes da casa.
+  tags: [produtividade, jarvis]
+
+- id: paperless
+  name: Paperless-ngx
+  icon: file
+  kind: container
+  category: productivity
+  ram_mb: 700
+  disk_mb: 1200
+  summary: Todo papel da casa, digitalizado e pesquisável.
+  description: >-
+    Lê o texto dos documentos escaneados e acha por palavra. O reconhecimento é
+    pesado; com um ajudante ligado, ele faz essa parte.
+  tags: [documentos, ocr, scanner]
+
+- id: grafana
+  name: Grafana
+  icon: chart
+  kind: service
+  category: dev
+  ram_mb: 220
+  disk_mb: 350
+  summary: Gráficos de tudo que a casa mede.
+  description: Painéis de temperatura, consumo, rede — o que você mandar guardar.
+  tags: [gráficos, métricas]

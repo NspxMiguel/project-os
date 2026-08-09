@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "projectos"
+version = "0.1.0"
+description = "The system layer of a Raspberry Pi, driven entirely from a browser."
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Miguel Moretti (NspxMiguel)" }]
+keywords = ["raspberry-pi", "homelab", "dashboard", "self-hosted", "airplay", "chromecast"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Home Automation",
+    "Topic :: System :: Systems Administration",
+]
+
+# The only hard requirements: everything else degrades gracefully.
+dependencies = [
+    "fastapi>=0.128,<1.0",
+    "uvicorn[standard]>=0.39,<1.0",
+    "PyYAML>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+# mDNS discovery and casting. Heavy on a Pi 3B; skip them and the UI will say so.
+devices = [
+    "zeroconf>=0.148",
+    "pyatv>=0.18",
+    "PyChromecast>=13.1",
+]
+# CPU / memory / disk / temperature readings.
+system = ["psutil>=7.2"]
+# Home Assistant integration.
+ha = ["httpx>=0.28"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.28",
+]
+all = [
+    "zeroconf>=0.148",
+    "pyatv>=0.18",
+    "PyChromecast>=13.1",
+    "psutil>=7.2",
+    "httpx>=0.28",
+]
+
+[project.urls]
+Homepage = "https://github.com/NspxMiguel/ProjectOS"
+Source = "https://github.com/NspxMiguel/ProjectOS"
+
+[project.scripts]
+projectos = "projectos.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["projectos*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+# The "web/*" entries cover a wheel build that copies the root web/ tree into
+# projectos/web/ -- which is the first location paths.web_dir() looks in.
+# Running from a git clone uses the repo-root web/ directory instead.
+"projectos" = [
+    "apps/*/manifest.json",
+    "apps/*/web/*",
+    "apps/*/web/**/*",
+    "web/*",
+    "web/**/*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]

@@ -1,0 +1,31 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ProjectOS runtime state
+.projectos/
+config.yaml
+*.db
+*.db-wal
+*.db-shm
+*.log
+/media
+# The helper agent writes its token next to itself.
+agents/projectos-helper.json
+
+# Notes that stay on the machine
+PEDIDOS.md
+
+# OS noise
+.DS_Store
+Thumbs.db

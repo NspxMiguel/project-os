@@ -1,0 +1,40 @@
+{
+  "id": "birdtunes",
+  "name": "BirdTunes",
+  "version": "0.1.0",
+  "description": "Scheduled music for a pet bird: local files or YouTube, cast to an AirPlay or Chromecast speaker, on the hours you choose.",
+  "author": "ProjectOS",
+  "icon": "music",
+  "category": "media",
+  "entrypoint": "app:setup",
+  "min_projectos": "0.0.0",
+  "ui": {
+    "panel": "panel.js"
+  },
+  "permissions": ["network", "media"],
+  "config_schema": [
+    {"key": "output.type", "type": "string", "label": "Output", "default": "null"},
+    {"key": "output.device_id", "type": "string", "label": "Device", "default": ""},
+    {"key": "output.ha_entity", "type": "string", "label": "Home Assistant entity", "default": ""},
+    {"key": "output.volume", "type": "number", "label": "Volume", "default": 0.15},
+    {"key": "output.max_volume", "type": "number", "label": "Max volume", "default": 0.6},
+    {"key": "library.paths", "type": "array", "label": "Library folders", "default": []},
+    {"key": "library.follow_symlinks", "type": "boolean", "label": "Follow symlinks", "default": false},
+    {"key": "library.extensions", "type": "array", "label": "File extensions", "default": [".mp3", ".m4a", ".flac", ".wav", ".ogg", ".oga", ".opus", ".aac", ".wma", ".aiff"]},
+    {"key": "schedule.enabled", "type": "boolean", "label": "Schedule enabled", "default": true},
+    {"key": "schedule.quiet_hours.start", "type": "string", "label": "Quiet hours start", "default": "20:00"},
+    {"key": "schedule.quiet_hours.end", "type": "string", "label": "Quiet hours end", "default": "07:00"},
+    {"key": "schedule.windows", "type": "array", "label": "Playback windows", "default": []},
+    {"key": "playback.fade_seconds", "type": "number", "label": "Fade seconds", "default": 3},
+    {"key": "playback.max_session_minutes", "type": "number", "label": "Max session minutes", "default": 120},
+    {"key": "playback.gap_seconds", "type": "number", "label": "Gap between tracks", "default": 2},
+    {"key": "playback.shuffle", "type": "boolean", "label": "Shuffle", "default": true},
+    {"key": "recommender.like_boost", "type": "number", "label": "Like boost", "default": 0.8},
+    {"key": "recommender.dislike_decay", "type": "number", "label": "Dislike decay", "default": 0.35},
+    {"key": "recommender.less_decay", "type": "number", "label": "Play-less decay", "default": 0.6},
+    {"key": "recommender.recency_window", "type": "number", "label": "Recency window", "default": 8},
+    {"key": "recommender.novelty_bonus", "type": "number", "label": "Novelty bonus", "default": 0.25},
+    {"key": "recommender.explore_rate", "type": "number", "label": "Explore rate", "default": 0.1},
+    {"key": "import.youtube.quality", "type": "string", "label": "YouTube import quality", "default": "192"}
+  ]
+}

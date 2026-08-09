@@ -1,0 +1,39 @@
+# ProjectOS runtime dependencies.
+# Versions below are the ones verified working on Python 3.9 / Raspberry Pi OS.
+#
+#   python -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# ---------------------------------------------------------------------------
+# Required. Without these there is no ProjectOS.
+# ---------------------------------------------------------------------------
+fastapi==0.128.8
+uvicorn[standard]==0.39.0
+PyYAML==6.0.3
+# Multipart form parsing -- without it the file manager cannot accept uploads,
+# which is how music reaches BirdTunes and how anything gets onto the Pi from
+# the browser. FastAPI refuses to build the route at import time if it is
+# missing, so this is required, not optional.
+python-multipart==0.0.20
+
+# ---------------------------------------------------------------------------
+# Optional: device discovery and casting.
+# Safe to delete on a 1 GB Pi 3B -- ProjectOS boots without them, the affected
+# features report the missing package and tell you how to install it.
+# pyatv and PyChromecast are the heavy ones (they pull in cryptography and
+# protobuf); zeroconf alone is enough to *find* devices without playing to them.
+# ---------------------------------------------------------------------------
+zeroconf==0.148.0
+pyatv==0.18.0
+PyChromecast==13.1.0
+
+# ---------------------------------------------------------------------------
+# Optional: system metrics (CPU, memory, disks, temperature).
+# Without it the dashboard falls back to /proc and shows less detail.
+# ---------------------------------------------------------------------------
+psutil==7.2.2
+
+# ---------------------------------------------------------------------------
+# Optional: Home Assistant integration.
+# Only needed if you point ProjectOS at a Home Assistant instance.
+# ---------------------------------------------------------------------------
+httpx==0.28.1

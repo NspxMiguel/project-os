@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0f1417" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f6f7" media="(prefers-color-scheme: light)">
+<meta name="description" content="ProjectOS — the system layer of your Raspberry Pi.">
+<meta name="robots" content="noindex">
+<title>ProjectOS</title>
+<script>
+  // Anti-flash: resolve the theme before the first paint. The shell rewrites
+  // these values once the server config is known.
+  (function () {
+    try {
+      var pref = localStorage.getItem('projectos.theme') || 'auto';
+      var resolved = pref;
+      if (pref === 'auto') {
+        resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+          ? 'light' : 'dark';
+      }
+      var root = document.documentElement;
+      root.setAttribute('data-theme', resolved);
+      root.setAttribute('data-theme-pref', pref);
+      var accent = localStorage.getItem('projectos.accent');
+      if (accent) root.style.setProperty('--accent', accent);
+    } catch (err) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%235ac8a8'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app" class="boot">
+  <div class="boot__inner">
+    <div class="spinner" role="status" aria-label="Loading ProjectOS"></div>
+  </div>
+</div>
+<noscript>
+  <p class="noscript">ProjectOS needs JavaScript enabled to run its browser interface.</p>
+</noscript>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
