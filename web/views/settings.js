@@ -48,6 +48,9 @@ setStrings('en', {
   'settings.general.language': 'Language',
   'settings.general.language.hint': 'Only English is translated today; this is saved for when more are.',
   'settings.general.theme': 'Theme',
+  'settings.general.timezone': 'Timezone',
+  'settings.general.timezone.hint': 'Decides when scheduled things happen. The image boots on UTC, because it cannot know where it will be plugged in.',
+  'settings.general.timezone.detect': 'Use this browser',
   'settings.general.mode': 'Interface',
   'settings.general.mode.hint': 'Simple is one screen per idea. Advanced adds system, services, files, terminal and logs.',
   // account
@@ -409,6 +412,23 @@ export default {
                 value: state.language,
                 onChange: (e) => { state.language = e.target.value; saveValues({'ui.language': state.language}); },
               }, h('option', {value: 'en'}, 'English'))),
+            field(t('settings.general.timezone'), t('settings.general.timezone.hint'),
+              h('div', {class: 'input-group'},
+                h('input', {
+                  class: 'input', type: 'text', placeholder: 'America/Sao_Paulo',
+                  value: dig(state.settings, 'system.timezone', '') || '',
+                  onChange: (e) => saveValues({'system.timezone': e.target.value.trim()}),
+                }),
+                // The browser already knows, and typing "America/Sao_Paulo" by
+                // hand on a phone is a small cruelty.
+                h('button', {
+                  class: 'btn btn--outline', type: 'button',
+                  onClick: () => {
+                    const guess = (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || '';
+                    if (guess) saveValues({'system.timezone': guess});
+                  },
+                }, t('settings.general.timezone.detect')),
+              )),
             field(t('settings.general.theme'), null,
               h('div', {class: 'segmented'},
                 ['auto', 'dark', 'light'].map((key) => h('button', {

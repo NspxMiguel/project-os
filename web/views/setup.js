@@ -153,6 +153,15 @@ export default {
 
         try {
           await api.post('/setup', {username: user, password: pass}, {redirectOnAuth: false});
+          // The box boots on UTC and has no way to know where it is. The browser
+          // does, and asking a person to type "America/Sao_Paulo" to make the
+          // schedule work would be a poor first impression.
+          try {
+            const zone = (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || '';
+            if (zone) await api.put('/settings', {values: {'system.timezone': zone}});
+          } catch (err) {
+            /* a wrong clock is worth a warning, never a failed setup */
+          }
           // The server may or may not hand back a session; make sure we have one.
           try {
             await api.get('/auth/me', {redirectOnAuth: false});

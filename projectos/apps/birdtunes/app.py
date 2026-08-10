@@ -447,12 +447,12 @@ class BirdTunesApp(AppInstance):
             "can_pause": True, "error": "",
         }
         schedule_cfg = self.ctx.config.get("schedule", {}) or {}
-        quiet = safety.is_quiet_hours(_now(), schedule_cfg)
+        quiet = safety.is_quiet_hours(_now(self.ctx.config), schedule_cfg)
         snapshot.update({
             "output": self.ctx.config.get("output.type", "null"),
             "queue_len": len(self._queue),
             "quiet_hours_active": quiet,
-            "next_change": scheduler.next_change(_now(), schedule_cfg),
+            "next_change": scheduler.next_change(_now(self.ctx.config), schedule_cfg),
             "empty_reason": self._last_empty_reason,
         })
         # The dashboard card renders `summary` + `fields` when they are present
@@ -637,7 +637,7 @@ class BirdTunesApp(AppInstance):
         comes from, not whether the bird should be hearing it at 3am.
         """
         schedule_cfg = self.ctx.config.get("schedule", {}) or {}
-        can_play, reason = safety.check_can_play(_now(), schedule_cfg, device_available=True)
+        can_play, reason = safety.check_can_play(_now(self.ctx.config), schedule_cfg, device_available=True)
         if not can_play:
             self._last_empty_reason = "quiet_hours"
             raise ApiError(409, "quiet_hours", reason)
@@ -665,7 +665,7 @@ class BirdTunesApp(AppInstance):
 
     async def play(self, track_id: Optional[str] = None, playlist_id: Optional[str] = None) -> Dict[str, Any]:
         schedule_cfg = self.ctx.config.get("schedule", {}) or {}
-        can_play, reason = safety.check_can_play(_now(), schedule_cfg, device_available=True)
+        can_play, reason = safety.check_can_play(_now(self.ctx.config), schedule_cfg, device_available=True)
         if not can_play:
             self._last_empty_reason = "quiet_hours"
             raise ApiError(409, "quiet_hours", reason)
@@ -703,7 +703,7 @@ class BirdTunesApp(AppInstance):
             return None
         pool = [dict(t, feedback=library.feedback_for(self.ctx.db, t["id"])) for t in candidates]
         cfg = self.ctx.config.get("recommender", {}) or {}
-        picked = recommender.pick_next(pool, cfg, _now(), self._recent_ids, self._rng)
+        picked = recommender.pick_next(pool, cfg, _now(self.ctx.config), self._recent_ids, self._rng)
         return picked
 
     async def _start_track(self, player: Player, track: Dict[str, Any]) -> None:
@@ -743,7 +743,7 @@ class BirdTunesApp(AppInstance):
 
     async def _auto_advance(self) -> None:
         schedule_cfg = self.ctx.config.get("schedule", {}) or {}
-        can_play, _reason = safety.check_can_play(_now(), schedule_cfg, device_available=True)
+        can_play, _reason = safety.check_can_play(_now(self.ctx.config), schedule_cfg, device_available=True)
         if not can_play:
             return
         try:
@@ -815,8 +815,8 @@ class BirdTunesApp(AppInstance):
         cfg = self.ctx.config.get("schedule", {}) or {}
         return {
             "schedule": cfg,
-            "next_change": scheduler.next_change(_now(), cfg),
-            "active_window": scheduler.active_window(_now(), cfg),
+            "next_change": scheduler.next_change(_now(self.ctx.config), cfg),
+            "active_window": scheduler.active_window(_now(self.ctx.config), cfg),
         }
 
     async def _on_schedule_play(self, window: Dict[str, Any]) -> None:
@@ -918,10 +918,33 @@ def device_label(instance: "BirdTunesApp") -> str:
     return _label(player.device)
 
 
-def _now() -> Any:
+def _now(config: Any = None) -> Any:
+    """The local time of the house, not of the card.
+
+    The image boots on UTC -- it has no way to know where it will be plugged in
+    -- so on a fresh Pi "quiet hours 20:00" meant 17:00 in Brazil. For an app
+    whose whole job is *when* to make noise, that is not a cosmetic bug.
+    """
     import datetime as dt
 
-    return dt.datetime.now()
+    name = ""
+    if config is not None:
+        try:
+            name = str(config.get("system.timezone", "") or "")
+        except Exception:  # pragma: no cover - config is never this broken
+            name = ""
+    if not name:
+        return dt.datetime.now()
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:  # pragma: no cover - Python 3.9 without tzdata
+        return dt.datetime.now()
+    try:
+        return dt.datetime.now(ZoneInfo(name)).replace(tzinfo=None)
+    except Exception:
+        logging.getLogger("projectos.apps.birdtunes").warning(
+            "unknown timezone %r; falling back to the system clock", name)
+        return dt.datetime.now()
 
 
 def setup(ctx: AppContext) -> BirdTunesApp:

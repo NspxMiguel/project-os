@@ -58,6 +58,18 @@ DEFAULTS = {
         "file_roots": [],
     },
     "ui": {"default_mode": "simple", "theme": "auto", "accent": "#5ac8a8"},
+    # The image boots on UTC, because an image cannot know where it will be
+    # plugged in. Everything that decides *when* something happens -- above all
+    # BirdTunes' quiet hours and its windows -- has to use the timezone of the
+    # house, not of the card. Empty means "whatever the operating system says".
+    "system": {
+        "timezone": "",
+        # Asked over the network on first boot, because a headless box has
+        # nobody to ask and the image cannot know where it will be plugged in.
+        # Set timezone by hand and this never runs again.
+        "timezone_auto": True,
+        "timezone_url": "http://ip-api.com/json/?fields=status,timezone",
+    },
     "discovery": {"enabled": True, "interval_seconds": 300, "probe_hosts": []},
     # Updating over the network instead of pulling the SD card. manifest_url is
     # a plain URL on purpose: pointing it at our own domain later is one setting,

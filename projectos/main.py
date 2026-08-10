@@ -360,6 +360,20 @@ def get_plugins(request: Request) -> PluginManager:
 # application
 # ---------------------------------------------------------------------------
 @contextlib.asynccontextmanager
+def _settle_timezone(config: Any) -> None:
+    """Ask the network what timezone this box is in, once, when nobody said.
+
+    A schedule is the one thing on this machine that acts while nobody is
+    watching, so a clock three hours off is not cosmetic.
+    """
+    try:
+        from projectos.core import clock
+
+        clock.ensure(config)
+    except Exception:  # pragma: no cover - never let this stop a boot
+        log.debug("timezone lookup skipped", exc_info=True)
+
+
 async def lifespan(app: FastAPI):
     state = app.state
     config = load_config()
@@ -367,6 +381,10 @@ async def lifespan(app: FastAPI):
     state.config = config
     configure_logging(config)
     log.info("ProjectOS %s starting (home=%s)", __version__, paths.home())
+
+    # Off the event loop: it is one HTTP request with a timeout, but boot should
+    # not wait on someone else's server to answer.
+    asyncio.get_running_loop().run_in_executor(None, _settle_timezone, config)
 
     db = Database()
     db.connect()

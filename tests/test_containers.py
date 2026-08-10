@@ -117,7 +117,16 @@ class FakeRuntime:
 @pytest.fixture()
 def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> FakeRuntime:
     fake = FakeRuntime()
-    monkeypatch.setattr(_live_containers(), "_run", fake.run)
+    # Both objects, because they are not always the same one. The tests in this
+    # file call the module imported at collection time, while the app calls
+    # whatever is in sys.modules after conftest's purge. Patching only one of
+    # them leaves the other talking to a real docker socket -- which is how a
+    # green suite started failing the moment an unrelated test happened to
+    # re-import projectos.core.containers first.
+    monkeypatch.setattr(containers, "_run", fake.run)
+    live = _live_containers()
+    if live is not containers:
+        monkeypatch.setattr(live, "_run", fake.run)
     return fake
 
 

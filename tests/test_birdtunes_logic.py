@@ -492,3 +492,35 @@ def test_a_window_can_be_removed_by_sending_the_list_without_it():
 
     trimmed = scheduler.normalize_schedule({"windows": [kept]})
     assert [w["id"] for w in trimmed["windows"]] == ["manha"]
+
+
+def test_the_clock_follows_the_configured_timezone_not_the_card(home, monkeypatch):
+    """The image boots on UTC; quiet hours must still mean the house's evening.
+
+    On the real Pi this was a three-hour error: "quiet hours 20:00" started at
+    17:00 in Brazil. For an app whose only job is deciding when to make noise in
+    someone's home, that is the whole product being wrong.
+    """
+    import datetime as dt
+
+    from projectos.apps.birdtunes import app as birdtunes_app
+
+    class Config(object):
+        def __init__(self, zone):
+            self.zone = zone
+
+        def get(self, path, default=None):
+            return self.zone if path == "system.timezone" else default
+
+    # Named zones on both sides: comparing against Config("") would only measure
+    # the timezone of whatever machine runs the suite.
+    utc = birdtunes_app._now(Config("UTC"))
+    sao = birdtunes_app._now(Config("America/Sao_Paulo"))
+    assert isinstance(sao, dt.datetime)
+    assert sao.tzinfo is None, "callers compare it against naive times"
+    # Three hours behind UTC, give or take the second the test took.
+    delta = (utc - sao).total_seconds()
+    assert 3 * 3600 - 5 < delta < 3 * 3600 + 5
+
+    # An unusable name must not stop the app from deciding anything.
+    assert isinstance(birdtunes_app._now(Config("Nowhere/Nothing")), dt.datetime)

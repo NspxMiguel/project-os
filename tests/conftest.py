@@ -44,6 +44,10 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # installs them the way the store would instead of relying on a default that
     # no longer exists.
     monkeypatch.setenv("PROJECTOS__APPS__ENABLED", '["birdtunes", "whatsapp-bot"]')
+    # Booting asks the network which timezone this box is in. In the suite that
+    # would be one real HTTP request per test, against someone else's server --
+    # slow, flaky, and rude. The lookup has its own tests, with the network faked.
+    monkeypatch.setenv("PROJECTOS__SYSTEM__TIMEZONE_AUTO", "false")
     _reset_modules()
     return h
 
@@ -251,7 +255,7 @@ def daytime(monkeypatch):
 
     from projectos.apps.birdtunes import app as birdtunes_app
 
-    monkeypatch.setattr(birdtunes_app, "_now", lambda: dt.datetime(2026, 1, 7, 10, 0))
+    monkeypatch.setattr(birdtunes_app, "_now", lambda config=None: dt.datetime(2026, 1, 7, 10, 0))
     return dt.datetime(2026, 1, 7, 10, 0)
 
 
