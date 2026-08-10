@@ -25,8 +25,12 @@ DEPLOY_ZIP=0
 TARGET_HOSTNAME=project-os
 
 # SSH is on: without a screen it is the only way in when something goes wrong.
-# The password is deliberately the boring default and the first-run web setup
-# tells you to change it -- an image everyone downloads cannot ship a secret.
+#
+# FIRST_USER_PASS is here because pi-gen wants one, not because it is ever usable:
+# our stage locks the account immediately afterwards and clears pi-gen's
+# "change your password at next login" flag, which otherwise survives into the
+# password the browser sets later and makes sshd hang up on every login. The real
+# password is invented on the first-run screen and exists only on that card.
 ENABLE_SSH=1
 FIRST_USER_NAME=project-os
 FIRST_USER_PASS=project-os

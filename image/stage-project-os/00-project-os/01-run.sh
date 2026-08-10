@@ -70,6 +70,14 @@ chmod 440 /etc/sudoers.d/010_project-os
 # Locked: no password, so no login, until the first-run screen sets one.
 passwd --lock project-os >/dev/null 2>&1 || true
 
+# pi-gen marks the first user's password as needing an immediate change, which
+# makes sense for an image that ships a known password. This one ships none, and
+# the flag survives into the password the browser sets later -- sshd then demands
+# a change it cannot complete and hangs up, on a box with no screen. Turn it off
+# here as well as in the helper, so a card that never went through the helper is
+# not booby-trapped either.
+chage -d "$(date -u +%Y-%m-%d)" -m 0 -M -1 -I -1 -E -1 project-os >/dev/null 2>&1 || true
+
 systemctl enable project-os.service
 systemctl enable project-os-firstboot.service
 systemctl enable avahi-daemon.service
