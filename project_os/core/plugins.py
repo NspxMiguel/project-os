@@ -652,6 +652,15 @@ class PluginManager(object):
         )
         return self.list_apps()
 
+    def has(self, app_id: str) -> bool:
+        """Whether this app exists as code on this machine.
+
+        The catalog lists a few builtins that are planned and not written yet;
+        the store asks this before offering an Install button, so a card can say
+        "not ready" instead of the install failing with "No app called 'kasa'".
+        """
+        return app_id in self._apps
+
     # -- lifecycle -------------------------------------------------------
     def _require(self, app_id: str) -> LoadedApp:
         record = self._apps.get(app_id)

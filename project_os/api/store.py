@@ -54,9 +54,15 @@ def _installed_ids(plugins: Any) -> List[str]:
     return [item["id"] for item in plugins.list_apps() if item.get("state") != "disabled"]
 
 
-def _decorate(entry: Dict[str, Any], installed: List[str]) -> Dict[str, Any]:
+def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None) -> Dict[str, Any]:
     item = dict(entry)
     item["installed"] = entry["id"] in installed
+    if item["kind"] == "builtin":
+        # A few builtins in the catalog are planned, not written. Saying so on
+        # the card beats an Install button that answers "No app called 'kasa'".
+        item["installable"] = plugins is None or bool(plugins.has(entry["id"]))
+        if not item["installable"]:
+            item["install_reason"] = "%s is not built yet -- it is on the list." % entry["name"]
     if item["kind"] == "container":
         # Said up front, on the card, before the install button: a machine
         # with neither docker nor podman should not find that out mid-spinner.
@@ -74,7 +80,7 @@ async def browse(
 ) -> Dict[str, Any]:
     board = hardware.detect()
     installed = _installed_ids(plugins)
-    items = [_decorate(entry, installed) for entry in catalog.entries(board)]
+    items = [_decorate(entry, installed, plugins) for entry in catalog.entries(board)]
 
     if category:
         items = [item for item in items if item["category"] == category]
@@ -111,7 +117,7 @@ async def detail(
     entry = catalog.get(app_id)
     if entry is None:
         raise ApiError(404, "not_in_catalog", "The store has no entry called %r." % app_id)
-    return _decorate(entry, _installed_ids(plugins))
+    return _decorate(entry, _installed_ids(plugins), plugins)
 
 
 @router.post("/{app_id}/install")
@@ -143,6 +149,14 @@ async def install(
         )
 
     if entry["kind"] == "builtin":
+        if not plugins.has(app_id):
+            raise ApiError(
+                501,
+                "installer_pending",
+                "%s is in the catalog but is not built yet -- it is on the list."
+                % entry["name"],
+                detail={"id": app_id, "kind": entry["kind"]},
+            )
         result = await plugins.enable(app_id)
         log.info("installed builtin app %s (by %s)", app_id, user.get("username"))
         return {"ok": True, "installed": True, "app": result}

@@ -166,7 +166,10 @@ function emptyState(title, message) {
 /** Whether the store can actually install this entry today, independent of
  *  whether it fits in RAM (fit is a warning, not a gate — this is a hard one). */
 function isInstallable(item) {
-  if (item.kind === 'builtin') return true;
+  // A few builtins in the catalog are planned rather than written -- the API
+  // now says which, per item. Assuming yes made their card offer an Install
+  // button whose only possible outcome was "No app called 'kasa'".
+  if (item.kind === 'builtin') return item.installable !== false;
   if (item.kind === 'container') return item.installable === true;
   return false;
 }
@@ -314,7 +317,8 @@ export default {
       } else if (!installable && item.kind !== 'container') {
         notices.push(h('div', {class: 'notice notice--info'},
           icon('info', {size: 16}),
-          h('div', {class: 'notice__body'}, h('span', null, t('store.notice.pending', {kind: item.kind})))));
+          h('div', {class: 'notice__body'}, h('span', null,
+            item.install_reason || t('store.notice.pending', {kind: item.kind})))));
       } else if (runtimeDown) {
         notices.push(h('div', {class: 'notice notice--warn'},
           icon('warning', {size: 16}),

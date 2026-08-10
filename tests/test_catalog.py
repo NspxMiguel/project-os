@@ -93,3 +93,26 @@ def test_a_clean_install_has_no_apps_enabled() -> None:
     from project_os import config
 
     assert config.DEFAULTS["apps"]["enabled"] == []
+
+
+# --------------------------------------------------------------- não escritos
+# O catálogo lista alguns builtins que ainda não existem como código (kasa,
+# tuya, mqtt -- pedidos 17-19). A loja tem que dizer isso na carta, em vez de
+# oferecer um botão cujo único desfecho possível é "No app called 'kasa'".
+def test_a_builtin_that_is_not_written_yet_is_not_offered(auth_client) -> None:
+    response = auth_client.get("/api/store")
+    assert response.status_code == 200, response.text
+    items = {item["id"]: item for item in response.json()["items"]}
+
+    assert items["birdtunes"]["installable"] is True
+    assert items["kasa"]["installable"] is False
+    assert "not built yet" in items["kasa"]["install_reason"]
+
+
+def test_installing_one_says_so_instead_of_failing_with_an_internal_error(auth_client) -> None:
+    response = auth_client.post("/api/store/kasa/install", json={})
+    assert response.status_code == 501, response.text
+    body = response.json()
+    assert body["error"] == "installer_pending"
+    assert "not built yet" in body["message"]
+    assert "No app called" not in body["message"]
