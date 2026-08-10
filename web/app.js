@@ -368,6 +368,19 @@ async function logout() {
   boot();
 }
 
+// A session can end without anyone clicking anything: it expires, or the box
+// restarts while the page is open. api.js sees the 401 first and says so here.
+// Without this the store kept claiming the browser was signed in, the login
+// route sent it back to the dashboard, and the dashboard's poll asked again --
+// a request storm against a Pi, for as long as the tab stayed open.
+window.addEventListener('project-os:unauthenticated', () => {
+  if (!store.get('authenticated')) return;
+  if (ws) { try { ws.close(); } catch (err) { /* already gone */ } }
+  ws = null;
+  closeDock();
+  store.set({user: null, authenticated: false});
+});
+
 /* ---------------------------------------------------------------- shell */
 
 function buildShell() {

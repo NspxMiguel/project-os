@@ -72,6 +72,23 @@ function toError(response, body, path) {
   return new ApiError(message, {code, status: response.status, detail, path});
 }
 
+/** Tell the shell the session is gone, then send the browser to the door.
+ *
+ * The redirect alone was not enough and the failure was ugly: the shell still
+ * had `authenticated: true` in its store, so the login route bounced straight
+ * back to the dashboard, which refetched, which got another 401 -- hundreds of
+ * requests a second against a Raspberry Pi, forever. The shell has to be told
+ * the truth before it is asked to route on it.
+ */
+function sessionLost() {
+  try {
+    window.dispatchEvent(new CustomEvent('project-os:unauthenticated'));
+  } catch (err) {
+    /* very old browser: the redirect below still happens */
+  }
+  navigate('#/login', {replace: true});
+}
+
 /** Low-level request. Options: {headers, signal, redirectOnAuth, raw, query}. */
 export async function request(method, path, body, options = {}) {
   const {
@@ -130,7 +147,7 @@ export async function request(method, path, body, options = {}) {
   if (!response.ok) {
     const error = toError(response, payload, url);
     if (redirectOnAuth) {
-      if (response.status === 401) navigate('#/login', {replace: true});
+      if (response.status === 401) sessionLost();
       else if (response.status === 428 || error.code === 'setup_required') navigate('#/setup', {replace: true});
     }
     throw error;
@@ -211,7 +228,7 @@ export function upload(path, file, onProgress, options = {}) {
         message = payload.message || message;
         detail = payload.detail !== undefined ? payload.detail : null;
       }
-      if (xhr.status === 401) navigate('#/login', {replace: true});
+      if (xhr.status === 401) sessionLost();
       else if (xhr.status === 428) navigate('#/setup', {replace: true});
       reject(new ApiError(message, {code, status: xhr.status, detail, path: url}));
     });

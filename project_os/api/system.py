@@ -66,6 +66,23 @@ async def stats(user: Dict[str, Any] = Depends(auth.require_auth)) -> Dict[str, 
     return await loop.run_in_executor(None, sysinfo.stats)
 
 
+@router.get("/processes")
+async def processes(
+    limit: int = Query(20, ge=1, le=100),
+    user: Dict[str, Any] = Depends(auth.require_auth),
+) -> Dict[str, Any]:
+    """The heaviest processes, memory first.
+
+    ``sysinfo.top_processes`` existed from the start and nothing ever served it,
+    so the System page's "Top processes" card asked for a route that answered
+    404 and then quietly said nothing. On a Pi that card is the whole reason to
+    open the page: it is where "why is this thing slow" gets an answer.
+    """
+    loop = asyncio.get_running_loop()
+    rows = await loop.run_in_executor(None, sysinfo.top_processes, limit)
+    return {"processes": rows, "psutil": sysinfo.have_psutil()}
+
+
 @router.get("/info")
 async def info(user: Dict[str, Any] = Depends(auth.require_auth)) -> Dict[str, Any]:
     loop = asyncio.get_running_loop()

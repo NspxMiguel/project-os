@@ -1123,6 +1123,17 @@ async def async_scan_mdns(
 
     error = None  # type: Optional[str]
     try:
+        # Zeroconf's engine starts on its own task. A browser created before it
+        # is up parks on async_wait_for_start(), and if the scan window closes
+        # first that wait raises NotRunningException on a task nobody awaits --
+        # which lands in the log as "Task exception was never retrieved" during
+        # every boot. Waiting here costs milliseconds and removes it.
+        waiter = getattr(azc.zeroconf, "async_wait_for_start", None)
+        if waiter is not None:
+            try:
+                await asyncio.wait_for(waiter(), timeout=5.0)
+            except Exception as exc:  # a slow start is not a reason to give up
+                log.debug("zeroconf did not report itself started: %s", exc)
         types = [t for t in service_types]
         browsers.append(AsyncServiceBrowser(azc.zeroconf, types, handlers=[_on_change]))
         for address in unicast_addresses or ():

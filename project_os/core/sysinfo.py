@@ -1059,12 +1059,25 @@ def _user_for_pid(pid: int) -> Optional[str]:
         return str(uid)
 
 
+#: A command line is shown as one line in a table; an Electron app's is two
+#: kilobytes of switches. Sending twenty of those over a Pi's wifi to render a
+#: 60-character cell is pure waste, so it is cut here, once, at the source.
+CMDLINE_CHARS = 300
+
+
+def _shorten_cmdline(value):
+    # type: (Optional[str]) -> Optional[str]
+    if not value or len(value) <= CMDLINE_CHARS:
+        return value
+    return value[:CMDLINE_CHARS - 1].rstrip() + "\u2026"
+
+
 def _cmdline_for_pid(pid: int) -> Optional[str]:
     raw = _read("/proc/%d/cmdline" % pid)
     if raw is None:
         return None
     parts = [part for part in raw.split("\x00") if part]
-    return " ".join(parts) if parts else None
+    return _shorten_cmdline(" ".join(parts)) if parts else None
 
 
 def top_processes(limit: int = 10) -> List[Dict[str, Any]]:
@@ -1133,7 +1146,7 @@ def _psutil_cmdline(psutil: Any, pid: int) -> Optional[str]:
         parts = psutil.Process(pid).cmdline()
     except Exception:
         return None
-    return " ".join(parts) if parts else None
+    return _shorten_cmdline(" ".join(parts)) if parts else None
 
 
 # ---------------------------------------------------------------------------
