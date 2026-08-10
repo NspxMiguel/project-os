@@ -27,12 +27,15 @@ set -e
 # same user rather than as root: the web interface installs packages and runs
 # apps, and none of that needs to own the machine.
 #
-# The image is public, so its password is public too. Expiring it means the
-# first SSH login has to set a new one before it gives you a shell.
+# The password is NOT expired on purpose, and that is a correction of a real
+# mistake: expiring it looked like good hygiene, but on a box whose only door is
+# SSH it slams that door. An expired password makes sshd refuse every
+# non-interactive command, and the interactive change then failed too -- the
+# machine became unreachable by the one route it has. A warning that cannot lock
+# anyone out beats a policy that can.
 if ! id -u project-os >/dev/null 2>&1; then
     adduser --system --group --home /var/lib/project-os --shell /usr/sbin/nologin project-os
 fi
-chage -d 0 project-os 2>/dev/null || true
 install -d -m 755 -o project-os -g project-os /var/lib/project-os
 chown -R project-os:project-os /opt/project-os
 chmod +x /opt/project-os/bin/project-os
@@ -94,6 +97,7 @@ project-os
 
 Sem monitor em nenhum momento. Se precisar do terminal:
    ssh project-os@project-os.local   (senha inicial: project-os)
-   No primeiro login ele obriga a trocar a senha -- esta imagem e publica,
-   entao a senha inicial tambem e.
+
+   Troque a senha assim que entrar, com:  passwd
+   Esta imagem e publica, entao a senha inicial tambem e.
 EOF
