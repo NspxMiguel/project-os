@@ -8,15 +8,20 @@ OS — but general purpose. It hosts *your* things.
 
 > Português: a documentação de conceito está em [docs/CONCEITO.md](docs/CONCEITO.md).
 
-1. Download `project_os-<version>.img.xz` from
+1. Download `project-os-<version>.img.xz` from
    [Releases](https://github.com/NspxMiguel/project-os/releases).
 2. Write it to the card with [Balena Etcher](https://etcher.balena.io).
 3. On Wi-Fi only: rename `project-os-wifi.txt.exemplo` to `project-os-wifi.txt` on
    the boot partition and put your network and password in it.
 4. Boot the Pi and open **http://project-os.local**.
 
-The first screen creates your account. Until you do, the system answers nothing
-else — that is deliberate.
+The first screen creates your account — and, with one checkbox, the machine's
+SSH password too. The image ships with that Linux account *locked*: a public
+image cannot carry a real password, because it would be printed in every copy of
+this file. Until you finish that screen, the system answers nothing else — that
+is deliberate.
+
+The interface is in Portuguese.
 
 Already have a Raspberry Pi OS you do not want to reflash? There is an installer
 for that too: see [docs/INSTALL.md](docs/INSTALL.md).

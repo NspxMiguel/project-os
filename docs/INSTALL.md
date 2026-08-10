@@ -3,7 +3,7 @@
 O project-os é um sistema, não um programa que você instala por cima de outro.
 O caminho normal é gravar o cartão:
 
-1. Baixe `project_os-<versão>.img.xz` em
+1. Baixe `project-os-<versão>.img.xz` em
    [Releases](https://github.com/NspxMiguel/project-os/releases).
 2. Grave no cartão com o [Balena Etcher](https://etcher.balena.io) — ele aceita
    o `.xz` direto, não precisa descompactar.
@@ -14,15 +14,25 @@ O caminho normal é gravar o cartão:
 5. Abra `http://project-os.local` no navegador e crie a sua conta. Se o `.local`
    não funcionar na sua rede, use o IP que aparece no roteador.
 
+Na tela de criar a conta vem marcada a opção **"Usar esta senha no SSH
+também"**. É ali que a senha do Linux nasce — a imagem sai de fábrica com a
+conta *trancada*, sem senha nenhuma.
+
 O arquivo do Wi-Fi é lido a cada boot e apagado assim que a rede conecta — ele
 guarda a senha em texto puro, e a partição de boot qualquer computador lê.
 
-Precisando do terminal: `ssh project_os@project-os.local`, senha inicial
-`project_os`. No primeiro login ele obriga a trocar — a imagem é pública, então
-a senha inicial também é.
+Precisando do terminal: `ssh project-os@project-os.local`, com a senha que você
+criou no primeiro acesso pelo navegador.
+
+Não existe senha de fábrica de propósito. Uma imagem pública não pode carregar
+uma: qualquer senha que viesse escrita aqui estaria no README de todas as cópias
+e valeria em todas as placas do mundo. E forçar a troca no primeiro login também
+não serve — numa placa sem monitor, o SSH recusa comando não-interativo enquanto
+a senha estiver expirada, e a única porta da máquina fica trancada. Por isso a
+conta vem trancada e ganha senha na tela de configuração, do lado de cá.
 
 Depois da primeira instalação você não precisa mais mexer no cartão: as
-atualizações vêm pela própria tela, em **Updates**.
+atualizações vêm pela própria tela, em **Atualizações**.
 
 ---
 
