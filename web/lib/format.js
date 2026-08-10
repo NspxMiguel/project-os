@@ -160,13 +160,22 @@ function toDate(value) {
   return isNaN(date.getTime()) ? null : date;
 }
 
-const RTF = (() => {
+// Segue o idioma da interface, não o do navegador: a tela inteira em português
+// dizendo "12 minutes ago" é a mesma mistura que este arquivo existe para
+// acabar. Refeito quando o idioma muda, e nunca mais que uma vez por idioma.
+let rtfLocale = null;
+let rtfCache = null;
+
+function relativeFormatter() {
+  if (rtfLocale === locale) return rtfCache;
+  rtfLocale = locale;
   try {
-    return new Intl.RelativeTimeFormat(undefined, {numeric: 'auto'});
+    rtfCache = new Intl.RelativeTimeFormat(locale, {numeric: 'auto'});
   } catch (err) {
-    return null;
+    rtfCache = null;
   }
-})();
+  return rtfCache;
+}
 
 const REL_STEPS = [
   ['second', 60],
@@ -187,14 +196,15 @@ export function relativeTime(value, {now = Date.now()} = {}) {
   for (const [unit, span] of REL_STEPS) {
     if (Math.abs(delta) < span || span === Infinity) {
       const rounded = Math.round(delta);
-      if (RTF) return RTF.format(rounded, unit);
+      const formatter = relativeFormatter();
+      if (formatter) return formatter.format(rounded, unit);
       const abs = Math.abs(rounded);
       const label = abs === 1 ? unit : unit + 's';
       return rounded < 0 ? abs + ' ' + label + ' ago' : 'in ' + abs + ' ' + label;
     }
     delta /= span;
   }
-  return date.toLocaleString();
+  return date.toLocaleString(locale);
 }
 
 /** Absolute local timestamp, short form. */
@@ -204,7 +214,7 @@ export function dateTime(value, {withSeconds = false} = {}) {
   const opts = {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'};
   if (withSeconds) opts.second = '2-digit';
   try {
-    return date.toLocaleString(undefined, opts);
+    return date.toLocaleString(locale, opts);
   } catch (err) {
     return date.toISOString();
   }
@@ -214,7 +224,7 @@ export function clockTime(value) {
   const date = toDate(value);
   if (!date) return '—';
   try {
-    return date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'});
+    return date.toLocaleTimeString(locale, {hour: '2-digit', minute: '2-digit'});
   } catch (err) {
     return date.toISOString().slice(11, 16);
   }
@@ -274,7 +284,7 @@ export function number(value, {digits = 0} = {}) {
   const num = numeric(value);
   if (!isFinite(num)) return '—';
   try {
-    return num.toLocaleString(undefined, {minimumFractionDigits: digits, maximumFractionDigits: digits});
+    return num.toLocaleString(locale, {minimumFractionDigits: digits, maximumFractionDigits: digits});
   } catch (err) {
     return round(num, digits).toFixed(digits);
   }

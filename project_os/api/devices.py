@@ -59,7 +59,10 @@ async def get_device(
     device = registry.get(device_id)
     if device is None:
         raise ApiError(404, "device_not_found", "No device with id %r." % device_id)
-    return device
+    # to_dict, not the object: this route says it returns a mapping, and FastAPI
+    # believes it. Returning the dataclass raised ResponseValidationError, so
+    # every device's own page answered 500 -- the whole screen was dead.
+    return device.to_dict()
 
 
 @router.get("/{device_id}/recipes")
@@ -80,9 +83,13 @@ async def device_recipes(
     if device is None:
         raise ApiError(404, "device_not_found", "No device with id %r." % device_id)
     installed = [item["id"] for item in plugins.list_apps()]
-    found = recipes_core.for_device(device, installed=installed)
+    # recipes.for_device reads the device like a mapping (device.get(...)), so it
+    # gets the mapping. Handing it the dataclass raised AttributeError and the
+    # "what you can do with this device" card only ever showed an error.
+    payload = device.to_dict()
+    found = recipes_core.for_device(payload, installed=installed)
     return {
-        "device": device,
+        "device": payload,
         "recipes": found,
         "count": len(found),
         "automatic": sum(item["automatic"] for item in found),
@@ -104,7 +111,7 @@ async def update_device(
         registry.set_flag(device_id, "pinned", payload.pinned)
     if payload.ignored is not None:
         registry.set_flag(device_id, "ignored", payload.ignored)
-    return registry.get(device_id)
+    return registry.get(device_id).to_dict()
 
 
 @router.delete("/{device_id}")
