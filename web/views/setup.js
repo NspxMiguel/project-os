@@ -6,6 +6,49 @@ import {h, mount, clear} from '../lib/dom.js';
 import {icon} from '../lib/icons.js';
 import * as api from '../lib/api.js';
 import {navigate} from '../lib/router.js';
+import {t, setStrings} from '../lib/format.js';
+
+setStrings('en', {
+  'setup.title': 'Set up project-os',
+  'setup.welcome.title': 'Welcome to project-os',
+  'setup.welcome.lead': 'This machine is not set up yet. It takes one minute.',
+  'setup.welcome.point1': 'Create an administrator account for this box.',
+  'setup.welcome.point2': 'project-os then looks for speakers, TVs and hubs on your network.',
+  'setup.welcome.point3': 'Apps you install show up in the sidebar and on the dashboard.',
+  'setup.welcome.start': 'Get started',
+  'setup.create.title': 'Create your admin account',
+  'setup.create.lead': 'This is the only account that exists until you add more.',
+  'setup.username': 'Username',
+  'setup.password': 'Password',
+  'setup.confirm': 'Confirm password',
+  'setup.ssh': 'Use this password for SSH too (the terminal login for this machine).',
+  'setup.submit': 'Create account',
+  'setup.submitting': 'Creating…',
+  'setup.needUser': 'Choose a username.',
+  'setup.needPassword': 'Type a password.',
+  'setup.mismatch': 'The two passwords do not match.',
+  'setup.failed': 'Could not create the account.',
+  'setup.keepSafe': 'Store this password somewhere safe — there is no email recovery on a Raspberry Pi.',
+  'setup.strength.any': 'Any password you like.',
+  'setup.strength.weak': 'Weak',
+  'setup.strength.fair': 'Fair',
+  'setup.strength.good': 'Good',
+  'setup.strength.strong': 'Strong',
+  'setup.strength.hint1': 'Short, but it is yours.',
+  'setup.strength.hint2': 'Longer is better than complicated.',
+  'setup.strength.hint3': 'Good. A few more characters would not hurt.',
+  'setup.strength.hint4': 'Strong.',
+  'setup.done.title': 'You are all set',
+  'setup.done.lead': 'Signed in as {name}.',
+  'setup.done.devices.title': 'Find your devices',
+  'setup.done.devices.text': 'project-os scans the network for AirPlay speakers, Chromecasts, Home Assistant and more. That is where BirdTunes gets its output.',
+  'setup.done.apps.title': 'Then pick an app',
+  'setup.done.apps.text': 'Apps are installed from the store and appear in the sidebar with their own panel.',
+  'setup.done.discover': 'Discover devices',
+  'setup.done.dashboard': 'Go to the dashboard',
+  'setup.ssh.ready': 'SSH is ready with the same password: ssh project-os@project-os.local',
+  'setup.ssh.failed': 'The SSH password was not set: {reason}',
+}, {activate: false});
 
 // No minimum. "n coloca isso: The password needs at least 8 characters." --
 // this is his own box on his own network, and a rule that refuses the password
@@ -16,7 +59,7 @@ const GOOD_LENGTH = 8;
 /** Cheap, honest strength estimate: length first, variety second. */
 function strength(password) {
   const value = String(password || '');
-  if (!value) return {level: 0, label: '', hint: 'Any password you like.'};
+  if (!value) return {level: 0, label: '', hint: t('setup.strength.any')};
   let score = 0;
   if (value.length >= GOOD_LENGTH) score += 1;
   if (value.length >= 12) score += 1;
@@ -25,19 +68,19 @@ function strength(password) {
   if (classes >= 2) score += 1;
   if (classes >= 3) score += 1;
   const level = Math.max(1, Math.min(4, Math.round(score * 4 / 5)));
-  const labels = {1: 'Weak', 2: 'Fair', 3: 'Good', 4: 'Strong'};
+  const labels = {1: t('setup.strength.weak'), 2: t('setup.strength.fair'), 3: t('setup.strength.good'), 4: t('setup.strength.strong')};
   const hints = {
-    1: 'Short, but it is yours.',
-    2: 'Longer is better than complicated.',
-    3: 'Good. A few more characters would not hurt.',
-    4: 'Strong.',
+    1: t('setup.strength.hint1'),
+    2: t('setup.strength.hint2'),
+    3: t('setup.strength.hint3'),
+    4: t('setup.strength.hint4'),
   };
   return {level, label: labels[level], hint: hints[level]};
 }
 
 export default {
   id: 'setup',
-  title: 'Set up project-os',
+  get title() { return t('setup.title'); },
 
   async mount(root, ctx) {
     let step = 0;
@@ -71,16 +114,16 @@ export default {
 
     function renderWelcome() {
       mount(host, [
-        brand('Welcome to project-os', 'This machine is not set up yet. It takes one minute.'),
+        brand(t('setup.welcome.title'), t('setup.welcome.lead')),
         h('ul', {class: 'stack stack--sm small muted', style: {listStyle: 'none', padding: '0', margin: '0'}},
-          h('li', {class: 'row row--tight'}, icon('lock', {size: 16}), h('span', null, 'Create an administrator account for this box.')),
-          h('li', {class: 'row row--tight'}, icon('devices', {size: 16}), h('span', null, 'project-os then looks for speakers, TVs and hubs on your network.')),
-          h('li', {class: 'row row--tight'}, icon('apps', {size: 16}), h('span', null, 'Apps you install show up in the sidebar and on the dashboard.')),
+          h('li', {class: 'row row--tight'}, icon('lock', {size: 16}), h('span', null, t('setup.welcome.point1'))),
+          h('li', {class: 'row row--tight'}, icon('devices', {size: 16}), h('span', null, t('setup.welcome.point2'))),
+          h('li', {class: 'row row--tight'}, icon('apps', {size: 16}), h('span', null, t('setup.welcome.point3'))),
         ),
         h('button', {
           class: 'btn btn--primary btn--block btn--lg', type: 'button',
           onClick: () => { step = 1; render(); },
-        }, 'Get started'),
+        }, t('setup.welcome.start')),
       ]);
     }
 
@@ -108,7 +151,7 @@ export default {
       });
 
       const bars = [0, 1, 2, 3].map(() => h('span', {class: 'strength__bar'}));
-      const meterHint = h('span', {class: 'field__hint'}, 'Any password you like.');
+      const meterHint = h('span', {class: 'field__hint'}, t('setup.strength.any'));
       const meter = h('div', {class: 'strength', dataset: {level: '0'}},
         h('div', {class: 'strength__bars'}, bars),
         meterHint,
@@ -121,10 +164,10 @@ export default {
       const sshField = h('label', {class: 'row row--tight'},
         sshToggle,
         h('span', {class: 'small muted'},
-          'Use this password for SSH too (the terminal login for this machine).'),
+          t('setup.ssh')),
       );
 
-      const submit = h('button', {class: 'btn btn--primary btn--block btn--lg', type: 'submit'}, 'Create account');
+      const submit = h('button', {class: 'btn btn--primary btn--block btn--lg', type: 'submit'}, t('setup.submit'));
 
       function updateMeter() {
         const result = strength(password.value);
@@ -147,17 +190,17 @@ export default {
         const pass = password.value;
 
         if (!user) {
-          showProblem('Choose a username.');
+          showProblem(t('setup.needUser'));
           username.focus();
           return;
         }
         if (!pass) {
-          showProblem('Type a password.');
+          showProblem(t('setup.needPassword'));
           password.focus();
           return;
         }
         if (pass !== confirmPassword.value) {
-          showProblem('The two passwords do not match.');
+          showProblem(t('setup.mismatch'));
           confirmPassword.select();
           confirmPassword.focus();
           return;
@@ -166,7 +209,7 @@ export default {
         busy = true;
         submit.disabled = true;
         submit.classList.add('is-busy');
-        mount(submit, [h('span', {class: 'spinner spinner--sm'}), 'Creating…']);
+        mount(submit, [h('span', {class: 'spinner spinner--sm'}), t('setup.submitting')]);
 
         try {
           await api.post('/setup', {username: user, password: pass}, {redirectOnAuth: false});
@@ -207,7 +250,7 @@ export default {
           busy = false;
           submit.disabled = false;
           submit.classList.remove('is-busy');
-          mount(submit, 'Create account');
+          mount(submit, t('setup.submit'));
           if (err && err.code === 'already_configured') {
             // "ele ta mandando eu criar um usuario, sendo q o usuario ja
             // existe" -- so stop asking. The account is there; what he needs is
@@ -215,31 +258,31 @@ export default {
             navigate('#/login', {replace: true});
             return;
           }
-          showProblem((err && err.message) || 'Could not create the account.');
+          showProblem((err && err.message) || t('setup.failed'));
         }
       }
 
       mount(host, [
-        brand('Create your admin account', 'This is the only account that exists until you add more.'),
+        brand(t('setup.create.title'), t('setup.create.lead')),
         h('form', {class: 'form', onSubmit: onSubmit, novalidate: true},
           problem,
           h('div', {class: 'field'},
-            h('label', {class: 'field__label', for: 'setup-username'}, 'Username'),
+            h('label', {class: 'field__label', for: 'setup-username'}, t('setup.username')),
             username,
           ),
           h('div', {class: 'field'},
-            h('label', {class: 'field__label', for: 'setup-password'}, 'Password'),
+            h('label', {class: 'field__label', for: 'setup-password'}, t('setup.password')),
             password,
             meter,
           ),
           h('div', {class: 'field'},
-            h('label', {class: 'field__label', for: 'setup-confirm'}, 'Confirm password'),
+            h('label', {class: 'field__label', for: 'setup-confirm'}, t('setup.confirm')),
             confirmPassword,
           ),
           sshField,
           submit,
         ),
-        h('p', {class: 'auth__foot'}, 'Store this password somewhere safe — there is no email recovery on a Raspberry Pi.'),
+        h('p', {class: 'auth__foot'}, t('setup.keepSafe')),
       ]);
 
       password.addEventListener('input', updateMeter);
@@ -254,11 +297,11 @@ export default {
     function sshNote() {
       if (!sshProblem) {
         return h('p', {class: 'auth__foot'},
-          'SSH is ready with the same password: ssh project-os@project-os.local');
+          t('setup.ssh.ready'));
       }
       return h('div', {class: 'notice notice--warning'},
         h('div', {class: 'notice__body'},
-          'The SSH password was not set: ' + sshProblem));
+          t('setup.ssh.failed', {reason: sshProblem})));
     }
 
 
@@ -277,29 +320,29 @@ export default {
 
     function renderDone() {
       mount(host, [
-        brand('You are all set', 'Signed in as ' + (createdUser || 'admin') + '.'),
+        brand(t('setup.done.title'), t('setup.done.lead', {name: createdUser || 'admin'})),
         h('div', {class: 'stack stack--sm'},
           h('div', {class: 'notice notice--info'},
             icon('devices', {size: 18}),
             h('div', {class: 'notice__body'},
-              h('span', {class: 'notice__title'}, 'Find your devices'),
+              h('span', {class: 'notice__title'}, t('setup.done.devices.title')),
               h('span', {class: 'small muted'},
-                'project-os scans the network for AirPlay speakers, Chromecasts, Home Assistant and more. That is where BirdTunes gets its output.'),
+                t('setup.done.devices.text')),
             ),
           ),
           h('div', {class: 'notice'},
             icon('apps', {size: 18}),
             h('div', {class: 'notice__body'},
-              h('span', {class: 'notice__title'}, 'Then pick an app'),
+              h('span', {class: 'notice__title'}, t('setup.done.apps.title')),
               h('span', {class: 'small muted'},
-                'Apps are installed from the store and appear in the sidebar with their own panel.'),
+                t('setup.done.apps.text')),
             ),
           ),
         ),
         h('button', {class: 'btn btn--primary btn--block btn--lg', type: 'button', onClick: go('#/devices')},
-          icon('devices', {size: 17}), 'Discover devices'),
+          icon('devices', {size: 17}), t('setup.done.discover')),
         h('button', {class: 'btn btn--ghost btn--block', type: 'button', onClick: go('#/')},
-          'Go to the dashboard'),
+          t('setup.done.dashboard')),
         sshNote(),
       ]);
     }

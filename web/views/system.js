@@ -15,6 +15,71 @@ import {icon} from '../lib/icons.js';
 import * as fmt from '../lib/format.js';
 import * as api from '../lib/api.js';
 import {toast} from '../lib/toast.js';
+import {t, setStrings} from '../lib/format.js';
+
+setStrings('en', {
+  'sys.lead': 'Live readings from this machine. Everything here is measured, nothing is cached.',
+  'sys.card.host': 'This machine',
+  'sys.host.reading': 'Reading hardware…',
+  'sys.host.model': 'Model',
+  'sys.host.os': 'Operating system',
+  'sys.host.kernel': 'Kernel',
+  'sys.host.arch': 'Architecture',
+  'sys.host.cpu': 'CPU',
+  'sys.host.memory': 'Memory',
+  'sys.host.python': 'Python',
+  'sys.host.addresses': 'Addresses',
+  'sys.host.uptime': 'Uptime',
+  'sys.host.load': 'Load',
+  'sys.host.pi': 'Raspberry Pi',
+  'sys.host.generic': 'Generic host',
+  'sys.card.processor': 'Processor',
+  'sys.perCore': 'Per core',
+  'sys.perCore.none': 'Per-core usage is not reported on this machine.',
+  'sys.core': 'Core {n}',
+  'sys.card.memory': 'Memory',
+  'sys.mem.ram': 'RAM',
+  'sys.mem.swap': 'Swap',
+  'sys.mem.used': 'Used',
+  'sys.mem.available': 'Available',
+  'sys.mem.cached': 'Cached',
+  'sys.card.thermal': 'Temperature & power',
+  'sys.thermal.soc': 'SoC temperature',
+  'sys.thermal.scale': 'Warm above 70 °C, throttling near 80 °C',
+  'sys.thermal.clean': 'Power and thermals are clean since boot.',
+  'sys.thermal.viaVcgencmd': 'Throttling flags come from vcgencmd and are only available on Raspberry Pi OS.',
+  'sys.card.storage': 'Storage',
+  'sys.storage.none': 'No mounted filesystems reported.',
+  'sys.card.network': 'Network',
+  'sys.net.down': 'Down',
+  'sys.net.up': 'Up',
+  'sys.net.sinceBoot': 'Since boot',
+  'sys.net.interfaces': 'Interfaces',
+  'sys.net.none': 'No interfaces reported.',
+  'sys.card.processes': 'Top processes',
+  'sys.processes.sub': 'Sorted by memory — the resource a 1 GB board runs out of first',
+  'sys.processes.col.pid': 'PID',
+  'sys.processes.col.name': 'Process',
+  'sys.processes.col.user': 'User',
+  'sys.processes.col.cpu': 'CPU',
+  'sys.processes.col.memory': 'Memory',
+  'sys.processes.none': 'No processes reported.',
+  'sys.processes.noPsutil': 'This build does not report per-process usage. Installing psutil on the Pi turns this card on.',
+  'sys.processes.showing': 'Showing the {shown} hungriest of {total} processes.',
+  'sys.processes.count': '{total} processes.',
+  'sys.processes.cpuNote': 'Usage since the last sample',
+  'sys.error.info': 'Could not read the host description.',
+  'sys.error.stats': 'Could not read system stats.',
+  'sys.error.page': 'The system page could not load.',
+  'sys.throttle.nowPower.title': 'Not enough power right now',
+  'sys.throttle.nowPower.body': 'The board is reporting under-voltage. Use the official power supply for this model and a short, thick USB cable — phone chargers and long cables are the usual cause.',
+  'sys.throttle.nowCpu.title': 'The CPU is throttled right now',
+  'sys.throttle.nowCpu.body': 'Clock speed is being cut to protect the chip, so everything feels slow. Check airflow and the temperature above, or fix the power supply.',
+  'sys.throttle.bootPower.title': 'Under-voltage happened since boot',
+  'sys.throttle.bootPower.body': 'Power dipped at least once since this machine started. It is fine now, but the supply is marginal and SD-card corruption follows from exactly this.',
+  'sys.throttle.bootCpu.title': 'The CPU was throttled since boot',
+  'sys.throttle.bootCpu.body': 'The chip hit its limit at least once since boot — heat or power. Worth a heatsink or a better supply if it keeps happening.',
+}, {activate: false});
 
 /** Samples of the network counters kept for the throughput sparkline. */
 const HISTORY = 60;
@@ -304,33 +369,29 @@ export function throttleWarnings(throttled) {
   if (throttled.undervoltage_now) {
     out.push({
       level: 'danger',
-      title: 'Not enough power right now',
-      body: 'The board is reporting under-voltage. Use the official power supply for this ' +
-        'model and a short, thick USB cable — phone chargers and long cables are the usual cause.',
+      title: t('sys.throttle.nowPower.title'),
+      body: t('sys.throttle.nowPower.body'),
     });
   }
   if (throttled.throttled_now) {
     out.push({
       level: 'danger',
-      title: 'The CPU is throttled right now',
-      body: 'Clock speed is being cut to protect the chip, so everything feels slow. ' +
-        'Check airflow and the temperature above, or fix the power supply.',
+      title: t('sys.throttle.nowCpu.title'),
+      body: t('sys.throttle.nowCpu.body'),
     });
   }
   if (throttled.undervoltage_since_boot && !throttled.undervoltage_now) {
     out.push({
       level: 'warn',
-      title: 'Under-voltage happened since boot',
-      body: 'Power dipped at least once since this machine started. It is fine now, but the ' +
-        'supply is marginal and SD-card corruption follows from exactly this.',
+      title: t('sys.throttle.bootPower.title'),
+      body: t('sys.throttle.bootPower.body'),
     });
   }
   if (throttled.throttled_since_boot && !throttled.throttled_now) {
     out.push({
       level: 'warn',
-      title: 'The CPU was throttled since boot',
-      body: 'The chip hit its limit at least once since boot — heat or power. Worth a heatsink ' +
-        'or a better supply if it keeps happening.',
+      title: t('sys.throttle.bootCpu.title'),
+      body: t('sys.throttle.bootCpu.body'),
     });
   }
   return out;
@@ -366,7 +427,7 @@ function readProcess(entry) {
 
 export default {
   id: 'system',
-  title: 'System',
+  get title() { return t('nav.system'); },
 
   async mount(root, ctx) {
     const store = ctx.store;
@@ -388,15 +449,15 @@ export default {
     const refreshBtn = h('button', {
       class: 'btn btn--sm', type: 'button',
       onClick: () => refreshAll(true),
-    }, icon('refresh', {size: 15}), 'Refresh');
+    }, icon('refresh', {size: 15}), t('action.refresh'));
 
     const grid = h('div', {class: 'grid grid--wide'});
 
     mount(root, [
       h('div', {class: 'page__header'},
         h('div', null,
-          h('h2', null, 'System'),
-          h('p', {class: 'page__lead'}, 'Live readings from this machine. Everything here is measured, nothing is cached.'),
+          h('h2', null, t('nav.system')),
+          h('p', {class: 'page__lead'}, t('sys.lead')),
         ),
         h('div', {class: 'page__actions'}, refreshBtn),
       ),
@@ -415,8 +476,8 @@ export default {
       python: h('span', {class: 'field-row__value mono tiny'}, '—'),
       version: h('span', {class: 'field-row__value mono tiny'}, '—'),
     };
-    const hostTitle = h('div', {class: 'card__title'}, 'This machine');
-    const hostSub = h('div', {class: 'card__sub'}, 'Reading hardware…');
+    const hostTitle = h('div', {class: 'card__title'}, t('sys.card.host'));
+    const hostSub = h('div', {class: 'card__sub'}, t('sys.host.reading'));
     const addressList = h('div', {class: 'row', style: {gap: 'var(--space-1)'}}, h('span', {class: 'faint small'}, '—'));
     const uptimeValue = h('span', {class: 'stat__value'}, '—');
     const serviceUptimeValue = h('span', {class: 'stat__value'}, '—');
@@ -429,26 +490,26 @@ export default {
       ),
       h('div', {class: 'card__body'},
         h('div', {class: 'fields'},
-          kvRow('Model', hostFields.model),
-          kvRow('Operating system', hostFields.os),
-          kvRow('Kernel', hostFields.kernel),
-          kvRow('Architecture', hostFields.arch),
-          kvRow('CPU', hostFields.cpu),
-          kvRow('Memory', hostFields.ram),
-          kvRow('Python', hostFields.python),
+          kvRow(t('sys.host.model'), hostFields.model),
+          kvRow(t('sys.host.os'), hostFields.os),
+          kvRow(t('sys.host.kernel'), hostFields.kernel),
+          kvRow(t('sys.host.arch'), hostFields.arch),
+          kvRow(t('sys.host.cpu'), hostFields.cpu),
+          kvRow(t('sys.host.memory'), hostFields.ram),
+          kvRow(t('sys.host.python'), hostFields.python),
           kvRow('project-os', hostFields.version),
         ),
         h('div', {class: 'stack stack--sm'},
-          h('span', {class: 'stat__label'}, 'Addresses'),
+          h('span', {class: 'stat__label'}, t('sys.host.addresses')),
           addressList,
         ),
         h('div', {class: 'stats'},
           h('div', {class: 'stat'},
-            h('span', {class: 'stat__label'}, 'Uptime'), uptimeValue),
+            h('span', {class: 'stat__label'}, t('sys.host.uptime')), uptimeValue),
           h('div', {class: 'stat'},
             h('span', {class: 'stat__label'}, 'project-os up'), serviceUptimeValue),
           h('div', {class: 'stat'},
-            h('span', {class: 'stat__label'}, 'Load'), loadValue,
+            h('span', {class: 'stat__label'}, t('sys.host.load')), loadValue,
             h('span', {class: 'stat__hint'}, '1 / 5 / 15 min')),
         ),
       ),
@@ -462,7 +523,7 @@ export default {
     const cpuCard = h('div', {class: 'card'},
       h('div', {class: 'card__header'},
         h('span', {class: 'card__icon'}, icon('cpu', {size: 18})),
-        h('div', {class: 'grow'}, h('div', {class: 'card__title'}, 'Processor'), cpuSub),
+        h('div', {class: 'grow'}, h('div', {class: 'card__title'}, t('sys.card.processor')), cpuSub),
       ),
       h('div', {class: 'card__body'},
         h('div', {style: {display: 'flex', justifyContent: 'center', padding: '2px 0'}}, cpuGauge.node),
@@ -476,12 +537,12 @@ export default {
       coreBars = [];
       clear(coreHost);
       if (!count) {
-        coreHost.appendChild(h('p', {class: 'small faint'}, 'Per-core usage is not reported on this machine.'));
+        coreHost.appendChild(h('p', {class: 'small faint'}, t('sys.perCore.none')));
         return;
       }
-      coreHost.appendChild(h('span', {class: 'stat__label'}, 'Per core'));
+      coreHost.appendChild(h('span', {class: 'stat__label'}, t('sys.perCore')));
       for (let i = 0; i < count; i += 1) {
-        const bar = meter('Core ' + i);
+        const bar = meter(t('sys.core', {n: i}));
         coreBars.push(bar);
         coreHost.appendChild(bar.node);
       }
@@ -489,8 +550,8 @@ export default {
 
     /* ------------------------------------------------------ memory card */
 
-    const memMeter = meter('RAM', {warn: 80, danger: 92});
-    const swapMeter = meter('Swap', {warn: 40, danger: 75});
+    const memMeter = meter(t('sys.mem.ram'), {warn: 80, danger: 92});
+    const swapMeter = meter(t('sys.mem.swap'), {warn: 40, danger: 75});
     const memDetail = h('div', {class: 'fields'});
     const memCard = card({
       title: 'Memory',
@@ -505,22 +566,22 @@ export default {
       swap: h('span', {class: 'field-row__value'}, '—'),
     };
     mount(memDetail, [
-      kvRow('Used', memFields.used),
-      kvRow('Available', memFields.available),
-      kvRow('Cached', memFields.cached),
-      kvRow('Swap', memFields.swap),
+      kvRow(t('sys.mem.used'), memFields.used),
+      kvRow(t('sys.mem.available'), memFields.available),
+      kvRow(t('sys.mem.cached'), memFields.cached),
+      kvRow(t('sys.mem.swap'), memFields.swap),
     ]);
 
     /* ------------------------------------------------- temperature card */
 
     const tempValue = h('span', {class: 'stat__value', style: {fontSize: 'var(--text-2xl)'}}, '—');
-    const tempHint = h('span', {class: 'stat__hint'}, 'Warm above 70 °C, throttling near 80 °C');
+    const tempHint = h('span', {class: 'stat__hint'}, t('sys.thermal.scale'));
     const warningHost = h('div', {class: 'stack stack--sm'});
     const tempCard = card({
-      title: 'Temperature & power',
+      title: t('sys.card.thermal'),
       iconName: 'thermometer',
       body: [
-        h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, 'SoC temperature'), tempValue, tempHint),
+        h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, t('sys.thermal.soc')), tempValue, tempHint),
         warningHost,
       ],
     });
@@ -528,7 +589,7 @@ export default {
     /* -------------------------------------------------------- disk card */
 
     const diskHost = h('div', {class: 'stack stack--sm'});
-    const diskCard = card({title: 'Storage', iconName: 'disk', body: diskHost});
+    const diskCard = card({title: t('sys.card.storage'), iconName: 'disk', body: diskHost});
     let diskMeters = new Map();
 
     /* ----------------------------------------------------- network card */
@@ -539,12 +600,12 @@ export default {
     const netTotals = h('span', {class: 'stat__hint'}, '—');
     const ifaceHost = h('div', {class: 'stack stack--sm'});
     const netCard = card({
-      title: 'Network',
+      title: t('sys.card.network'),
       iconName: 'wifi',
       body: [
         h('div', {class: 'stats'},
-          h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, 'Down'), netDown),
-          h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, 'Up'), netUp),
+          h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, t('sys.net.down')), netDown),
+          h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, t('sys.net.up')), netUp),
         ),
         h('div', {class: 'stack stack--sm'},
           spark.node,
@@ -554,7 +615,7 @@ export default {
             h('span', {class: 'tiny faint', style: {marginLeft: 'auto'}}, 'last ' + HISTORY + ' samples'),
           ),
         ),
-        h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, 'Since boot'), netTotals),
+        h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, t('sys.net.sinceBoot')), netTotals),
         ifaceHost,
       ],
     });
@@ -562,13 +623,13 @@ export default {
     /* ----------------------------------------------------- process card */
 
     const processBody = h('tbody');
-    const processNote = h('div', {class: 'small faint'}, 'Loading…');
+    const processNote = h('div', {class: 'small faint'}, t('state.loading'));
     const processCard = h('div', {class: 'card card--span2'},
       h('div', {class: 'card__header'},
         h('span', {class: 'card__icon'}, icon('apps', {size: 18})),
         h('div', {class: 'grow'},
-          h('div', {class: 'card__title'}, 'Top processes'),
-          h('div', {class: 'card__sub'}, 'Sorted by memory — the resource a 1 GB board runs out of first'),
+          h('div', {class: 'card__title'}, t('sys.card.processes')),
+          h('div', {class: 'card__sub'}, t('sys.processes.sub')),
         ),
       ),
       h('div', {class: 'card__body'},
@@ -576,11 +637,11 @@ export default {
           h('table', {class: 'table'},
             h('thead', null,
               h('tr', null,
-                h('th', null, 'PID'),
-                h('th', null, 'Process'),
-                h('th', null, 'User'),
-                h('th', {class: 'num'}, 'CPU'),
-                h('th', {class: 'num'}, 'Memory'),
+                h('th', null, t('sys.processes.col.pid')),
+                h('th', null, t('sys.processes.col.name')),
+                h('th', null, t('sys.processes.col.user')),
+                h('th', {class: 'num'}, t('sys.processes.col.cpu')),
+                h('th', {class: 'num'}, t('sys.processes.col.memory')),
               ),
             ),
             processBody,
@@ -609,7 +670,7 @@ export default {
 
       hostTitle.textContent = hostname || 'This machine';
       const tier = board.tier_note || board.reason || '';
-      hostSub.textContent = tier || (board.is_raspberry_pi ? 'Raspberry Pi' : 'Generic host');
+      hostSub.textContent = tier || (board.is_raspberry_pi ? t('sys.host.pi') : t('sys.host.generic'));
 
       hostFields.model.textContent = board.model || info.model || '—';
       hostFields.os.textContent = os.name || info.os_name || '—';
@@ -651,7 +712,7 @@ export default {
         diskMeters = new Map();
         clear(diskHost);
         if (!disks.length) {
-          diskHost.appendChild(h('p', {class: 'small faint'}, 'No mounted filesystems reported.'));
+          diskHost.appendChild(h('p', {class: 'small faint'}, t('sys.storage.none')));
         }
         for (const key of keys) {
           const bar = meter(key, {warn: 85, danger: 93});
@@ -705,7 +766,7 @@ export default {
       const names = Object.keys(net.interfaces || {});
       mount(ifaceHost, names.length
         ? [
-            h('span', {class: 'stat__label'}, 'Interfaces'),
+            h('span', {class: 'stat__label'}, t('sys.net.interfaces')),
             h('div', {class: 'fields'}, names.map((name) => {
               const entry = net.interfaces[name] || {};
               const rx = num(entry.rx_bytes);
@@ -714,16 +775,15 @@ export default {
                 (rx === null ? '—' : fmt.bytes(rx)) + ' / ' + (tx === null ? '—' : fmt.bytes(tx))));
             })),
           ]
-        : h('p', {class: 'small faint'}, 'No interfaces reported.'));
+        : h('p', {class: 'small faint'}, t('sys.net.none')));
     }
 
     function paintProcesses(list) {
       clear(processBody);
       if (!Array.isArray(list)) {
         processNote.textContent = processEndpoint === false
-          ? 'This build does not report per-process usage. Installing psutil on the Pi ' +
-            '(pip install psutil) gives the server what it needs.'
-          : 'Loading…';
+          ? t('sys.processes.noPsutil')
+          : t('state.loading');
         processNote.className = 'small faint';
         return;
       }
@@ -734,7 +794,7 @@ export default {
         return bm - am;
       });
       if (!rows.length) {
-        processNote.textContent = 'No processes reported.';
+        processNote.textContent = t('sys.processes.none');
         processNote.className = 'small faint';
         return;
       }
@@ -752,8 +812,8 @@ export default {
         ));
       }
       processNote.textContent = rows.length > PROCESS_ROWS
-        ? 'Showing the ' + PROCESS_ROWS + ' hungriest of ' + rows.length + ' processes.'
-        : rows.length + ' processes.';
+        ? t('sys.processes.showing', {shown: PROCESS_ROWS, total: rows.length})
+        : t('sys.processes.count', {total: rows.length});
       processNote.className = 'small faint';
     }
 
@@ -765,7 +825,7 @@ export default {
       for (let i = 0; i < coreBars.length; i += 1) coreBars[i].set(s.perCore[i]);
       const freq = s.cpuFreq === null ? '' : fmt.number(s.cpuFreq) + ' MHz';
       const count = s.cpuCount === null ? '' : s.cpuCount + ' cores';
-      cpuSub.textContent = [count, freq].filter(Boolean).join(' · ') || 'Usage since the last sample';
+      cpuSub.textContent = [count, freq].filter(Boolean).join(' · ') || t('sys.processes.cpuNote');
 
       memMeter.set(s.mem.percent, s.mem.total === null || s.mem.used === null
         ? null
@@ -786,10 +846,10 @@ export default {
       else if (dig(info, 'throttled.available', false)) {
         mount(warningHost, h('div', {class: 'notice'},
           icon('check', {size: 18}),
-          h('div', {class: 'notice__body'}, h('span', {class: 'small muted'}, 'Power and thermals are clean since boot.'))));
+          h('div', {class: 'notice__body'}, h('span', {class: 'small muted'}, t('sys.thermal.clean')))));
       } else {
         mount(warningHost, h('p', {class: 'small faint'},
-          'Throttling flags come from vcgencmd and are only available on Raspberry Pi OS.'));
+          t('sys.thermal.viaVcgencmd')));
       }
 
       paintDisks(s.disks);
@@ -819,7 +879,7 @@ export default {
         infoError = null;
       } catch (err) {
         if (disposed) return;
-        infoError = (err && err.message) || 'Could not read the host description.';
+        infoError = (err && err.message) || t('sys.error.info');
       }
       paintInfo();
       if (store.get('stats')) applyStats(store.get('stats'));
@@ -833,7 +893,7 @@ export default {
         applyStats(raw);
       } catch (err) {
         if (disposed) return;
-        hostSub.textContent = (err && err.message) || 'Could not read system stats.';
+        hostSub.textContent = (err && err.message) || t('sys.error.stats');
         hostSub.className = 'card__sub danger';
       }
     }
@@ -897,7 +957,7 @@ export default {
     }, 10000);
 
     refreshAll(false).catch((err) => {
-      if (!disposed) toast((err && err.message) || 'The system page could not load.', {type: 'error'});
+      if (!disposed) toast((err && err.message) || t('sys.error.page'), {type: 'error'});
     });
 
     return () => {

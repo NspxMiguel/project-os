@@ -93,10 +93,11 @@ BOARD_TYPES = {
 MINIMUM_RAM_MB = 700
 
 #: What the board unlocks. The app store reads this; nothing else branches on it.
+#: Em português: isto sai direto na tela, e a tela fala português.
 TIERS = (
-    (3500, "roomy", "Everything in the catalog fits, including Home Assistant."),
-    (1800, "comfortable", "Home Assistant fits alongside a couple of services."),
-    (0, "minimal", "Built-in apps and light services. Home Assistant will be tight."),
+    (3500, "roomy", "Cabe tudo o que tem no catálogo, Home Assistant incluído."),
+    (1800, "comfortable", "O Home Assistant cabe junto com uns dois serviços."),
+    (0, "minimal", "Aplicativos nativos e serviços leves. O Home Assistant vai ficar apertado."),
 )
 
 
@@ -245,12 +246,12 @@ def detect(proc_root: str = "/proc", dt_root: str = "/proc/device-tree") -> Boar
 
     if ram_mb and ram_mb < MINIMUM_RAM_MB:
         supported, reason = False, (
-            "%s has %d MB of RAM. project-os needs at least 1 GB -- below that the "
-            "web interface and a single app do not fit at the same time."
-            % (model or "This machine", ram_mb)
+            "%s tem %d MB de RAM. O project-os precisa de pelo menos 1 GB -- abaixo "
+            "disso a interface e um aplicativo sozinho já não cabem juntos."
+            % (model or "Esta máquina", ram_mb)
         )
     elif not ram_mb:
-        supported, reason = True, "Could not measure RAM; proceeding, but watch memory use."
+        supported, reason = True, "Não deu para medir a RAM; seguindo assim mesmo, mas fique de olho na memória."
     else:
         supported, reason = True, ""
 
