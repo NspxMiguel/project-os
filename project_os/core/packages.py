@@ -81,33 +81,51 @@ def _is_root() -> bool:
     return bool(getuid) and getuid() == 0
 
 
-def _sudo_without_password() -> bool:
-    """Whether ``sudo -n`` works right now, asked once and cached."""
-    global _sudo_ok
-    if _sudo_ok is None:
-        if not _have("sudo"):
-            _sudo_ok = False
-        else:
-            try:
-                result = subprocess.run(
-                    ["sudo", "-n", "true"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    timeout=5.0, check=False,
-                )
-                _sudo_ok = result.returncode == 0
-            except (OSError, subprocess.SubprocessError):
-                _sudo_ok = False
-    return bool(_sudo_ok)
+#: One answer per command: "may I sudo apt-get" and "may I sudo flatpak" are
+#: different questions with different answers.
+_sudo_cache = {}  # type: Dict[str, bool]
 
 
-_sudo_ok = None  # type: Optional[bool]
+def reset_privilege_cache() -> None:
+    """Forget what sudo said. Used by tests and after a sudoers change."""
+    _sudo_cache.clear()
 
 
-def _privilege_prefix() -> List[str]:
+def _sudo_without_password(command: str = "apt-get") -> bool:
+    """Whether ``sudo -n`` may run *this command*, asked once per command.
+
+    Asking ``sudo -n true`` instead -- which is what this did -- gets the wrong
+    answer on exactly the machine that matters. A well-made sudoers grants the
+    few commands the service actually needs and nothing else, so ``true`` is
+    denied and the whole package manager concluded it could not become root.
+    On the shipped image that meant Advanced mode reported "apt is here, but
+    this service cannot become root to use it" while apt was, in fact, allowed.
+
+    ``sudo -l <command>`` asks the real question: may I run that? It exits 0
+    when the rule permits it, without running anything.
+    """
+    if command in _sudo_cache:
+        return _sudo_cache[command]
+    allowed = False
+    if _have("sudo"):
+        try:
+            result = subprocess.run(
+                ["sudo", "-n", "-l", command],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=5.0, check=False,
+            )
+            allowed = result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            allowed = False
+    _sudo_cache[command] = allowed
+    return allowed
+
+
+def _privilege_prefix(command: str = "apt-get") -> List[str]:
     """[] when already root, ["sudo", "-n"] when that works, else raise."""
     if _is_root():
         return []
-    if _sudo_without_password():
+    if _sudo_without_password(command):
         return ["sudo", "-n"]
     raise PackageError(
         "Installing system packages needs root, and this service has neither.",
@@ -127,7 +145,7 @@ def backends() -> List[Dict[str, Any]]:
     apt_reason = ""
     if not apt_present:
         apt_reason = "apt is not on this machine (it is not a Debian-based system)."
-    elif not (_is_root() or _sudo_without_password()):
+    elif not (_is_root() or _sudo_without_password("apt-get")):
         apt_reason = "apt is here, but this service cannot become root to use it."
     result.append({
         "id": "apt",
@@ -285,7 +303,7 @@ def search(query: str, sources: Optional[List[str]] = None, limit: int = MAX_RES
 # ---------------------------------------------------------------------------
 def install_argv(source: str, name: str) -> List[str]:
     if source == "apt":
-        return _privilege_prefix() + [
+        return _privilege_prefix("apt-get") + [
             "apt-get", "install", "-y", "--no-install-recommends", name,
         ]
     if source == "flatpak":
@@ -295,7 +313,7 @@ def install_argv(source: str, name: str) -> List[str]:
 
 def remove_argv(source: str, name: str) -> List[str]:
     if source == "apt":
-        return _privilege_prefix() + ["apt-get", "remove", "-y", name]
+        return _privilege_prefix("apt-get") + ["apt-get", "remove", "-y", name]
     if source == "flatpak":
         return ["flatpak", "uninstall", "-y", "--noninteractive", name]
     raise PackageError("Unknown package source %r." % source, code="unknown_source")

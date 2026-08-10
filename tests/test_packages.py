@@ -55,23 +55,74 @@ def test_apt_install_never_uses_a_shell_and_is_noninteractive(monkeypatch) -> No
 
 def test_apt_uses_sudo_when_not_root(monkeypatch) -> None:
     monkeypatch.setattr(packages, "_is_root", lambda: False)
-    monkeypatch.setattr(packages, "_sudo_without_password", lambda: True)
+    monkeypatch.setattr(packages, "_sudo_without_password", lambda *_: True)
     assert packages.install_argv("apt", "firefox")[:2] == ["sudo", "-n"]
 
 
 def test_apt_refuses_before_running_when_root_is_impossible(monkeypatch) -> None:
     """Better a refusal with a reason than a permission error halfway through."""
     monkeypatch.setattr(packages, "_is_root", lambda: False)
-    monkeypatch.setattr(packages, "_sudo_without_password", lambda: False)
+    monkeypatch.setattr(packages, "_sudo_without_password", lambda *_: False)
     with pytest.raises(packages.PackageError) as excinfo:
         packages.install_argv("apt", "firefox")
     assert excinfo.value.code == "needs_root"
     assert "sudo" in excinfo.value.hint
 
 
+def test_sudo_probe_asks_about_the_command_not_about_true(monkeypatch) -> None:
+    """The image grants sudo for apt-get and nothing else, on purpose.
+
+    The probe used to run ``sudo -n true``, which that sudoers denies, so the
+    package manager declared itself powerless on the one machine where it
+    actually works. It has to ask about the command it means to run.
+    """
+    asked = []
+
+    class Result:
+        def __init__(self, code): self.returncode = code
+
+    def fake_run(argv, **kwargs):
+        asked.append(argv)
+        # A sudoers that permits apt-get and refuses everything else.
+        return Result(0 if argv[-1] == "apt-get" else 1)
+
+    monkeypatch.setattr(packages, "_have", lambda command: True)
+    monkeypatch.setattr(packages.subprocess, "run", fake_run)
+    packages.reset_privilege_cache()
+
+    assert packages._sudo_without_password("apt-get") is True
+    assert packages._sudo_without_password("flatpak") is False
+    assert asked[0] == ["sudo", "-n", "-l", "apt-get"]
+    assert "true" not in [argv[-1] for argv in asked]
+
+    # Asked once per command, not once per install.
+    before = len(asked)
+    packages._sudo_without_password("apt-get")
+    assert len(asked) == before
+    packages.reset_privilege_cache()
+
+
+def test_apt_is_usable_under_the_images_narrow_sudoers(monkeypatch) -> None:
+    """backends() must report apt as usable there, not as impossible."""
+    class Result:
+        def __init__(self, code): self.returncode = code
+
+    monkeypatch.setattr(packages, "_is_root", lambda: False)
+    monkeypatch.setattr(packages, "_have", lambda command: command != "flatpak")
+    monkeypatch.setattr(
+        packages.subprocess, "run",
+        lambda argv, **kwargs: Result(0 if argv[-1] == "apt-get" else 1),
+    )
+    packages.reset_privilege_cache()
+    apt = [item for item in packages.backends() if item["id"] == "apt"][0]
+    packages.reset_privilege_cache()
+    assert apt["can_install"] is True
+    assert apt["reason"] == ""
+
+
 def test_flatpak_needs_no_privilege(monkeypatch) -> None:
     monkeypatch.setattr(packages, "_is_root", lambda: False)
-    monkeypatch.setattr(packages, "_sudo_without_password", lambda: False)
+    monkeypatch.setattr(packages, "_sudo_without_password", lambda *_: False)
     argv = packages.install_argv("flatpak", "org.mozilla.firefox")
     assert argv[0] == "flatpak" and "-y" in argv
 
