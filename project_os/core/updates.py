@@ -418,6 +418,22 @@ def under_systemd() -> bool:
     return bool(os.environ.get("INVOCATION_ID")) or os.path.exists("/run/systemd/system")
 
 
+def _systemctl_argv() -> List[str]:
+    """``systemctl`` prefixed with sudo unless this process is already root.
+
+    The service runs as an unprivileged user on purpose, so a bare ``systemctl
+    restart`` is refused -- which meant the update swapped the code, said it had
+    finished, and left the old version serving until the next power cut. The
+    image's sudoers grants exactly this command with no password.
+    """
+    getuid = getattr(os, "geteuid", None)
+    if getuid is not None and getuid() == 0:
+        return ["systemctl"]
+    if shutil.which("sudo"):
+        return ["sudo", "-n", "systemctl"]
+    return ["systemctl"]
+
+
 def restart(on_line: Optional[Any] = None) -> str:
     """Restart into the new code, whichever way this process is supervised.
 
@@ -432,7 +448,7 @@ def restart(on_line: Optional[Any] = None) -> str:
         # update reported success and the box went on serving the old code until
         # somebody happened to reboot it.
         say("reiniciando o serviço project-os")
-        subprocess.Popen(["systemctl", "restart", UNIT_NAME])
+        subprocess.Popen(_systemctl_argv() + ["restart", UNIT_NAME])
         return "systemd"
     argv = restart_argv()
     # The swap renamed the directory this process is sitting in, and a working

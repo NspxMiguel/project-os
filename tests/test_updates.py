@@ -347,3 +347,31 @@ def test_the_wrapper_still_starts_a_tree_with_the_old_package_name(tmp_path) -> 
     out = subprocess.run([str(tree / "bin" / "project-os")], capture_output=True, timeout=30)
     assert out.returncode == 0, out.stderr.decode()
     assert b"started projectos" in out.stdout
+
+
+def test_the_restart_asks_sudo_when_it_is_not_root(monkeypatch):
+    """The service runs unprivileged; a bare systemctl restart is refused.
+
+    The update swapped the tree, reported success, and left the old code serving
+    until the next power cut -- the worst possible shape for a bug, because the
+    version number on the screen only changes after a reboot nobody did.
+    """
+    from project_os.core import updates
+
+    monkeypatch.setattr(updates.os, "geteuid", lambda: 1000, raising=False)
+    monkeypatch.setattr(updates.shutil, "which", lambda name: "/usr/bin/" + name)
+    assert updates._systemctl_argv() == ["sudo", "-n", "systemctl"]
+
+
+def test_the_restart_does_not_ask_sudo_when_it_is_already_root(monkeypatch):
+    from project_os.core import updates
+
+    monkeypatch.setattr(updates.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(updates.shutil, "which", lambda name: "/usr/bin/" + name)
+    assert updates._systemctl_argv() == ["systemctl"]
+
+
+def test_the_restart_targets_the_unit_the_image_installs():
+    from project_os.core import updates
+
+    assert updates.UNIT_NAME == "project-os.service"
