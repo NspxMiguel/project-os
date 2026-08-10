@@ -58,8 +58,8 @@ setStrings('en', {
   'settings.account.currentPassword': 'Current password',
   'settings.account.newPassword': 'New password',
   'settings.account.confirmPassword': 'Confirm new password',
+  'settings.account.password.empty': 'Type the new password.',
   'settings.account.password.mismatch': 'The new password and its confirmation do not match.',
-  'settings.account.password.tooShort': 'Use at least 8 characters.',
   'settings.account.password.changed': 'Password changed. Every session, including this one, was signed out — sign back in.',
   'settings.account.sessions': 'Signed-in sessions',
   'settings.account.sessions.empty': 'No other session data to show.',
@@ -302,8 +302,8 @@ export default {
 
     async function changePassword() {
       const {current, next, confirm: confirmValue} = state.passwordForm;
-      if (next.length < 8) {
-        toast(t('settings.account.password.tooShort'), {type: 'error'});
+      if (!next) {
+        toast(t('settings.account.password.empty'), {type: 'error'});
         return;
       }
       if (next !== confirmValue) {

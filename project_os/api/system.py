@@ -291,7 +291,7 @@ async def set_system_password(
         status = {
             "unavailable": 501,
             "needs_root": 403,
-            "too_short": 400,
+            "empty": 400,
             "bad_password": 400,
         }.get(result["code"], 500)
         raise ApiError(status, result["code"], result["message"], result.get("hint"))

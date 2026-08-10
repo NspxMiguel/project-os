@@ -36,7 +36,7 @@ class Credentials(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=1)
 
 
 @router.get("/auth/status")
@@ -67,10 +67,6 @@ async def setup(
     """
     if not auth.setup_required(db):
         raise ApiError(409, "already_configured", "project-os already has a user.")
-    if len(payload.password) < 8:
-        raise ApiError(
-            400, "weak_password", "Use at least 8 characters for the first password."
-        )
     user = await auth.create_user_async(db, payload.username, payload.password)
     session = auth.create_session(
         db, user["id"], user_agent=request.headers.get("user-agent"), config=config

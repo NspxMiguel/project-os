@@ -6,14 +6,18 @@ import {h, mount, clear} from '../lib/dom.js';
 import {icon} from '../lib/icons.js';
 import * as api from '../lib/api.js';
 
-const MIN_LENGTH = 8;
+// No minimum. "n coloca isso: The password needs at least 8 characters." --
+// this is his own box on his own network, and a rule that refuses the password
+// someone actually wants is a rule that gets worked around, not obeyed. The
+// meter still says what it thinks; it just does not stand in the doorway.
+const GOOD_LENGTH = 8;
 
 /** Cheap, honest strength estimate: length first, variety second. */
 function strength(password) {
   const value = String(password || '');
-  if (!value) return {level: 0, label: '', hint: 'At least ' + MIN_LENGTH + ' characters.'};
+  if (!value) return {level: 0, label: '', hint: 'Any password you like.'};
   let score = 0;
-  if (value.length >= MIN_LENGTH) score += 1;
+  if (value.length >= GOOD_LENGTH) score += 1;
   if (value.length >= 12) score += 1;
   if (value.length >= 16) score += 1;
   const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(value)).length;
@@ -22,7 +26,7 @@ function strength(password) {
   const level = Math.max(1, Math.min(4, Math.round(score * 4 / 5)));
   const labels = {1: 'Weak', 2: 'Fair', 3: 'Good', 4: 'Strong'};
   const hints = {
-    1: value.length < MIN_LENGTH ? 'Too short — use at least ' + MIN_LENGTH + ' characters.' : 'Add length or another kind of character.',
+    1: 'Short, but it is yours.',
     2: 'Longer is better than complicated.',
     3: 'Good. A few more characters would not hurt.',
     4: 'Strong.',
@@ -103,7 +107,7 @@ export default {
       });
 
       const bars = [0, 1, 2, 3].map(() => h('span', {class: 'strength__bar'}));
-      const meterHint = h('span', {class: 'field__hint'}, 'At least ' + MIN_LENGTH + ' characters.');
+      const meterHint = h('span', {class: 'field__hint'}, 'Any password you like.');
       const meter = h('div', {class: 'strength', dataset: {level: '0'}},
         h('div', {class: 'strength__bars'}, bars),
         meterHint,
@@ -146,8 +150,8 @@ export default {
           username.focus();
           return;
         }
-        if (pass.length < MIN_LENGTH) {
-          showProblem('The password needs at least ' + MIN_LENGTH + ' characters.');
+        if (!pass) {
+          showProblem('Type a password.');
           password.focus();
           return;
         }

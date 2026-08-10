@@ -130,15 +130,37 @@ def test_the_helper_gets_the_password_on_stdin_never_as_an_argument(monkeypatch,
     assert not any("senha" in str(part) for part in seen["argv"])
 
 
-def test_a_short_password_is_refused_before_root_is_involved(tmp_path):
+def test_a_short_password_is_accepted_because_he_asked_for_that(monkeypatch, tmp_path):
+    """"n coloca isso: The password needs at least 8 characters."
+
+    It is his machine on his network. A minimum that refuses the password
+    someone wants is a rule that gets worked around, not obeyed.
+    """
     from project_os.core import syspass
 
     helper = tmp_path / "set-password"
     helper.write_text("#!/bin/sh\nexit 0\n")
     helper.chmod(0o755)
 
-    result = syspass.set_password("curta", helper=str(helper))
-    assert result["code"] == "too_short"
+    class Completed(object):
+        returncode = 0
+        stdout = b""
+
+    monkeypatch.setattr(syspass.subprocess, "run", lambda *a, **k: Completed())
+    monkeypatch.setattr(syspass.os, "geteuid", lambda: 0)
+
+    assert syspass.set_password("curta", helper=str(helper))["ok"] is True
+
+
+def test_an_empty_password_is_still_refused(tmp_path):
+    """An account with no password is not a short password -- it is an open door."""
+    from project_os.core import syspass
+
+    helper = tmp_path / "set-password"
+    helper.write_text("#!/bin/sh\nexit 0\n")
+    helper.chmod(0o755)
+
+    assert syspass.set_password("", helper=str(helper))["code"] == "empty"
 
 
 def test_a_password_with_a_colon_is_refused(tmp_path):

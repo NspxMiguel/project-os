@@ -39,7 +39,6 @@ HELPER = "/usr/local/sbin/project-os-set-password"
 #: The account the helper is allowed to change.
 SERVICE_USER = os.environ.get("PROJECT_OS_SYSTEM_USER", "project-os")
 
-MIN_LENGTH = 8
 TIMEOUT = 15.0
 
 
@@ -87,11 +86,13 @@ def set_password(password: str, helper: str = HELPER, user: str = "") -> Dict[st
     if not state["available"]:
         return {"ok": False, "code": "unavailable", "message": state["reason"], "hint": state["hint"]}
 
-    if not isinstance(password, str) or len(password) < MIN_LENGTH:
+    if not isinstance(password, str) or not password:
+        # Empty is the one refusal left: an account with an empty password is
+        # not a short password, it is an open door. Everything else is his call.
         return {
             "ok": False,
-            "code": "too_short",
-            "message": "The system password needs at least %d characters." % MIN_LENGTH,
+            "code": "empty",
+            "message": "The system password cannot be empty.",
             "hint": None,
         }
     if "\n" in password or ":" in password:
@@ -137,4 +138,4 @@ def set_password(password: str, helper: str = HELPER, user: str = "") -> Dict[st
     return {"ok": True, "code": "", "message": "", "hint": None, "user": account}
 
 
-__all__ = ["HELPER", "MIN_LENGTH", "SERVICE_USER", "available", "set_password"]
+__all__ = ["HELPER", "SERVICE_USER", "available", "set_password"]
