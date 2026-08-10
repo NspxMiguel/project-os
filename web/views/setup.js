@@ -5,6 +5,7 @@
 import {h, mount, clear} from '../lib/dom.js';
 import {icon} from '../lib/icons.js';
 import * as api from '../lib/api.js';
+import {navigate} from '../lib/router.js';
 
 // No minimum. "n coloca isso: The password needs at least 8 characters." --
 // this is his own box on his own network, and a rule that refuses the password
@@ -207,6 +208,13 @@ export default {
           submit.disabled = false;
           submit.classList.remove('is-busy');
           mount(submit, 'Create account');
+          if (err && err.code === 'already_configured') {
+            // "ele ta mandando eu criar um usuario, sendo q o usuario ja
+            // existe" -- so stop asking. The account is there; what he needs is
+            // the sign-in screen, not a form that can only refuse him.
+            navigate('#/login', {replace: true});
+            return;
+          }
           showProblem((err && err.message) || 'Could not create the account.');
         }
       }

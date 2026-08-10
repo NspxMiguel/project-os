@@ -880,8 +880,13 @@ function buildRouter() {
   });
 
   r.add('#/setup', (routeCtx) => {
-    if (!store.get('setupRequired') && store.get('authenticated')) {
-      navigate('#/', {replace: true});
+    if (!store.get('setupRequired')) {
+      // The box already has its account. Being signed out is the normal way to
+      // arrive here -- an old bookmark, a browser that kept #/setup in the URL
+      // -- and it used to end at the wizard, which could only answer "already
+      // has a user". A machine that is set up sends you to the door, not to the
+      // form for building one.
+      navigate(store.get('authenticated') ? '#/' : '#/login', {replace: true});
       return;
     }
     return showView('setup', routeCtx, {layout: 'auth', title: 'Set up project-os'});
