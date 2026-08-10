@@ -86,3 +86,67 @@ def test_lookup_reads_whatever_field_the_provider_uses(monkeypatch):
         monkeypatch.setattr(
             "urllib.request.urlopen", lambda *a, **k: Response(payload))
         assert clock.lookup("http://example.invalid/tz") == "America/Sao_Paulo"
+
+
+# ------------------------------------------------------------- system password
+
+
+def test_setting_the_system_password_needs_the_helper(monkeypatch):
+    """A box without the root helper says so; it does not pretend."""
+    from project_os.core import syspass
+
+    monkeypatch.setattr(syspass.os.path, "exists", lambda path: False)
+    result = syspass.set_password("uma senha boa")
+    assert result["ok"] is False
+    assert result["code"] == "unavailable"
+
+
+def test_the_helper_gets_the_password_on_stdin_never_as_an_argument(monkeypatch, tmp_path):
+    """Arguments are readable in ps by every user on the machine."""
+    from project_os.core import syspass
+
+    helper = tmp_path / "set-password"
+    helper.write_text("#!/bin/sh\nexit 0\n")
+    helper.chmod(0o755)
+
+    seen = {}
+
+    class Completed(object):
+        returncode = 0
+        stdout = b""
+
+    def fake_run(argv, input=None, **kwargs):
+        seen["argv"] = argv
+        seen["input"] = input
+        return Completed()
+
+    monkeypatch.setattr(syspass.subprocess, "run", fake_run)
+    monkeypatch.setattr(syspass.os, "geteuid", lambda: 0)
+
+    result = syspass.set_password("uma senha boa", helper=str(helper))
+    assert result["ok"] is True
+    assert seen["argv"] == [str(helper)]
+    assert seen["input"] == b"project-os:uma senha boa\n"
+    assert not any("senha" in str(part) for part in seen["argv"])
+
+
+def test_a_short_password_is_refused_before_root_is_involved(tmp_path):
+    from project_os.core import syspass
+
+    helper = tmp_path / "set-password"
+    helper.write_text("#!/bin/sh\nexit 0\n")
+    helper.chmod(0o755)
+
+    result = syspass.set_password("curta", helper=str(helper))
+    assert result["code"] == "too_short"
+
+
+def test_a_password_with_a_colon_is_refused(tmp_path):
+    """chpasswd reads user:password, so a colon would split it in the wrong place."""
+    from project_os.core import syspass
+
+    helper = tmp_path / "set-password"
+    helper.write_text("#!/bin/sh\nexit 0\n")
+    helper.chmod(0o755)
+
+    assert syspass.set_password("senha:com:dois", helper=str(helper))["code"] == "bad_password"

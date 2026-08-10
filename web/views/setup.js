@@ -38,6 +38,7 @@ export default {
     let step = 0;
     let busy = false;
     let createdUser = '';
+    let sshProblem = '';
 
     const host = h('div', {class: 'auth__card'});
     mount(root, host);
@@ -95,6 +96,7 @@ export default {
         type: 'password', id: 'setup-password', name: 'new-password',
         autocomplete: 'new-password', required: true,
       });
+
       const confirmPassword = h('input', {
         type: 'password', id: 'setup-confirm', name: 'confirm-password',
         autocomplete: 'new-password', required: true,
@@ -105,6 +107,16 @@ export default {
       const meter = h('div', {class: 'strength', dataset: {level: '0'}},
         h('div', {class: 'strength__bars'}, bars),
         meterHint,
+      );
+
+      // The image ships with the Linux account locked -- a password printed in a
+      // public README is not a password. This is where the box gets one, which
+      // is also the only place it will ever exist.
+      const sshToggle = h('input', {type: 'checkbox', id: 'setup-ssh', checked: true});
+      const sshField = h('label', {class: 'row row--tight'},
+        sshToggle,
+        h('span', {class: 'small muted'},
+          'Use this password for SSH too (the terminal login for this machine).'),
       );
 
       const submit = h('button', {class: 'btn btn--primary btn--block btn--lg', type: 'submit'}, 'Create account');
@@ -162,6 +174,16 @@ export default {
           } catch (err) {
             /* a wrong clock is worth a warning, never a failed setup */
           }
+          // Needs the session that setup just created, so it goes after it.
+          if (sshToggle.checked) {
+            try {
+              await api.post('/system/password', {password: pass});
+            } catch (err) {
+              // A box without the helper (a manual install) simply cannot do
+              // this, and that is not a reason to fail the whole setup.
+              sshProblem = String((err && err.message) || err);
+            }
+          }
           // The server may or may not hand back a session; make sure we have one.
           try {
             await api.get('/auth/me', {redirectOnAuth: false});
@@ -198,6 +220,7 @@ export default {
             h('label', {class: 'field__label', for: 'setup-confirm'}, 'Confirm password'),
             confirmPassword,
           ),
+          sshField,
           submit,
         ),
         h('p', {class: 'auth__foot'}, 'Store this password somewhere safe — there is no email recovery on a Raspberry Pi.'),
@@ -210,6 +233,18 @@ export default {
     }
 
     /* --------------------------------------------------------- step 2 */
+    // Says which of the two happened, because "you can SSH in now" and "you
+    // cannot" are very different facts to leave someone with.
+    function sshNote() {
+      if (!sshProblem) {
+        return h('p', {class: 'auth__foot'},
+          'SSH is ready with the same password: ssh project-os@project-os.local');
+      }
+      return h('div', {class: 'notice notice--warning'},
+        h('div', {class: 'notice__body'},
+          'The SSH password was not set: ' + sshProblem));
+    }
+
 
     function go(hash) {
       return async () => {
@@ -249,6 +284,7 @@ export default {
           icon('devices', {size: 17}), 'Discover devices'),
         h('button', {class: 'btn btn--ghost btn--block', type: 'button', onClick: go('#/')},
           'Go to the dashboard'),
+        sshNote(),
       ]);
     }
 

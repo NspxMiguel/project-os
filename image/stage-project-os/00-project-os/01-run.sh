@@ -6,6 +6,7 @@
 # the machine doing the building.
 
 install -m 755 files/usr/local/sbin/project-os-firstboot "${ROOTFS_DIR}/usr/local/sbin/project-os-firstboot"
+install -m 755 files/usr/local/sbin/project-os-set-password "${ROOTFS_DIR}/usr/local/sbin/project-os-set-password"
 install -m 644 files/etc/systemd/system/project-os.service "${ROOTFS_DIR}/etc/systemd/system/project-os.service"
 install -m 644 files/etc/systemd/system/project-os-firstboot.service "${ROOTFS_DIR}/etc/systemd/system/project-os-firstboot.service"
 
@@ -27,12 +28,16 @@ set -e
 # same user rather than as root: the web interface installs packages and runs
 # apps, and none of that needs to own the machine.
 #
-# The password is NOT expired on purpose, and that is a correction of a real
-# mistake: expiring it looked like good hygiene, but on a box whose only door is
-# SSH it slams that door. An expired password makes sshd refuse every
-# non-interactive command, and the interactive change then failed too -- the
-# machine became unreachable by the one route it has. A warning that cannot lock
-# anyone out beats a policy that can.
+# No password at all, on purpose -- the Home Assistant idea:
+#
+#   "n da pra criar a passwd na porra do setup??? no site igual ha"
+#
+# A password printed in a public README is not a password. Shipping one and then
+# expiring it was worse: an expired password makes sshd refuse non-interactive
+# commands, which is the only way to administer a box with no screen, and it
+# locked the machine out entirely. So the account ships locked, and the first-run
+# screen in the browser is what gives it a password -- one that exists nowhere
+# except on this card.
 if ! id -u project-os >/dev/null 2>&1; then
     adduser --system --group --home /var/lib/project-os --shell /usr/sbin/nologin project-os
 fi
@@ -58,8 +63,12 @@ chown -R project-os:project-os /opt/project-os
 # advanced eu falei q é um linux normal". Scoped to apt/flatpak, not to a shell.
 cat > /etc/sudoers.d/010_project-os <<'SUDO'
 project-os ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt-mark, /usr/bin/flatpak, /usr/bin/systemctl
+project-os ALL=(root) NOPASSWD: /usr/local/sbin/project-os-set-password
 SUDO
 chmod 440 /etc/sudoers.d/010_project-os
+
+# Locked: no password, so no login, until the first-run screen sets one.
+passwd --lock project-os >/dev/null 2>&1 || true
 
 systemctl enable project-os.service
 systemctl enable project-os-firstboot.service
@@ -95,9 +104,11 @@ project-os
    Se o .local nao funcionar na sua rede, use o IP que aparece no roteador.
    A primeira tela pede para criar a sua conta.
 
-Sem monitor em nenhum momento. Se precisar do terminal:
-   ssh project-os@project-os.local   (senha inicial: project-os)
+Sem monitor em nenhum momento.
 
-   Troque a senha assim que entrar, com:  passwd
-   Esta imagem e publica, entao a senha inicial tambem e.
+O SSH vem sem senha nenhuma -- esta imagem e publica, e senha que vem escrita
+num arquivo publico nao e senha. Voce define a sua na propria tela do passo 3,
+e a partir dai entra com:
+
+   ssh project-os@project-os.local
 EOF

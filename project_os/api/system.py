@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
 from project_os import __version__, auth
-from project_os.core import hardware, sysinfo
+from project_os.core import hardware, syspass, sysinfo
 from project_os.db import Database
 from project_os.errors import ApiError
 from project_os.main import get_config, get_db
@@ -258,3 +258,42 @@ async def _run(command: List[str], check: bool = False) -> Optional[str]:
 
 
 __all__ = ["router"]
+
+
+# --------------------------------------------------------------------------- ssh
+
+
+class SystemPassword(BaseModel):
+    password: str = Field(..., min_length=1)
+
+
+@router.get("/password")
+async def password_state(
+    user: Dict[str, Any] = Depends(auth.require_auth),
+) -> Dict[str, Any]:
+    """Whether the Linux account's password can be set from here."""
+    return syspass.available()
+
+
+@router.post("/password")
+async def set_system_password(
+    body: SystemPassword,
+    user: Dict[str, Any] = Depends(auth.require_auth),
+) -> Dict[str, Any]:
+    """Set the password of the Linux account used for SSH.
+
+    A public image cannot ship a real password, so it ships none at all and the
+    account is locked. This is how it gets one -- from the same screen that
+    already asks you to invent an administrator password.
+    """
+    result = syspass.set_password(body.password)
+    if not result["ok"]:
+        status = {
+            "unavailable": 501,
+            "needs_root": 403,
+            "too_short": 400,
+            "bad_password": 400,
+        }.get(result["code"], 500)
+        raise ApiError(status, result["code"], result["message"], result.get("hint"))
+    log.info("system password changed by %s", user.get("username"))
+    return {"ok": True, "user": result.get("user", "")}
