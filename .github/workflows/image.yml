@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: project_os
+          path: project-os
 
       - name: Make room
         # pi-gen needs more free disk than a runner has by default.
@@ -48,16 +48,16 @@ jobs:
 
       - name: Wire project-os into pi-gen
         run: |
-          cp project_os/image/config pi-gen/config
-          cp -a project_os/image/stage-project_os pi-gen/stage-project_os
+          cp project-os/image/config pi-gen/config
+          cp -a project-os/image/stage-project-os pi-gen/stage-project-os
           # Our stage is the one that exports an image; without this pi-gen also
           # writes out a plain Raspberry Pi OS Lite, which is not the product.
           touch pi-gen/stage2/SKIP_IMAGES
-          # The stage list in config points at ./image/stage-project_os as seen
+          # The stage list in config points at ./image/stage-project-os as seen
           # from the repo; inside pi-gen it lives at the top level.
-          sed -i 's#\./image/stage-project_os#./stage-project_os#' pi-gen/config
+          sed -i 's#\./image/stage-project-os#./stage-project-os#' pi-gen/config
           {
-            echo "PROJECT_OS_SRC=${GITHUB_WORKSPACE}/project_os"
+            echo "PROJECT_OS_SRC=${GITHUB_WORKSPACE}/project-os"
             echo "export PROJECT_OS_SRC"
           } >> pi-gen/config
 
@@ -72,7 +72,7 @@ jobs:
           # pi-gen runs under sudo, so everything it wrote belongs to root.
           sudo chown -R "$(id -u):$(id -g)" pi-gen/deploy
           file=$(ls pi-gen/deploy/*.img.xz | head -n1)
-          version=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' project_os/project_os/__init__.py | head -n1 | tr -d '"' || true)
+          version=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' project-os/project_os/__init__.py | head -n1 | tr -d '"' || true)
           [ -n "$version" ] || version="${GITHUB_REF_NAME#v}"
           name="project-os-${version}.img.xz"
           mv "$file" "pi-gen/deploy/${name}"
@@ -93,7 +93,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || inputs.release
         env:
           GH_TOKEN: ${{ github.token }}
-        working-directory: project_os
+        working-directory: project-os
         run: |
           tag="${GITHUB_REF_NAME}"
           gh release view "$tag" >/dev/null 2>&1 || \

@@ -16,6 +16,7 @@ import tarfile
 
 import pytest
 
+from project_os import __version__
 from project_os.core import updates
 
 
@@ -42,8 +43,11 @@ def test_a_nonsense_version_does_not_crash_the_check() -> None:
 
 # -------------------------------------------------------------------- manifest
 def _manifest(**overrides):
+    # Derived, never a literal: the suite must not start failing the day the
+    # product's own version catches up with the number written in the test.
+    newer = "%d.0.0" % (int(__version__.split(".")[0]) + 1)
     data = {
-        "version": "0.2.0",
+        "version": newer,
         "url": "https://example.invalid/project_os-0.2.0.tar.gz",
         "sha256": "a" * 64,
         "notes": "Tudo novo",
@@ -55,7 +59,7 @@ def _manifest(**overrides):
 def test_check_reads_a_manifest(monkeypatch) -> None:
     monkeypatch.setattr(updates, "_fetch_json", lambda url, timeout=0: _manifest())
     result = updates.check_tarball("https://example.invalid/latest.json")
-    assert result["latest"] == "0.2.0"
+    assert result["latest"] == _manifest()["version"]
     assert result["update_available"] is True
     assert result["method"] == updates.METHOD_TARBALL
 
@@ -209,7 +213,6 @@ def test_restart_keeps_an_explicit_command_line_as_it_was() -> None:
 # ------------------------------------------------------------------------ HTTP
 def test_status_reports_the_running_version(auth_client) -> None:
     from project_os import __version__
-
     from project_os.core import updates as live
 
     response = auth_client.get("/api/updates")
@@ -299,3 +302,48 @@ def test_restart_lands_in_the_new_tree_not_the_renamed_old_one(tmp_path, monkeyp
     assert os.path.realpath(os.getcwd()) == os.path.realpath(str(tmp_path / "install.previous-0.1.0"))
     os.chdir(str(root))
     assert os.path.realpath(os.getcwd()) == os.path.realpath(str(root))
+
+
+# ---------------------------------------------------------------- entry point
+
+
+def test_the_unit_never_names_anything_inside_the_tree() -> None:
+    """The one thing that made the rename un-updatable.
+
+    A unit that says `python -m projectos` pins the *inside* of the tree, and an
+    update replaces the tree without being able to touch /etc -- so a rename
+    could only be delivered by writing a new card. The unit now names a script
+    that lives in the tree, which every update replaces.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    unit = (root / "image" / "stage-project-os" / "00-project-os" / "files"
+            / "etc" / "systemd" / "system" / "project-os.service").read_text()
+
+    assert "ExecStart=/opt/project-os/bin/project-os" in unit
+    assert "-m project_os" not in unit, "the module name must not be pinned in /etc"
+
+    installer = (root / "install.sh").read_text()
+    assert "ExecStart=$PREFIX/bin/project-os" in installer
+
+
+def test_the_wrapper_still_starts_a_tree_with_the_old_package_name(tmp_path) -> None:
+    """A box migrated from 0.1.x has projectos/ on disk until it updates."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    tree = tmp_path / "install"
+    (tree / "bin").mkdir(parents=True)
+    shutil.copy(root / "bin" / "project-os", tree / "bin" / "project-os")
+    (tree / "bin" / "project-os").chmod(0o755)
+    # The old layout: package named projectos, no venv.
+    (tree / "projectos").mkdir()
+    (tree / "projectos" / "__init__.py").write_text("")
+    (tree / "projectos" / "__main__.py").write_text("print('started projectos')\n")
+
+    out = subprocess.run([str(tree / "bin" / "project-os")], capture_output=True, timeout=30)
+    assert out.returncode == 0, out.stderr.decode()
+    assert b"started projectos" in out.stdout

@@ -1,0 +1,42 @@
+#!/bin/sh
+# The one path the systemd unit ever names.
+#
+#   "nao quero ter q ficar fleshando nao, tem q ter alguma forma de atualizar
+#    direto de la"
+#
+# The rename to project-os broke updating for exactly one reason: the unit said
+# `python -m projectos`, and an update replaces the tree but cannot replace the
+# unit. Anything the unit hard-codes about the inside of the tree becomes a
+# thing that can only be fixed by rewriting /etc, which the service is not root
+# enough to do -- so it became "reflash the card", which is not updating.
+#
+# So the unit points here, forever, and this script -- which lives *inside* the
+# tree and is therefore replaced by every update -- decides how to start. A
+# future rename, a different interpreter, an extra flag: all of that becomes an
+# ordinary update.
+set -e
+
+here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+# The virtualenv the installer or the image built. Falling back to the system
+# python keeps a hand-made install working instead of failing at boot.
+if [ -x "$here/.venv/bin/python" ]; then
+    python="$here/.venv/bin/python"
+else
+    python=$(command -v python3 || command -v python)
+fi
+
+# Whichever package this tree ships. Named in one place so the next rename is a
+# one-line change here and nothing outside the tree.
+module=project_os
+if [ ! -d "$here/$module" ]; then
+    for candidate in project_os projectos; do
+        if [ -d "$here/$candidate" ]; then
+            module=$candidate
+            break
+        fi
+    done
+fi
+
+cd "$here"
+exec "$python" -m "$module" "$@"

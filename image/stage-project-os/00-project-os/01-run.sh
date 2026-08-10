@@ -13,7 +13,7 @@ install -m 644 files/etc/systemd/system/project-os-firstboot.service "${ROOTFS_D
 # the repository root, so PROJECT_OS_SRC points at it.
 SRC="${PROJECT_OS_SRC:-$(pwd)}"
 install -d -m 755 "${ROOTFS_DIR}/opt/project-os"
-for item in project_os web docs requirements.txt pyproject.toml README.md LICENSE install.sh; do
+for item in project_os bin web docs requirements.txt pyproject.toml README.md LICENSE install.sh; do
     if [ -e "${SRC}/${item}" ]; then
         cp -a "${SRC}/${item}" "${ROOTFS_DIR}/opt/project-os/"
     fi
@@ -35,6 +35,7 @@ fi
 chage -d 0 project-os 2>/dev/null || true
 install -d -m 755 -o project-os -g project-os /var/lib/project-os
 chown -R project-os:project-os /opt/project-os
+chmod +x /opt/project-os/bin/project-os
 
 python3 -m venv /opt/project-os/.venv
 /opt/project-os/.venv/bin/pip install --no-cache-dir --upgrade pip wheel

@@ -15,13 +15,13 @@
 set -euo pipefail
 
 REPO="${PROJECT_OS_REPO:-https://github.com/NspxMiguel/project-os.git}"
-BRANCH="${PROJECTOS_BRANCH:-main}"
+BRANCH="${PROJECT_OS_BRANCH:-main}"
 PREFIX="${PROJECT_OS_PREFIX:-/opt/project-os}"
 STATE="${PROJECT_OS_HOME:-/var/lib/project-os}"
 SERVICE_USER="${PROJECT_OS_USER:-project-os}"
 PORT="${PROJECT_OS_PORT:-8099}"
 # Empty means "decide by how much RAM this board has" -- see choose_extras.
-EXTRAS="${PROJECTOS_EXTRAS:-}"
+EXTRAS="${PROJECT_OS_EXTRAS:-}"
 
 UNIT=/etc/systemd/system/project-os.service
 
@@ -171,7 +171,7 @@ User=$SERVICE_USER
 Group=$SERVICE_USER
 Environment=PROJECT_OS_HOME=$STATE
 WorkingDirectory=$PREFIX
-ExecStart=$PREFIX/.venv/bin/python3 -m project_os --port $PORT
+ExecStart=$PREFIX/bin/project-os --port $PORT
 Restart=on-failure
 RestartSec=5
 
@@ -205,7 +205,7 @@ wait_for_boot() {
     done
     printf '\n'
     note "não respondeu em 60s. O que aconteceu:"
-    journalctl -u project_os -n 30 --no-pager || true
+    journalctl -u project-os -n 30 --no-pager || true
     return 1
 }
 
@@ -229,9 +229,9 @@ finish() {
 
   Ele vem vazio. Os aplicativos ficam na loja, dentro da própria tela.
 
-    systemctl status project_os
-    journalctl -u project_os -f
-    $PREFIX/.venv/bin/python3 -m project_os --help
+    systemctl status project-os
+    journalctl -u project-os -f
+    $PREFIX/bin/project-os --help
 
 DONE
 }

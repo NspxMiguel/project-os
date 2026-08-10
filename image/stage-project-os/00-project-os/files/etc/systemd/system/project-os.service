@@ -10,7 +10,7 @@ User=project-os
 Group=project-os
 Environment=PROJECT_OS_HOME=/var/lib/project-os
 WorkingDirectory=/opt/project-os
-ExecStart=/opt/project-os/.venv/bin/python -m project_os --host 0.0.0.0 --port 80
+ExecStart=/opt/project-os/bin/project-os --host 0.0.0.0 --port 80
 
 # Port 80 so the address is just the IP -- typing a port number is exactly the
 # kind of thing that makes a box feel like a script instead of a system. The
