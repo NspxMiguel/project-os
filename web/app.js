@@ -1139,7 +1139,7 @@ function restoreDock() {
 }
 
 // Escape hatch for app panels and for debugging from the console.
-window.project-os = {
+window.projectOs = {
   store, api, apiFor, fmt, h, icon, toast, confirm, navigate, readStats,
   get ws() { return ws; },
   get router() { return router; },

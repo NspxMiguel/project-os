@@ -73,14 +73,28 @@ export function navigate(path, {replace = false} = {}) {
   const target = '#' + (String(path).startsWith('#') ? String(path).slice(1) : String(path));
   const next = target === '#' ? '#/' : target;
   if (window.location.hash === next) {
-    // Same hash: no hashchange event fires, so re-dispatch manually.
+    // Already there. A view that writes its own state into the URL -- Files
+    // does, with ?path= -- calls this on every load, and re-dispatching would
+    // mount it again, which loads again, which navigates again: the screen
+    // never settles and on a Pi the fan comes on. Asking for the route you are
+    // already on is not a request to run it twice; router.reload() is.
+    if (replace) return;
+    // A plain navigate() to the same hash fires no hashchange event, so a
+    // deliberate re-run (clicking the current item in the sidebar) needs help.
     window.dispatchEvent(new HashChangeEvent('hashchange'));
     return;
   }
   if (replace) {
+    // Same route, different query: the view is recording where it is, not
+    // asking to go anywhere. Files does this on every folder it opens, and
+    // dispatching would tear the screen down and build it again -- losing the
+    // scroll position, and, when the view navigates as it loads, looping.
+    // Matching ignores the query string anyway (see the header), so this is the
+    // same rule stated once more.
+    const sameRoute = splitLocation(window.location.hash).path === splitLocation(next).path;
     const url = window.location.href.split('#')[0] + next;
     window.history.replaceState(null, '', url);
-    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    if (!sameRoute) window.dispatchEvent(new HashChangeEvent('hashchange'));
   } else {
     window.location.hash = next;
   }

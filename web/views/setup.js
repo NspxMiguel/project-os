@@ -165,12 +165,16 @@ export default {
 
         try {
           await api.post('/setup', {username: user, password: pass}, {redirectOnAuth: false});
-          // The box boots on UTC and has no way to know where it is. The browser
-          // does, and asking a person to type "America/Sao_Paulo" to make the
-          // schedule work would be a poor first impression.
+          // The box boots on UTC and has no way to know where it is. It asks the
+          // network at boot -- "puxar fuso pela net ne..." -- and that answer
+          // wins, because it describes where the machine is, not where whoever
+          // opened this page happens to be. The browser is only the fallback for
+          // when that lookup found nothing (no internet on first boot, say).
           try {
+            const current = await api.get('/settings');
+            const known = ((current.settings || {}).system || {}).timezone || '';
             const zone = (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || '';
-            if (zone) await api.put('/settings', {values: {'system.timezone': zone}});
+            if (!known && zone) await api.put('/settings', {values: {'system.timezone': zone}});
           } catch (err) {
             /* a wrong clock is worth a warning, never a failed setup */
           }
