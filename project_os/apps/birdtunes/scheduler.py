@@ -279,16 +279,16 @@ def next_change(moment: dt.datetime, schedule_cfg: Dict[str, Any]) -> Dict[str, 
                 return {
                     "event": "starts", "at": cursor.isoformat(),
                     "window_id": window.get("id") if window else None,
-                    "message": "Plays at %s" % when,
+                    "message": "Toca às %s" % when,
                 }
             return {
                 "event": "stops", "at": cursor.isoformat(),
                 "window_id": current.get("id") if current else None,
-                "message": "Stops at %s" % when,
+                "message": "Para às %s" % when,
             }
     return {
         "event": "none", "at": None, "window_id": None,
-        "message": "No upcoming change in the next week.",
+        "message": "Nada marcado para a próxima semana.",
     }
 
 

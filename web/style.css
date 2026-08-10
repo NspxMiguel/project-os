@@ -1041,6 +1041,16 @@ kbd {
   .page__header .page__actions { width: 100%; }
 }
 
+/* No celular a barra de cima tinha coisa demais para a largura que tem: o
+   título saía como "B..", e a pílula de CPU aparecia cortada no meio. Os
+   números já estão no painel, inteiros, e o nome da tela já está no menu de
+   baixo -- então aqui eles saem, e sobra espaço para o que só existe aqui:
+   trocar Simples/Avançado, o estado da conexão e sair. */
+@media (max-width: 440px) {
+  .topbar .pills { display: none; }
+  .topbar__title { display: none; }
+}
+
 /* Wider screens get a roomier sidebar again. */
 @media (min-width: 1400px) {
   :root { --sidebar-w: 248px; }

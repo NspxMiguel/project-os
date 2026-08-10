@@ -576,8 +576,8 @@ def _virtual_all_playlist(db: Any) -> Dict[str, Any]:
     )
     return {
         "id": ALL_PLAYLIST_ID,
-        "name": "All tracks",
-        "description": "Every track in the library that is not blocked or missing.",
+        "name": "Todas as faixas",
+        "description": "Todas as faixas do acervo que não estão bloqueadas nem sumidas.",
         "source": "virtual",
         "source_url": None,
         "color": "",
