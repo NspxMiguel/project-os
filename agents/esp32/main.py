@@ -1,9 +1,9 @@
-# ProjectOS ESP32 accessory -- MicroPython.
+# project-os ESP32 accessory -- MicroPython.
 #
 # *"o esp32 tbm n precisa ser s'ó um sistema, poderia ser tbm algo q ajuda o rp,
 # algum acessorio, diversas coisas da pra fazer com uma"*
 #
-# This is the accessory half. The board does not run ProjectOS; it pairs with
+# This is the accessory half. The board does not run project-os; it pairs with
 # one and becomes a pair of hands out in the house -- a temperature reading in
 # the bird room, a button by the door, a relay on a lamp.
 #
@@ -25,7 +25,7 @@ import urequests
 
 WIFI_SSID = "sua-rede"
 WIFI_PASSWORD = "sua-senha"
-SERVER = "http://projectos.local:8099"
+SERVER = "http://project-os.local:8099"
 # Leave empty on the first run and set PAIRING_CODE; the board prints the token
 # it receives, and you paste it here so it survives a reboot.
 TOKEN = ""

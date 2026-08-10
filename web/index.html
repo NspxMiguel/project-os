@@ -6,15 +6,15 @@
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#0f1417" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f4f6f7" media="(prefers-color-scheme: light)">
-<meta name="description" content="ProjectOS — the system layer of your Raspberry Pi.">
+<meta name="description" content="project-os — the system layer of your Raspberry Pi.">
 <meta name="robots" content="noindex">
-<title>ProjectOS</title>
+<title>project-os</title>
 <script>
   // Anti-flash: resolve the theme before the first paint. The shell rewrites
   // these values once the server config is known.
   (function () {
     try {
-      var pref = localStorage.getItem('projectos.theme') || 'auto';
+      var pref = localStorage.getItem('project_os.theme') || 'auto';
       var resolved = pref;
       if (pref === 'auto') {
         resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
@@ -23,7 +23,7 @@
       var root = document.documentElement;
       root.setAttribute('data-theme', resolved);
       root.setAttribute('data-theme-pref', pref);
-      var accent = localStorage.getItem('projectos.accent');
+      var accent = localStorage.getItem('project_os.accent');
       if (accent) root.style.setProperty('--accent', accent);
     } catch (err) {
       document.documentElement.setAttribute('data-theme', 'dark');
@@ -36,11 +36,11 @@
 <body>
 <div id="app" class="boot">
   <div class="boot__inner">
-    <div class="spinner" role="status" aria-label="Loading ProjectOS"></div>
+    <div class="spinner" role="status" aria-label="Loading project-os"></div>
   </div>
 </div>
 <noscript>
-  <p class="noscript">ProjectOS needs JavaScript enabled to run its browser interface.</p>
+  <p class="noscript">project-os needs JavaScript enabled to run its browser interface.</p>
 </noscript>
 <script type="module" src="/app.js"></script>
 </body>

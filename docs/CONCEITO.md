@@ -1,4 +1,4 @@
-# Conceito — o que o ProjectOS é
+# Conceito — o que o project-os é
 
 > "ele seria um sistema base, sem nada por padrao, mas dai vc vai conectando coisas nele
 > pra deixar ele um monstro, vamos pensar comigo por favor..."
@@ -46,7 +46,7 @@ Tem cara e tela própria. Roda no Pi. Ocupa RAM.
 *Jellyfin, Home Assistant, Node-RED, bot de zap, BirdTunes, Pi-hole, Syncthing.*
 
 ### 2.2 Integração
-Não tem tela própria. Ensina o ProjectOS a falar com alguma coisa que já existe.
+Não tem tela própria. Ensina o project-os a falar com alguma coisa que já existe.
 *Kasa, Tuya, Chromecast, AirPlay, PS5, Xbox, impressora 3D (Moonraker/OctoPrint), impressora
 de papel (IPP), Spotify Connect, câmera ONVIF.*
 
@@ -75,7 +75,7 @@ Deixo pro final — mas o modelo de dados precisa comportar desde já, senão vi
 
 ## 3. Detecção → Receita → Loja: a espinha do sistema
 
-Este é o fluxo central. Tudo que o ProjectOS acha vira uma linha numa lista só, e toda
+Este é o fluxo central. Tudo que o project-os acha vira uma linha numa lista só, e toda
 linha responde **"e daí, o que eu faço com isso?"**.
 
 ### 3.1 Três detectores
@@ -126,7 +126,7 @@ pode ser de nível mais alto se for tecnicamente impossível baixar.** A `local_
 Esses dois pedidos vieram separados, mas são o mesmo conceito, e tratá-los como um só é o
 que impede o sistema de virar duas gambiarras paralelas:
 
-> **Ajudante é qualquer máquina que entra no ProjectOS e contribui com o que o Pi não tem.**
+> **Ajudante é qualquer máquina que entra no project-os e contribui com o que o Pi não tem.**
 
 O Pi continua sendo o cérebro e o dono da fila. O ajudante nunca manda, só oferece.
 
@@ -201,11 +201,11 @@ comportamento óbvio.
 > "hospedar servidores (dependendo da rasp fica ruim, mas fds, usuario q escolhe ele q se fode)"
 
 Decisão registrada: **o cálculo de "cabe nesta placa" é aviso, nunca trava.** O
-`projectos/core/catalog.py` já mede isso; o que muda é que instalar algo que não cabe pede
+`project_os/core/catalog.py` já mede isso; o que muda é que instalar algo que não cabe pede
 uma confirmação e segue. O Frigate aparece num Pi de 1 GB dizendo "precisa de ~1500 MB, você
 tem ~700 MB livres" — e o botão instala do mesmo jeito.
 
-A única trava dura que continua de pé é a placa de 512 MB, porque ali o próprio ProjectOS
+A única trava dura que continua de pé é a placa de 512 MB, porque ali o próprio project-os
 não roda — não é opinião sobre o gosto de ninguém, é o serviço não subir.
 
 ---
@@ -252,14 +252,14 @@ no código. O `catalog.py` atual vira o **leitor** do arquivo, não o dono da li
 
 ## 9. Contêiner: decidido em 08/08/2026
 
-**O ProjectOS é nativo. Os apps de terceiros podem ser contêiner.**
+**O project-os é nativo. Os apps de terceiros podem ser contêiner.**
 
 Ele me deixou escolher ("escolha por mim"), então registro a escolha e o motivo:
 
-- **O ProjectOS em si nunca roda em contêiner.** systemd + venv, direto na placa. Isso é o
-  que ele disse desde o começo — *"projectos n é um container, é um sistema operacional"* —
+- **O project-os em si nunca roda em contêiner.** systemd + venv, direto na placa. Isso é o
+  que ele disse desde o começo — *"project_os n é um container, é um sistema operacional"* —
   e não muda.
-- **Encaixe leve roda nativo**, no próprio processo do ProjectOS: BirdTunes, Kasa, Tuya,
+- **Encaixe leve roda nativo**, no próprio processo do project-os: BirdTunes, Kasa, Tuya,
   MQTT, receitas. Custo de memória perto de zero, e é a maioria do que ele vai usar.
 - **App grande de terceiro roda em contêiner**: Jellyfin, Node-RED, bot de zap, Zigbee2MQTT,
   Uptime Kuma. Uma linha de definição por app em vez de uma receita de `apt`/`pip`/`npm` que
@@ -289,4 +289,4 @@ faz nativo. Contêiner é pra quando a alternativa é uma receita frágil.
 | `api/*` | Continuam |
 | `web/*` | **Refeito.** Item 24. |
 | `apps/birdtunes` | Deixa de vir instalado. Passa a ser o app nº 1 da loja. |
-| `docs/SIMPLEPROJECTOS.md` | Ganha o capítulo "ESP32 como ajudante" (item 37) |
+| `docs/SIMPLE-PROJECT-OS.md` | Ganha o capítulo "ESP32 como ajudante" (item 37) |

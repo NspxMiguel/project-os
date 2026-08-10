@@ -14,7 +14,7 @@ dois jeitos ruins de um jeito diferente, e o app não finge que um deles é de g
 | Precisa de | Conta de negócios da Meta, número verificado, aprovação | Nada além de rodar a ponte |
 | Estabilidade | Oficial, suportada, não quebra do nada | Depende de engenharia reversa de terceiro (whatsapp-web.js, Baileys, WPPConnect); quebra quando a Meta muda algo |
 | Risco pro número | Nenhum — é a API de verdade | A Meta pode banir o número. É automação disfarçada de app oficial, e ela sabe detectar isso |
-| Onde roda | Nuvem da Meta; o Pi só fala HTTP com ela | Um processo Node (container, outro serviço) que **o ProjectOS não hospeda** |
+| Onde roda | Nuvem da Meta; o Pi só fala HTTP com ela | Um processo Node (container, outro serviço) que **o project-os não hospeda** |
 
 Nenhuma opção é "a certa". Cloud API é o caminho de quem tem paciência para o cadastro e não
 se importa de pagar depois de um tempo. Ponte local é o caminho de quem quer testar hoje sem
@@ -25,7 +25,7 @@ não o pessoal.
 
 ## 2. Por isso o app é um encaixe de encaixe: provedores
 
-`projectos/apps/whatsapp-bot/providers/` define uma interface pequena (`connect`,
+`project_os/apps/whatsapp-bot/providers/` define uma interface pequena (`connect`,
 `disconnect`, `status`, `send_text`, mais três ganchos de webhook) e três implementações:
 
 - **`null`** — não fala com nada, só registra a mensagem. É o padrão. O app instala,
@@ -36,7 +36,7 @@ não o pessoal.
   Meta exige antes de aceitar o endpoint.
 - **`bridge`** — fala HTTP com uma ponte que **você** roda em outro lugar. Contrato mínimo:
   `POST {base_url}/send` para enviar, e a ponte chama de volta o webhook deste app com um
-  header `X-Bridge-Token` para provar quem ela é. O ProjectOS não sobe o processo Node — só
+  header `X-Bridge-Token` para provar quem ela é. O project-os não sobe o processo Node — só
   conversa com ele.
 
 Trocar de provedor é mudar um campo de configuração, nunca uma reescrita.
@@ -61,12 +61,12 @@ só entra em uso quando um provedor de verdade está configurado) para não doer
 - **Lista de permissão vazia por padrão.** Um bot que responde a qualquer número no minuto em
   que é instalado é um problema morando no bolso de alguém. Ninguém fala com ele até o dono
   cadastrar o número.
-- **Assinatura do webhook, sempre.** A rota `POST /webhook` não pede login do ProjectOS —
+- **Assinatura do webhook, sempre.** A rota `POST /webhook` não pede login do project-os —
   não tem como a Meta ou a ponte apresentar um cookie de sessão — então ela é protegida pela
   assinatura/token do próprio provedor. Sem isso, o webhook seria um jeito de qualquer um na
   internet mandar mensagem "recebida" fabricada.
 - **Segredos nomeados para serem redigidos.** `access_token`, `verify_token`, `app_secret` e
-  `bridge.token` batem no filtro de `projectos/config.py` (`is_secret_key`) e voltam como
+  `bridge.token` batem no filtro de `project_os/config.py` (`is_secret_key`) e voltam como
   `********` em qualquer leitura de configuração — o painel nunca vê o valor real depois de
   salvo.
 
@@ -77,7 +77,7 @@ só entra em uso quando um provedor de verdade está configurado) para não doer
 O prefixo é configurável (`!` por padrão). Três comandos vêm prontos:
 
 - `!help` — lista os comandos disponíveis.
-- `!status` — CPU, RAM, temperatura e disco, lendo `projectos/core/sysinfo.py`.
+- `!status` — CPU, RAM, temperatura e disco, lendo `project_os/core/sysinfo.py`.
 - `!apps` — quais apps instalados estão rodando agora.
 
 Outros apps registram comando sem importar este módulo (o id tem hífen, então nem daria para

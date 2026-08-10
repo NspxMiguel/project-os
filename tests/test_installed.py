@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from projectos.core import installed
+from project_os.core import installed
 
 
 @pytest.fixture()

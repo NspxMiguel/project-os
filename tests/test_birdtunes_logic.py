@@ -36,7 +36,7 @@ def _schedule_cfg(start: str = "20:00", end: str = "07:00") -> dict:
     ],
 )
 def test_quiet_hours_wrap_around_midnight(now: str, expected: bool) -> None:
-    from projectos.apps.birdtunes import safety
+    from project_os.apps.birdtunes import safety
 
     hour, minute = (int(part) for part in now.split(":"))
     moment = dt.datetime(2026, 8, 10, hour, minute)
@@ -46,7 +46,7 @@ def test_quiet_hours_wrap_around_midnight(now: str, expected: bool) -> None:
 def test_quiet_hours_same_start_and_end_is_never_quiet() -> None:
     """A zero-length range must not be read as 'quiet all day' - that would mean a bird
     room that never gets music and a user with no idea why."""
-    from projectos.apps.birdtunes import safety
+    from project_os.apps.birdtunes import safety
 
     cfg = _schedule_cfg("08:00", "08:00")
     for hour in range(24):
@@ -55,7 +55,7 @@ def test_quiet_hours_same_start_and_end_is_never_quiet() -> None:
 
 
 def test_quiet_hours_disabled_schedule_allows_everything() -> None:
-    from projectos.apps.birdtunes import safety
+    from project_os.apps.birdtunes import safety
 
     cfg = _schedule_cfg()
     cfg["enabled"] = False
@@ -69,14 +69,14 @@ def test_quiet_hours_disabled_schedule_allows_everything() -> None:
 def test_volume_is_clamped_to_the_configured_ceiling(
     requested: float, ceiling: float, expected: float
 ) -> None:
-    from projectos.apps.birdtunes import safety
+    from project_os.apps.birdtunes import safety
 
     cfg = {"output": {"max_volume": ceiling}}
     assert safety.clamp_volume(requested, cfg) == pytest.approx(expected)
 
 
 def test_cannot_play_during_quiet_hours_even_with_a_reachable_device() -> None:
-    from projectos.apps.birdtunes import safety
+    from project_os.apps.birdtunes import safety
 
     ok, reason = safety.check_can_play(
         dt.datetime(2026, 8, 10, 23, 0), _schedule_cfg(), device_available=True
@@ -86,7 +86,7 @@ def test_cannot_play_during_quiet_hours_even_with_a_reachable_device() -> None:
 
 
 def test_cannot_play_when_the_speaker_is_unreachable() -> None:
-    from projectos.apps.birdtunes import safety
+    from project_os.apps.birdtunes import safety
 
     ok, reason = safety.check_can_play(
         dt.datetime(2026, 8, 10, 12, 0), _schedule_cfg(), device_available=False
@@ -131,7 +131,7 @@ NOON = dt.datetime(2026, 8, 10, 12, 0)
 
 
 def test_liking_a_track_raises_its_score() -> None:
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     neutral = recommender.score_track(_track(plays=3), DEFAULT_CFG, NOON, [])
     liked = recommender.score_track(_track(plays=3, likes=1), DEFAULT_CFG, NOON, [])
@@ -140,7 +140,7 @@ def test_liking_a_track_raises_its_score() -> None:
 
 def test_play_less_lowers_the_score_without_silencing_the_track() -> None:
     """'Recommend less' is a nudge, not a ban - the track must still be reachable."""
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     neutral = recommender.score_track(_track(plays=3), DEFAULT_CFG, NOON, [])
     softened = recommender.score_track(_track(plays=3, less=1), DEFAULT_CFG, NOON, [])
@@ -148,7 +148,7 @@ def test_play_less_lowers_the_score_without_silencing_the_track() -> None:
 
 
 def test_dislike_hits_harder_than_play_less() -> None:
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     less = recommender.score_track(_track(plays=3, less=1), DEFAULT_CFG, NOON, [])
     disliked = recommender.score_track(_track(plays=3, dislikes=1), DEFAULT_CFG, NOON, [])
@@ -156,13 +156,13 @@ def test_dislike_hits_harder_than_play_less() -> None:
 
 
 def test_blocked_tracks_score_zero() -> None:
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     assert recommender.score_track(_track(blocked=1, likes=5), DEFAULT_CFG, NOON, []) == 0
 
 
 def test_recently_played_tracks_are_heavily_penalised() -> None:
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     track = _track("t1", plays=3)
     fresh = recommender.score_track(track, DEFAULT_CFG, NOON, ["other", "ids"])
@@ -171,7 +171,7 @@ def test_recently_played_tracks_are_heavily_penalised() -> None:
 
 
 def test_pick_next_is_deterministic_with_an_injected_rng() -> None:
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     tracks = [
         {"id": "a", "tags": [], "feedback": _fb(plays=1)},
@@ -186,7 +186,7 @@ def test_pick_next_is_deterministic_with_an_injected_rng() -> None:
 def test_feedback_actually_shifts_selection_over_many_draws() -> None:
     """The end-to-end claim the buttons make: liked tracks show up more, 'less' shows up
     less. Probabilistic, so assert on a large sample with a fixed seed."""
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     tracks = [
         {"id": "loved", "tags": [], "feedback": _fb(plays=5, likes=3)},
@@ -203,13 +203,13 @@ def test_feedback_actually_shifts_selection_over_many_draws() -> None:
 
 
 def test_pick_next_returns_none_for_an_empty_candidate_set() -> None:
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     assert recommender.pick_next([], DEFAULT_CFG, NOON, [], random.Random(1)) is None
 
 
 def test_explain_reports_the_factors_behind_a_choice() -> None:
-    from projectos.apps.birdtunes import recommender
+    from project_os.apps.birdtunes import recommender
 
     factors = recommender.explain(
         {"id": "a", "tags": ["lullaby"], "feedback": _fb(plays=2, likes=1)},
@@ -225,7 +225,7 @@ def test_explain_reports_the_factors_behind_a_choice() -> None:
 
 def test_normalize_schedule_unwraps_the_get_shape() -> None:
     """GET answers {"schedule": {...}}; sending that back must not nest it again."""
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     result = scheduler.normalize_schedule({"schedule": {"enabled": False, "windows": []}})
     assert result["enabled"] is False
@@ -233,7 +233,7 @@ def test_normalize_schedule_unwraps_the_get_shape() -> None:
 
 
 def test_normalize_schedule_accepts_weekday_names() -> None:
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     result = scheduler.normalize_schedule(
         {"windows": [{"id": "manha", "days": ["mon", "TUE", "sex", 6], "start": "8:00", "end": "09:30"}]}
@@ -244,7 +244,7 @@ def test_normalize_schedule_accepts_weekday_names() -> None:
 
 
 def test_normalize_schedule_rejects_a_typo_instead_of_playing_every_day() -> None:
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     with pytest.raises(ValueError) as excinfo:
         scheduler.normalize_schedule({"windows": [{"days": ["monday!"], "start": "08:00", "end": "09:00"}]})
@@ -252,7 +252,7 @@ def test_normalize_schedule_rejects_a_typo_instead_of_playing_every_day() -> Non
 
 
 def test_normalize_schedule_names_unknown_fields() -> None:
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     with pytest.raises(ValueError) as excinfo:
         scheduler.normalize_schedule({"enabled": True, "wndows": []})
@@ -263,7 +263,7 @@ def test_unreadable_days_never_widen_a_window(monkeypatch) -> None:
     """A window nobody can parse must not fire; it used to fire every day."""
     import datetime as dt
 
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     cfg = {"enabled": True, "windows": [{"id": "broken", "days": ["someday"], "start": "00:00", "end": "23:59"}]}
     moment = dt.datetime(2026, 8, 10, 12, 0)
@@ -272,7 +272,7 @@ def test_unreadable_days_never_widen_a_window(monkeypatch) -> None:
 
 def test_config_replace_removes_keys_the_file_layer_still_has(tmp_path) -> None:
     """set() merges, so a deleted window used to come back. replace() does not."""
-    from projectos.config import Config
+    from project_os.config import Config
 
     path = tmp_path / "config.yaml"
     path.write_text(
@@ -295,12 +295,12 @@ def test_an_import_that_downloaded_nothing_after_an_error_is_not_done(tmp_path, 
     Reporting "done -- nothing new to import" for that reads as "you already had
     it", which is the opposite of what happened.
     """
-    from projectos.apps.birdtunes import sources
-    from projectos.db import Database
+    from project_os.apps.birdtunes import sources
+    from project_os.db import Database
 
     db = Database(tmp_path / "b.db")
     db.migrate()
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     job = sources.create_job(db, "https://example.invalid/v", kind="video")
@@ -338,8 +338,8 @@ def test_importing_a_link_you_already_have_still_fills_the_playlist(tmp_path, mo
     The second time you paste a link there is nothing to download, and the
     playlist used to come out empty -- which reads as the button not working.
     """
-    from projectos.apps.birdtunes import library, sources
-    from projectos.db import Database
+    from project_os.apps.birdtunes import library, sources
+    from project_os.db import Database
 
     db = Database(tmp_path / "b.db")
     db.migrate()
@@ -386,8 +386,8 @@ def test_importing_a_link_you_already_have_still_fills_the_playlist(tmp_path, mo
 
 def test_a_video_youtube_swallows_reports_its_real_reason(tmp_path, monkeypatch):
     """ignoreerrors turns a refusal into a silent None; the job must still say why."""
-    from projectos.apps.birdtunes import library, sources
-    from projectos.db import Database
+    from project_os.apps.birdtunes import library, sources
+    from project_os.db import Database
 
     db = Database(tmp_path / "b.db")
     db.migrate()
@@ -430,7 +430,7 @@ def test_a_refused_download_is_retried_as_another_youtube_client(tmp_path, monke
     downloaded as the Android one, minutes apart. Giving up on the first refusal
     would make importing look broken half the time.
     """
-    from projectos.apps.birdtunes import sources
+    from project_os.apps.birdtunes import sources
 
     seen = []
 
@@ -459,7 +459,7 @@ def test_a_refused_download_is_retried_as_another_youtube_client(tmp_path, monke
 
 def test_the_same_preset_twice_does_not_become_two_windows():
     """From the screenshot: "While I'm out 09:00 - 17:00" listed twice."""
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     window = {"id": "while_out", "name": "While I'm out", "start": "09:00", "end": "17:00",
               "days": [0, 1, 2, 3, 4]}
@@ -470,7 +470,7 @@ def test_the_same_preset_twice_does_not_become_two_windows():
 
 def test_two_windows_with_the_same_id_but_different_times_both_survive():
     """Deduping must not eat a real second window -- only exact repeats."""
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     result = scheduler.normalize_schedule({"windows": [
         {"id": "manha", "name": "manha", "start": "08:00", "end": "09:30"},
@@ -483,7 +483,7 @@ def test_two_windows_with_the_same_id_but_different_times_both_survive():
 
 def test_a_window_can_be_removed_by_sending_the_list_without_it():
     """The trash button posts the remaining windows; nothing must be resurrected."""
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     kept = {"id": "manha", "name": "manha", "start": "08:00", "end": "09:30"}
     gone = {"id": "while_out", "name": "While I'm out", "start": "09:00", "end": "17:00"}
@@ -503,7 +503,7 @@ def test_the_clock_follows_the_configured_timezone_not_the_card(home, monkeypatc
     """
     import datetime as dt
 
-    from projectos.apps.birdtunes import app as birdtunes_app
+    from project_os.apps.birdtunes import app as birdtunes_app
 
     class Config(object):
         def __init__(self, zone):

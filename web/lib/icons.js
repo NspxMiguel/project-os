@@ -190,7 +190,7 @@ export const ICONS = {
   ],
 
   // --- store categories -----------------------------------------------------
-  // Every `icon:` in projectos/data/catalog.yaml must resolve to a name here.
+  // Every `icon:` in project_os/data/catalog.yaml must resolve to a name here.
   plug: [
     'M9 3v5', 'M15 3v5',
     'M6 8h12v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6z',

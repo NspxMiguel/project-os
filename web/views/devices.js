@@ -1,4 +1,4 @@
-// views/devices.js — everything ProjectOS has found on the network, and what
+// views/devices.js — everything project-os has found on the network, and what
 // to do about it.
 //
 // One view handles two routes: `#/devices` (the list) and `#/devices/:id`
@@ -25,7 +25,7 @@ import {toast, confirm} from '../lib/toast.js';
 import {navigate} from '../lib/router.js';
 
 setStrings('en', {
-  'devices.lead': 'Everything ProjectOS has found on this network.',
+  'devices.lead': 'Everything project-os has found on this network.',
   'devices.rescan': 'Scan now',
   'devices.rescanning': 'Scanning…',
   'devices.scan.started': 'Scanning the network…',
@@ -36,7 +36,7 @@ setStrings('en', {
   'devices.filter.ignored': 'Ignored',
   'devices.filter.allKinds': 'All kinds',
   'devices.empty.title': 'Nothing discovered yet',
-  'devices.empty.text': 'ProjectOS looks for AirPlay speakers, Chromecasts, smart hubs and a few other things over mDNS and local probes. Turn something on, then scan again.',
+  'devices.empty.text': 'project-os looks for AirPlay speakers, Chromecasts, smart hubs and a few other things over mDNS and local probes. Turn something on, then scan again.',
   'devices.empty.filtered.title': 'Nothing matches this filter',
   'devices.empty.filtered.text': 'Clear the filter to see the rest of what was found.',
   'devices.unavailable.title': 'Discovery is unavailable',
@@ -76,7 +76,7 @@ setStrings('en', {
   'devices.detail.recipes.automatic': '{done} of {total} steps are one click',
   'devices.detail.recipes.manualOnly': 'Every step here is manual — nothing yet can be done for you.',
   'devices.detail.recipes.empty.title': 'No recipes for this device yet',
-  'devices.detail.recipes.empty.text': 'ProjectOS does not know a specific routine for this kind of device yet.',
+  'devices.detail.recipes.empty.text': 'project-os does not know a specific routine for this kind of device yet.',
   'devices.detail.recipes.error': 'Could not load recipes for this device.',
   'devices.detail.step.manual': 'Manual',
   'devices.detail.step.run': 'Run',
@@ -757,7 +757,7 @@ async function mountDetail(root, ctx, deviceId, {updateDevice, patchDevice, remo
       const message = err && err.code === 'does_not_fit'
         ? (err.message || 'This does not fit the board.')
         : err && err.code === 'installer_pending'
-          ? (err.message || 'ProjectOS does not know how to install this kind of app yet.')
+          ? (err.message || 'project-os does not know how to install this kind of app yet.')
           : (err && err.message) || t('devices.toast.error');
       toast(message, {type: 'error'});
     } finally {

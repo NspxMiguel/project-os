@@ -1,13 +1,13 @@
-// views/services.js — Advanced mode: everything ProjectOS can start, stop and
+// views/services.js — Advanced mode: everything project-os can start, stop and
 // restart on this machine, in two halves.
 //
 // "Managed services" is GET /api/system/services -- systemd units under one of
-// the prefixes projectos/api/system.py is willing to talk about. Control is
+// the prefixes project_os/api/system.py is willing to talk about. Control is
 // gated server-side by security.allow_service_control, and the response says
 // so (`can_control: false`) rather than making the client guess from a 403;
 // buttons are simply not offered when it is off.
 //
-// "Apps" is GET /api/apps -- ProjectOS's own plugin manager, a different
+// "Apps" is GET /api/apps -- project-os's own plugin manager, a different
 // system entirely (in-process, not systemd). They read the same on this page
 // on purpose: an app and a systemd unit are both "a thing that can be
 // running", and the person looking at this screen should not have to know
@@ -28,17 +28,17 @@ import {navigate} from '../lib/router.js';
 
 setStrings('en', {
   'services.title': 'Services',
-  'services.lead': 'Everything ProjectOS can start, stop and restart on this machine.',
+  'services.lead': 'Everything project-os can start, stop and restart on this machine.',
   'services.units.title': 'Managed services',
-  'services.units.sub': 'systemd units ProjectOS knows about',
+  'services.units.sub': 'systemd units project-os knows about',
   'services.units.none': 'No managed units found',
-  'services.units.none.detail': 'ProjectOS only lists units under a known prefix (projectos, home-assistant, mosquitto, and the like).',
+  'services.units.none.detail': 'project-os only lists units under a known prefix (project_os, home-assistant, mosquitto, and the like).',
   'services.units.unavailable': 'No systemd on this machine',
   'services.units.unavailable.detail': 'This looks like a developer machine rather than a Pi -- there is no systemctl to ask.',
   'services.units.locked': 'Control is turned off',
   'services.units.locked.detail': 'Turn on security.allow_service_control in Settings to start, stop or restart units from here.',
   'services.apps.title': 'Apps',
-  'services.apps.sub': 'Running under ProjectOS’ own plugin manager',
+  'services.apps.sub': 'Running under project-os’ own plugin manager',
   'services.apps.none': 'No apps installed',
   'services.apps.none.detail': 'Install one from the store and it will show up here.',
   'services.action.start': 'Start',

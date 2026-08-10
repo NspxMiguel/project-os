@@ -1,0 +1,13 @@
+[Unit]
+Description=project-os: join the Wi-Fi network written on the card
+After=NetworkManager.service
+Wants=NetworkManager.service
+Before=project-os.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/usr/local/sbin/project-os-firstboot
+
+[Install]
+WantedBy=multi-user.target

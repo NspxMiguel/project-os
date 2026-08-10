@@ -1,7 +1,7 @@
 """The recipe engine, and the recipe file itself.
 
 Half of these test the matcher; the other half read
-:file:`projectos/data/recipes.yaml` and check the things a typo there would
+:file:`project_os/data/recipes.yaml` and check the things a typo there would
 break -- an install step pointing at an app that is not in the store, an icon
 the interface cannot draw, a placeholder nobody substitutes.
 """
@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from projectos.core import catalog, recipes
+from project_os.core import catalog, recipes
 
 APPLE_TV = {
     "id": "dev-appletv",
@@ -184,7 +184,7 @@ def test_no_emoji_in_the_recipes() -> None:
 def test_every_device_kind_we_can_detect_has_at_least_one_recipe() -> None:
     """The promise was "te ensina como adicionar o app". A kind with no recipe
     is a device the dashboard lists and then says nothing about."""
-    from projectos.core import discovery
+    from project_os.core import discovery
 
     without = []
     for kind in discovery.KIND_CAPABILITIES:

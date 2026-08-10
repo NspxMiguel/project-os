@@ -1,4 +1,4 @@
-# ProjectOS
+# project-os
 
 **The system layer of a Raspberry Pi, driven entirely from a browser.**
 
@@ -8,12 +8,12 @@ OS — but general purpose. It hosts *your* things.
 
 > Português: a documentação de conceito está em [docs/CONCEITO.md](docs/CONCEITO.md).
 
-1. Download `projectos-<version>.img.xz` from
-   [Releases](https://github.com/NspxMiguel/projectos/releases).
+1. Download `project_os-<version>.img.xz` from
+   [Releases](https://github.com/NspxMiguel/project-os/releases).
 2. Write it to the card with [Balena Etcher](https://etcher.balena.io).
-3. On Wi-Fi only: rename `projectos-wifi.txt.exemplo` to `projectos-wifi.txt` on
+3. On Wi-Fi only: rename `project-os-wifi.txt.exemplo` to `project-os-wifi.txt` on
    the boot partition and put your network and password in it.
-4. Boot the Pi and open **http://projectos.local**.
+4. Boot the Pi and open **http://project-os.local**.
 
 The first screen creates your account. Until you do, the system answers nothing
 else — that is deliberate.
@@ -25,7 +25,7 @@ for that too: see [docs/INSTALL.md](docs/INSTALL.md).
 
 ## It arrives empty
 
-ProjectOS ships with no apps. None. What you get on first boot is a machine
+project-os ships with no apps. None. What you get on first boot is a machine
 panel, a store, and a login.
 
 That is the whole design decision, and everything else follows from it:
@@ -71,7 +71,7 @@ your call to make, not the software's.
 
 - A Raspberry Pi with **1 GB of RAM or more** — 3B, 3B+, 4, 5, Zero 2 W, 400.
   512 MB boards are refused by the installer; see
-  [docs/SIMPLEPROJECTOS.md](docs/SIMPLEPROJECTOS.md) for the ESP32 sibling.
+  [docs/SIMPLE-PROJECT-OS.md](docs/SIMPLE-PROJECT-OS.md) for the ESP32 sibling.
 - Raspberry Pi OS Lite (or any Debian/Ubuntu with systemd).
 - Python 3.9 or newer.
 
@@ -81,10 +81,10 @@ It also runs fine on an ordinary Linux box, and on macOS for development.
 
 Two of the most important files in the repo are not code:
 
-- `projectos/data/catalog.yaml` — what the store offers.
-- `projectos/data/recipes.yaml` — what to do with a device once it is found.
+- `project_os/data/catalog.yaml` — what the store offers.
+- `project_os/data/recipes.yaml` — what to do with a device once it is found.
 
-Both are plain text. Adding an app or teaching ProjectOS about a device you own
+Both are plain text. Adding an app or teaching project-os about a device you own
 is an edit and a pull request, not a plug-in you have to write.
 
 For actual plug-ins, see [docs/APPS.md](docs/APPS.md).
@@ -92,11 +92,11 @@ For actual plug-ins, see [docs/APPS.md](docs/APPS.md).
 ## Development
 
 ```bash
-git clone https://github.com/NspxMiguel/projectos.git
-cd ProjectOS
+git clone https://github.com/NspxMiguel/project-os.git
+cd project-os
 python3 -m venv .venv
 .venv/bin/pip install -e '.[dev,all]'
-.venv/bin/python3 -m projectos --dev
+.venv/bin/python3 -m project_os --dev
 ```
 
 ```bash
@@ -116,12 +116,12 @@ install command.
 
 | | |
 |---|---|
-| [docs/CONCEITO.md](docs/CONCEITO.md) | What ProjectOS is, and why it is empty |
+| [docs/CONCEITO.md](docs/CONCEITO.md) | What project-os is, and why it is empty |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The build contract: modules, tables, events, routes |
 | [docs/APPS.md](docs/APPS.md) | Writing a plug-in |
 | [docs/HOME.md](docs/HOME.md) | Smart home: Home Assistant, Tuya, eWeLink and friends |
 | [docs/BIRDTUNES.md](docs/BIRDTUNES.md) | The first app: music for birds, on an Apple TV or a Chromecast |
-| [docs/SIMPLEPROJECTOS.md](docs/SIMPLEPROJECTOS.md) | The ESP32 build |
+| [docs/SIMPLE-PROJECT-OS.md](docs/SIMPLE-PROJECT-OS.md) | The ESP32 build |
 | [docs/ARGOS.md](docs/ARGOS.md) | Hooks for an external assistant |
 
 ## License

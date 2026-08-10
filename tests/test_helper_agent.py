@@ -21,7 +21,7 @@ AGENT = Path(__file__).resolve().parents[1] / "agents" / "helper_agent.py"
 @pytest.fixture()
 def agent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("PROJECTOS_HELPER_CONFIG", str(tmp_path / "conf.json"))
-    spec = importlib.util.spec_from_file_location("projectos_helper_agent", AGENT)
+    spec = importlib.util.spec_from_file_location("project_os_helper_agent", AGENT)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -49,7 +49,7 @@ def test_a_roomy_disk_is_offered_and_a_full_one_is_not(agent, monkeypatch: pytes
 
 def test_the_capabilities_it_claims_are_ones_the_server_knows(agent) -> None:
     # A typo here is invisible: the job simply never arrives.
-    from projectos.core import helpers as core
+    from project_os.core import helpers as core
 
     monkeyless = agent.capabilities()
     assert set(monkeyless).issubset(set(core.CAPABILITIES))

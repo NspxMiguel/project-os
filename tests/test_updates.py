@@ -16,7 +16,7 @@ import tarfile
 
 import pytest
 
-from projectos.core import updates
+from project_os.core import updates
 
 
 # -------------------------------------------------------------------- versions
@@ -44,7 +44,7 @@ def test_a_nonsense_version_does_not_crash_the_check() -> None:
 def _manifest(**overrides):
     data = {
         "version": "0.2.0",
-        "url": "https://example.invalid/projectos-0.2.0.tar.gz",
+        "url": "https://example.invalid/project_os-0.2.0.tar.gz",
         "sha256": "a" * 64,
         "notes": "Tudo novo",
     }
@@ -122,30 +122,30 @@ def test_extract_refuses_a_path_outside_the_install_dir(tmp_path) -> None:
 
 def test_extract_unwraps_a_single_top_level_directory(tmp_path) -> None:
     archive = _tar_with(tmp_path, {
-        "ProjectOS-0.2.0/projectos/__init__.py": b"__version__ = '0.2.0'\n",
+        "project-os-0.2.0/project_os/__init__.py": b"__version__ = '0.2.0'\n",
     })
     where = updates._safe_extract(archive, str(tmp_path / "into"))
-    assert os.path.basename(where) == "ProjectOS-0.2.0"
-    assert updates._looks_like_projectos(where)
+    assert os.path.basename(where) == "project-os-0.2.0"
+    assert updates._looks_like_project_os(where)
 
 
 # ------------------------------------------------------------------- the swap
 def _fake_tree(path, version: str) -> str:
-    os.makedirs(os.path.join(path, "projectos"), exist_ok=True)
-    with open(os.path.join(path, "projectos", "__init__.py"), "w") as handle:
+    os.makedirs(os.path.join(path, "project_os"), exist_ok=True)
+    with open(os.path.join(path, "project_os", "__init__.py"), "w") as handle:
         handle.write("__version__ = %r\n" % version)
     return path
 
 
 def test_apply_swaps_the_tree_and_keeps_the_old_one(tmp_path, monkeypatch) -> None:
-    root = _fake_tree(str(tmp_path / "projectos-install"), "0.1.0")
+    root = _fake_tree(str(tmp_path / "project_os-install"), "0.1.0")
     with open(os.path.join(root, "PEDIDOS.md"), "w") as handle:
         handle.write("nao me apague\n")
 
-    new_tree = _fake_tree(str(tmp_path / "build" / "ProjectOS-0.2.0"), "0.2.0")
+    new_tree = _fake_tree(str(tmp_path / "build" / "project-os-0.2.0"), "0.2.0")
     archive = str(tmp_path / "release.tar.gz")
     with tarfile.open(archive, "w:gz") as tar:
-        tar.add(new_tree, arcname="ProjectOS-0.2.0")
+        tar.add(new_tree, arcname="project-os-0.2.0")
     payload = open(archive, "rb").read()
     digest = hashlib.sha256(payload).hexdigest()
 
@@ -159,7 +159,7 @@ def test_apply_swaps_the_tree_and_keeps_the_old_one(tmp_path, monkeypatch) -> No
     lines = []
     result = updates.apply_tarball(info, root=root, on_line=lines.append)
 
-    with open(os.path.join(root, "projectos", "__init__.py")) as handle:
+    with open(os.path.join(root, "project_os", "__init__.py")) as handle:
         assert "0.2.0" in handle.read()
     assert os.path.isdir(result["previous"]), "the old version must still be on disk"
     assert os.path.isfile(os.path.join(root, "PEDIDOS.md")), "kept files must survive the swap"
@@ -170,7 +170,7 @@ def test_rollback_puts_the_previous_tree_back(tmp_path) -> None:
     root = _fake_tree(str(tmp_path / "install"), "0.2.0")
     previous = _fake_tree(str(tmp_path / "install.previous-0.1.0"), "0.1.0")
     updates.rollback(previous, root=root)
-    with open(os.path.join(root, "projectos", "__init__.py")) as handle:
+    with open(os.path.join(root, "project_os", "__init__.py")) as handle:
         assert "0.1.0" in handle.read()
 
 
@@ -183,34 +183,34 @@ def test_rollback_without_a_previous_version_says_so(tmp_path) -> None:
 
 # ---------------------------------------------------------------------- restart
 def test_the_restart_command_line_is_the_one_we_booted_with() -> None:
-    updates.remember_argv(["-m", "projectos", "--port", "8123"])
-    assert updates._original_argv() == ["-m", "projectos", "--port", "8123"]
+    updates.remember_argv(["-m", "project_os", "--port", "8123"])
+    assert updates._original_argv() == ["-m", "project_os", "--port", "8123"]
 
 
 def test_restart_rebuilds_dash_m_instead_of_running_the_script_path() -> None:
-    """`python -m projectos` and `python .../projectos/__main__.py` differ.
+    """`python -m project_os` and `python .../project_os/__main__.py` differ.
 
-    The second puts projectos/ on sys.path instead of its parent, so the import
+    The second puts project_os/ on sys.path instead of its parent, so the import
     of the package fails. Coming back up is the one step that cannot be clever.
     """
-    argv = ["/opt/projectos/projectos/__main__.py", "--port", "8099"]
-    assert updates.restart_argv(argv, executable="/opt/projectos/.venv/bin/python3") == [
-        "/opt/projectos/.venv/bin/python3", "-m", "projectos", "--port", "8099",
+    argv = ["/opt/project-os/project_os/__main__.py", "--port", "8099"]
+    assert updates.restart_argv(argv, executable="/opt/project-os/.venv/bin/python3") == [
+        "/opt/project-os/.venv/bin/python3", "-m", "project_os", "--port", "8099",
     ]
 
 
 def test_restart_keeps_an_explicit_command_line_as_it_was() -> None:
-    argv = ["-m", "projectos", "--port", "8099"]
+    argv = ["-m", "project_os", "--port", "8099"]
     assert updates.restart_argv(argv, executable="/usr/bin/python3") == [
-        "/usr/bin/python3", "-m", "projectos", "--port", "8099",
+        "/usr/bin/python3", "-m", "project_os", "--port", "8099",
     ]
 
 
 # ------------------------------------------------------------------------ HTTP
 def test_status_reports_the_running_version(auth_client) -> None:
-    from projectos import __version__
+    from project_os import __version__
 
-    from projectos.core import updates as live
+    from project_os.core import updates as live
 
     response = auth_client.get("/api/updates")
     assert response.status_code == 200
@@ -226,11 +226,11 @@ def test_status_needs_a_session(client) -> None:
 
 
 def test_install_refuses_when_already_current(auth_client, monkeypatch) -> None:
-    from projectos import __version__
-    # Imported here, not at module level: conftest drops projectos.* from
+    from project_os import __version__
+    # Imported here, not at module level: conftest drops project_os.* from
     # sys.modules per test, so the module this file imported at collection time
     # is not the one the running app is using.
-    from projectos.core import updates as live
+    from project_os.core import updates as live
 
     monkeypatch.setattr(
         live, "check",
@@ -246,7 +246,7 @@ def test_install_refuses_when_already_current(auth_client, monkeypatch) -> None:
 
 def test_install_refuses_when_the_version_moved(auth_client, monkeypatch) -> None:
     """The client says what it thinks it is installing; a mismatch is a stop."""
-    from projectos.core import updates as live
+    from project_os.core import updates as live
 
     monkeypatch.setattr(
         live, "check",
@@ -268,7 +268,7 @@ def test_install_is_refused_when_updates_are_turned_off(auth_client) -> None:
 
 
 def test_being_offline_is_a_503_with_a_reason(auth_client, monkeypatch) -> None:
-    from projectos.core import updates as live
+    from project_os.core import updates as live
 
     def offline(*args, **kwargs):
         raise live.UpdateError("no route to host", code="offline", hint="check the network")
@@ -289,12 +289,12 @@ def test_restart_lands_in_the_new_tree_not_the_renamed_old_one(tmp_path, monkeyp
     changes however many times you update. This reproduces the rename.
     """
     root = tmp_path / "install"
-    (root / "projectos").mkdir(parents=True)
+    (root / "project_os").mkdir(parents=True)
     monkeypatch.chdir(root)
 
     # what apply_tarball does
     os.rename(str(root), str(tmp_path / "install.previous-0.1.0"))
-    (tmp_path / "install" / "projectos").mkdir(parents=True)
+    (tmp_path / "install" / "project_os").mkdir(parents=True)
 
     assert os.path.realpath(os.getcwd()) == os.path.realpath(str(tmp_path / "install.previous-0.1.0"))
     os.chdir(str(root))

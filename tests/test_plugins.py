@@ -7,7 +7,7 @@ def test_a_fresh_machine_runs_nothing_until_you_install_something() -> None:
     meant "run every bundled app" -- so a new install came up with a WhatsApp bot
     nobody asked for. Empty means empty.
     """
-    from projectos.core.plugins import PluginManager
+    from project_os.core.plugins import PluginManager
 
     class Config(object):
         def __init__(self, value):

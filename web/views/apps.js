@@ -1,10 +1,10 @@
-// views/apps.js — apps ProjectOS itself is running, plus whatever the machine
+// views/apps.js — apps project-os itself is running, plus whatever the machine
 // already had lying around.
 //
 // Two independent sections, two independent API calls, two independent
 // failure modes — one going down must never take the other with it.
 //
-//   1. Installed apps (GET /apps): ProjectOS ships with nothing at all, the
+//   1. Installed apps (GET /apps): project-os ships with nothing at all, the
 //      same way Home Assistant does, so an empty list here is the normal
 //      first-run state. The empty state points at #/store instead of
 //      apologising for it.
@@ -30,10 +30,10 @@ import * as api from '../lib/api.js';
 import {toast, confirm} from '../lib/toast.js';
 
 setStrings('en', {
-  'apps.lead': 'What ProjectOS itself is running on this machine.',
+  'apps.lead': 'What project-os itself is running on this machine.',
   'apps.refresh': 'Refresh',
   'apps.empty.title': 'Nothing installed yet',
-  'apps.empty.text': 'ProjectOS ships empty, on purpose — pick something from the store and it will show up here with its own card.',
+  'apps.empty.text': 'project-os ships empty, on purpose — pick something from the store and it will show up here with its own card.',
   'apps.empty.action': 'Open the store',
   'apps.error.load': 'Could not load apps.',
   'apps.action.retry': 'Retry',
@@ -53,7 +53,7 @@ setStrings('en', {
   'apps.state.disabled': 'disabled',
   'apps.error.detail': 'This app failed to start. Check its logs from its own panel.',
   'detected.title': 'Also on this machine',
-  'detected.lead': 'Software ProjectOS found already installed, outside of its own apps — apt, Flatpak, Snap, systemd services and containers.',
+  'detected.lead': 'Software project-os found already installed, outside of its own apps — apt, Flatpak, Snap, systemd services and containers.',
   'detected.refresh': 'Check again',
   'detected.refreshing': 'Checking…',
   'detected.cached': 'as of {time}',
@@ -63,7 +63,7 @@ setStrings('en', {
   'detected.filter.service': 'Services',
   'detected.filter.container': 'Containers',
   'detected.empty.title': 'Nothing else found',
-  'detected.empty.text': 'ProjectOS checked apt, Flatpak, Snap, desktop entries, systemd services and containers, and this machine has nothing outside its own apps.',
+  'detected.empty.text': 'project-os checked apt, Flatpak, Snap, desktop entries, systemd services and containers, and this machine has nothing outside its own apps.',
   'detected.empty.filtered.title': 'Nothing matches this filter',
   'detected.empty.filtered.text': 'Try a different category, or clear the filter to see everything found.',
   'detected.error.load': 'Could not check what is installed on this machine.',

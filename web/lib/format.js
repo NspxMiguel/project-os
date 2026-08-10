@@ -2,12 +2,12 @@
 //
 // t() is deliberately dumb: a flat string table, English by default, with
 // {placeholder} interpolation. Every user-visible string in the shell goes
-// through it, so translating ProjectOS later means adding a table and calling
+// through it, so translating project-os later means adding a table and calling
 // setStrings() — not rewriting views.
 
 const STRINGS = {
   en: {
-    'app.name': 'ProjectOS',
+    'app.name': 'project-os',
     'nav.dashboard': 'Dashboard',
     'nav.apps': 'Apps',
     'nav.devices': 'Devices',

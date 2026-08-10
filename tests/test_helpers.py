@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 import pytest
 
-from projectos.core import helpers as core
+from project_os.core import helpers as core
 
 
 # --------------------------------------------------------------------------- helpers

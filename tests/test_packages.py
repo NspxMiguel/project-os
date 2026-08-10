@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from projectos.core import packages
+from project_os.core import packages
 
 
 # --------------------------------------------------------------------- names

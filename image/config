@@ -1,4 +1,4 @@
-# pi-gen configuration for the ProjectOS image.
+# pi-gen configuration for the project-os image.
 #
 #   "é um os msm, tu flesha direto no balenna, tu acessa o ip no chrome e dale,
 #    igual o os do homeassist"
@@ -9,27 +9,27 @@
 #
 # Sourced by pi-gen's build.sh -- shell assignments only.
 
-IMG_NAME=projectos
+IMG_NAME=project-os
 RELEASE=bookworm
 
 # Lite plus our stage. stage3+ are desktop images; a headless box does not need
 # a window manager it will never draw.
-STAGE_LIST="stage0 stage1 stage2 ./image/stage-projectos"
+STAGE_LIST="stage0 stage1 stage2 ./image/stage-project-os"
 
 # Written to the card with Etcher, so ship it compressed.
 DEPLOY_COMPRESSION=xz
 COMPRESSION_LEVEL=6
 DEPLOY_ZIP=0
 
-# projectos.local is how you find the machine with no monitor attached.
-TARGET_HOSTNAME=projectos
+# project-os.local is how you find the machine with no monitor attached.
+TARGET_HOSTNAME=project-os
 
 # SSH is on: without a screen it is the only way in when something goes wrong.
 # The password is deliberately the boring default and the first-run web setup
 # tells you to change it -- an image everyone downloads cannot ship a secret.
 ENABLE_SSH=1
-FIRST_USER_NAME=projectos
-FIRST_USER_PASS=projectos
+FIRST_USER_NAME=project-os
+FIRST_USER_PASS=project-os
 DISABLE_FIRST_BOOT_USER_RENAME=1
 
 LOCALE_DEFAULT=en_US.UTF-8

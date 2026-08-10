@@ -6,7 +6,7 @@
 > "o esp32 tbm n precisa ser só um sistema, poderia ser tbm algo q ajuda o rp,
 > algum acessorio"
 
-An *ajudante* is any machine that joined a ProjectOS to lend it something it
+An *ajudante* is any machine that joined a project-os to lend it something it
 does not have. A PC lends CPU, a GPU, a fast disk. An ESP32 lends a temperature
 reading in another room, a button by the door, a relay on a lamp.
 
@@ -51,7 +51,7 @@ Python 3 is all it needs — no `pip install`, nothing to build. Copy the file t
 the machine you want to lend, get a code from the Ajudantes screen, and:
 
 ```bash
-python3 helper_agent.py --pair http://projectos.local:8099 123456
+python3 helper_agent.py --pair http://project-os.local:8099 123456
 python3 helper_agent.py
 ```
 
@@ -80,18 +80,18 @@ now".
 **Linux** — a user unit, so it stops when you log out and starts when you log in:
 
 ```ini
-# ~/.config/systemd/user/projectos-helper.service
+# ~/.config/systemd/user/project-os-helper.service
 [Unit]
-Description=ProjectOS helper
+Description=project-os helper
 [Service]
-ExecStart=/usr/bin/python3 %h/projectos/helper_agent.py
+ExecStart=/usr/bin/python3 %h/project_os/helper_agent.py
 Restart=on-failure
 [Install]
 WantedBy=default.target
 ```
 
 ```bash
-systemctl --user enable --now projectos-helper
+systemctl --user enable --now project-os-helper
 ```
 
 **macOS** — a LaunchAgent in `~/Library/LaunchAgents/` with `RunAtLoad` and
@@ -103,7 +103,7 @@ systemctl --user enable --now projectos-helper
 ## An ESP32
 
 Flash MicroPython, copy [`esp32/main.py`](esp32/main.py) to the board as
-`main.py`, and edit the settings block at the top: Wi-Fi, the ProjectOS address,
+`main.py`, and edit the settings block at the top: Wi-Fi, the project-os address,
 a pairing code, and which pins are actually wired.
 
 On the first boot it prints the token it received. Paste that into `TOKEN` so it
@@ -138,5 +138,5 @@ and wants a job the moment it exists rather than at the next poll.
 Kinds are `pc`, `pi`, `esp32` and `other`. Capabilities are `cpu`, `gpu`,
 `transcode`, `download`, `storage`, `sensor`, `actuator`, `display`, `button`,
 `infrared`, `audio` — the authoritative list lives in
-[`projectos/core/helpers.py`](../projectos/core/helpers.py), along with which
+[`project_os/core/helpers.py`](../project_os/core/helpers.py), along with which
 kinds may claim what.

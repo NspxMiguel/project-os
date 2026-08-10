@@ -11,7 +11,7 @@ O que vem depois do bloco é a lista de defeitos do que existe hoje — não faz
 ## Prompt (copiar daqui)
 
 ```
-Projete a interface do ProjectOS: um sistema operacional de casa e servidor caseiro que roda
+Projete a interface do project-os: um sistema operacional de casa e servidor caseiro que roda
 num Raspberry Pi e é usado inteiro pelo navegador, de outro computador na mesma rede.
 Concorrente mental: Home Assistant, Proxmox, Umbrel, CasaOS.
 

@@ -2,7 +2,7 @@
 //
 // *"ai opção de diminuir ventoinha do rp, e etc. varias coisas legais adiciona"*
 //
-// `projectos/core/tuning.py` splits every knob into two kinds of change, and
+// `project_os/core/tuning.py` splits every knob into two kinds of change, and
 // this screen keeps that split visible instead of hiding it behind one button:
 //
 //   NOW      — a /sys write. Immediate, and gone the moment the board reboots.
@@ -27,7 +27,7 @@ setStrings('en', {
   'tuning.disabled.title': 'Hardware control is off',
   'tuning.disabled.text': 'Turn on security.allow_hardware_control in Settings > Developer to change the fan, clock or LEDs from here. Reading still works without it.',
   'tuning.notRoot.title': 'Read-only from here',
-  'tuning.notRoot.text': 'ProjectOS is not running as root, so these values can be read but not changed. The systemd service runs as root; a venv opened by hand in a terminal does not.',
+  'tuning.notRoot.text': 'project-os is not running as root, so these values can be read but not changed. The systemd service runs as root; a venv opened by hand in a terminal does not.',
 
   'tuning.section.fan': 'Fan',
   'tuning.fan.unavailable': 'No fan the kernel can control',

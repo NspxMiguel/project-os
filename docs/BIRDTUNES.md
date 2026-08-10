@@ -5,7 +5,7 @@
 
 ## 1. What it is
 
-A scheduled music player for pet birds, running on the ProjectOS box and casting to a
+A scheduled music player for pet birds, running on the project-os box and casting to a
 real speaker on the network (Apple TV / HomePod over AirPlay, Chromecast, a Home
 Assistant media player, or the Pi's own audio jack).
 
@@ -52,7 +52,7 @@ Consequences that must be implemented, not just documented:
 
 ### Local files
 Any extension in `library.extensions` (default `.mp3 .flac .wav .ogg .oga .opus .m4a
-.aac .wma .aiff`). Scanned from `library.paths`; default `~/.projectos/media/birdtunes`.
+.aac .wma .aiff`). Scanned from `library.paths`; default `~/.project_os/media/birdtunes`.
 Nothing is copied or moved — the user's files stay where they are.
 
 ### YouTube

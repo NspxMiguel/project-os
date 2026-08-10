@@ -1,4 +1,4 @@
-// views/store.js — the catalog. A clean ProjectOS boots with nothing running;
+// views/store.js — the catalog. A clean project-os boots with nothing running;
 // this is the screen that fills it in, so it carries the weight of a real
 // app store rather than a settings sub-page.
 //
@@ -35,12 +35,12 @@ import {ApiError} from '../lib/api.js';
 import {toast, confirm} from '../lib/toast.js';
 
 setStrings('en', {
-  'store.lead': 'ProjectOS ships empty. Everything below is something you can add.',
+  'store.lead': 'project-os ships empty. Everything below is something you can add.',
   'store.search.placeholder': 'Search apps, categories, tags…',
   'store.filter.all': 'All',
   'store.board.title': 'This machine',
   'store.board.budget': '{free} free for apps',
-  'store.board.reserved': '{mb} reserved for ProjectOS itself',
+  'store.board.reserved': '{mb} reserved for project-os itself',
   'store.board.tier.roomy': 'Room to spare',
   'store.board.tier.comfortable': 'Comfortable',
   'store.board.tier.minimal': 'Tight — pick carefully',

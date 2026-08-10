@@ -1,4 +1,4 @@
-/* ProjectOS — design system.
+/* project-os — design system.
    One file, no build step, no external fonts. Dark is the default; light lives
    under [data-theme="light"]; `ui.theme = auto` is resolved to one of the two by
    the anti-flash script in index.html and re-resolved by app.js. Sizing is in

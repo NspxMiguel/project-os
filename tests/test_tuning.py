@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from projectos.core import tuning
+from project_os.core import tuning
 
 SAMPLE = """\
 # For more options and information see rpiconfig
@@ -51,7 +51,7 @@ def test_a_new_value_is_appended_and_marked(config_txt: Path) -> None:
     text = config_txt.read_text()
     assert "arm_freq=1200" in text
     # marked, because this file is also edited by hand and by raspi-config
-    assert "# projectos" in text.split("arm_freq=1200")[1].splitlines()[0]
+    assert "# project_os" in text.split("arm_freq=1200")[1].splitlines()[0]
 
 
 def test_none_removes_the_line(config_txt: Path) -> None:
@@ -63,7 +63,7 @@ def test_duplicates_collapse_to_one(config_txt: Path) -> None:
     config_txt.write_text(SAMPLE + "gpu_mem=64\ngpu_mem=32\n", encoding="utf-8")
     tuning._patch_config_txt({"gpu_mem": "16"})
     lines = [l for l in config_txt.read_text().splitlines() if l.startswith("gpu_mem=")]
-    assert lines == ["gpu_mem=16  # projectos"]
+    assert lines == ["gpu_mem=16  # project_os"]
 
 
 def test_the_file_always_ends_with_one_newline(config_txt: Path) -> None:

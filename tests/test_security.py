@@ -1,6 +1,6 @@
 """Security tests.
 
-ProjectOS hands a browser a file manager and a command runner. These tests exist to make
+project-os hands a browser a file manager and a command runner. These tests exist to make
 sure the front door is actually locked: the auth gate, the filesystem sandbox, and the
 opt-in switches that keep remote code execution off unless the user deliberately turns it
 on.
@@ -61,8 +61,8 @@ def test_login_rejects_a_wrong_password(client) -> None:
 
 
 def test_password_is_never_stored_in_plaintext(auth_client, home: Path) -> None:
-    from projectos import paths
-    from projectos.db import Database
+    from project_os import paths
+    from project_os.db import Database
 
     database = Database(paths.db_file())
     row = database.one("SELECT password_hash FROM users LIMIT 1")
@@ -101,8 +101,8 @@ TRAVERSAL_ATTEMPTS = [
 
 @pytest.mark.parametrize("attempt", TRAVERSAL_ATTEMPTS)
 def test_path_traversal_is_rejected(home: Path, attempt: str) -> None:
-    from projectos.core import files
-    from projectos.errors import ApiError
+    from project_os.core import files
+    from project_os.errors import ApiError
 
     with pytest.raises(ApiError) as excinfo:
         files.resolve(attempt)
@@ -111,8 +111,8 @@ def test_path_traversal_is_rejected(home: Path, attempt: str) -> None:
 
 def test_a_symlink_pointing_outside_the_sandbox_is_rejected(home: Path, tmp_path: Path) -> None:
     """Resolving must check the *target*, not the link path."""
-    from projectos.core import files
-    from projectos.errors import ApiError
+    from project_os.core import files
+    from project_os.errors import ApiError
 
     outside = tmp_path / "outside"
     outside.mkdir(exist_ok=True)
@@ -129,15 +129,15 @@ def test_a_symlink_pointing_outside_the_sandbox_is_rejected(home: Path, tmp_path
 
 
 def test_a_nul_byte_in_the_path_is_rejected(home: Path) -> None:
-    from projectos.core import files
-    from projectos.errors import ApiError
+    from project_os.core import files
+    from project_os.errors import ApiError
 
     with pytest.raises(ApiError):
         files.resolve("notes\x00.txt")
 
 
 def test_paths_inside_the_sandbox_resolve_fine(home: Path) -> None:
-    from projectos.core import files
+    from project_os.core import files
 
     (home / "notes.txt").write_text("hello")
     resolved = files.resolve("notes.txt")
@@ -214,7 +214,7 @@ def test_close_waits_for_statements_running_in_other_threads(tmp_path) -> None:
     """
     import threading
 
-    from projectos.db import Database
+    from project_os.db import Database
 
     database = Database(tmp_path / "race.db")
     database.migrate()

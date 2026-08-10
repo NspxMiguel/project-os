@@ -1,4 +1,4 @@
-// api.js — fetch wrapper for the ProjectOS HTTP API.
+// api.js — fetch wrapper for the project-os HTTP API.
 //
 // Every error the server can produce follows {error, message, detail}; this
 // module turns that into a thrown ApiError with .code / .status / .detail so
@@ -116,7 +116,7 @@ export async function request(method, path, body, options = {}) {
     response = await fetch(url, init);
   } catch (err) {
     if (err && err.name === 'AbortError') throw err;
-    throw new ApiError('Cannot reach ProjectOS. Check that the server is running.', {
+    throw new ApiError('Cannot reach project-os. Check that the server is running.', {
       code: 'network_error',
       status: 0,
       path: url,

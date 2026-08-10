@@ -7,7 +7,7 @@ O pedido:
 
 > "suporte a tuya ekaza, tudo. deixe a casa inteligente de vdd"
 
-"De verdade" quer dizer: a lâmpada acende a partir do ProjectOS, sem Home
+"De verdade" quer dizer: a lâmpada acende a partir do project-os, sem Home
 Assistant no meio, numa placa de 1 GB. O que segue é como.
 
 ---
@@ -16,7 +16,7 @@ Assistant no meio, numa placa de 1 GB. O que segue é como.
 
 Um dispositivo é uma caixa na parede; uma entidade é uma coisa que tem estado e
 aceita ordem. Uma régua de tomada Kasa é **um** dispositivo e **seis** entidades.
-O ProjectOS guarda entidades porque é isso que a tela mostra e é isso que o Argos
+O project-os guarda entidades porque é isso que a tela mostra e é isso que o Argos
 vai querer ligar.
 
 ```
@@ -94,7 +94,7 @@ await dev.update()
 await dev.turn_on()
 ```
 
-O que o ProjectOS usa da biblioteca, verificado na versão instalada:
+O que o project-os usa da biblioteca, verificado na versão instalada:
 
 - `Discover.discover(*, target, discovery_timeout, discovery_packets, credentials, username, password)` — broadcast UDP, devolve `{host: Device}`.
 - `Device.connect(*, host=..., config=...)` — reconexão direta, sem varrer de novo.
@@ -140,12 +140,12 @@ handshake Tuya é caro e o Pi 3B sente.
 
 **2. A `local_key` não é descobrível.** `tinytuya.deviceScan()` acha os aparelhos
 na rede — IP, `gwId`, versão do protocolo — e **não** a chave. Sem chave, o
-ProjectOS enxerga o dispositivo e não consegue tocar nele. A chave sai de um destes
+project-os enxerga o dispositivo e não consegue tocar nele. A chave sai de um destes
 caminhos, e a UI os apresenta nesta ordem:
 
 - **Tuya IoT Cloud** (o oficial): criar conta de desenvolvedor em
   `iot.tuya.com`, criar um projeto Cloud, vincular a conta do app Smart Life,
-  pegar *Access ID* e *Access Secret*. O ProjectOS usa `tinytuya.Cloud` pra puxar a
+  pegar *Access ID* e *Access Secret*. O project-os usa `tinytuya.Cloud` pra puxar a
   lista de dispositivos **com as chaves**, grava localmente, e a partir daí **a
   nuvem nunca mais é usada** — controle é LAN pura, funciona com a internet caída.
 - **Colar a chave na mão**, pra quem já tem.
@@ -155,7 +155,7 @@ controle local **continua funcionando**; o que quebra é adicionar dispositivo n
 Isso vai escrito na tela, não num README que ninguém lê.
 
 **3. Os `dps` são números sem significado universal.** `1` costuma ser liga/desliga
-e `2` costuma ser brilho, e "costuma" não é contrato. O ProjectOS mantém um mapa de
+e `2` costuma ser brilho, e "costuma" não é contrato. O project-os mantém um mapa de
 `product_id`/`category` → papéis dos dps para as categorias comuns (`cz` tomada,
 `dj` lâmpada, `kg` interruptor, `cl` cortina), usa `detect_available_dps()` pro
 resto, e quando não souber, mostra os dps crus com um seletor — o usuário diz qual
@@ -184,7 +184,7 @@ preciso das chaves locais; leva uns 10 minutos, te mostro" — e não silêncio.
 
 O provedor `mqtt` fala **MQTT Discovery do Home Assistant** (`homeassistant/+/+/config`).
 Isso é de propósito: é o formato que Zigbee2MQTT, Tasmota e ESPHome já publicam.
-Instalar Mosquitto + Zigbee2MQTT pelo ProjectOS (≈126 MB) traz a casa Zigbee
+Instalar Mosquitto + Zigbee2MQTT pelo project-os (≈126 MB) traz a casa Zigbee
 inteira sem Home Assistant nenhum.
 
 O provedor `homeassistant` é ponte, não dependência: quem já tem HA vê as entidades
@@ -196,7 +196,7 @@ dele aqui; quem não tem, não sente falta.
 
 Cômodo é do usuário, não do fabricante. Mas o fabricante quase sempre já sabe: uma
 lâmpada chamada "Sala TV" não precisa que ninguém digite "Sala". Na primeira
-descoberta o ProjectOS propõe os cômodos a partir dos nomes, agrupa, e mostra **um**
+descoberta o project-os propõe os cômodos a partir dos nomes, agrupa, e mostra **um**
 cartão pra confirmar tudo de uma vez. Errou? Arrastar corrige.
 
 Sem cômodo, o aparelho cai em "Sem cômodo" e continua funcionando. Nada aqui é
@@ -227,7 +227,7 @@ pode simplesmente atropelar o passarinho e deixar o silêncio.
 **`class` não é enfeite.** É o teto de sensibilidade do canal, e o alto-falante é
 `PUBLICO` — um alto-falante não tem tela de bloqueio nem dono, ele transmite pra
 quem estiver na sala. Um `announce` com `class` acima de `PUBLICO` é recusado com
-**403**, e a recusa é do ProjectOS, não do cliente. Isso está aqui porque é
+**403**, e a recusa é do project-os, não do cliente. Isso está aqui porque é
 exatamente a garantia que o Argos foi construído em cima (ver `ARGOS.md`), e uma
 garantia que depende de o chamador se comportar não é garantia.
 

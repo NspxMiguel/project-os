@@ -2,7 +2,7 @@
 
 Everything here uses the ``home`` fixture: these tests write config, and a test
 that writes config without an isolated home writes it into the developer's real
-~/.projectos -- which is exactly what happened the first time this file ran.
+~/.project_os -- which is exactly what happened the first time this file ran.
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ pytestmark = pytest.mark.usefixtures("home")
 
 def test_the_timezone_comes_from_the_network_when_nobody_set_one(monkeypatch):
     """"puxar fuso pela net ne..." -- a headless box has nobody to ask."""
-    from projectos.config import load_config
-    from projectos.core import clock
+    from project_os.config import load_config
+    from project_os.core import clock
 
     monkeypatch.setattr(clock, "lookup", lambda url=None, timeout=None: "America/Sao_Paulo")
     config = load_config()
@@ -32,8 +32,8 @@ def test_the_timezone_comes_from_the_network_when_nobody_set_one(monkeypatch):
 
 
 def test_a_timezone_somebody_chose_is_never_overwritten(monkeypatch):
-    from projectos.config import load_config
-    from projectos.core import clock
+    from project_os.config import load_config
+    from project_os.core import clock
 
     called = []
     monkeypatch.setattr(clock, "lookup", lambda *a, **k: called.append(1) or "Europe/Berlin")
@@ -47,8 +47,8 @@ def test_a_timezone_somebody_chose_is_never_overwritten(monkeypatch):
 
 
 def test_a_lookup_that_fails_leaves_the_clock_alone(monkeypatch):
-    from projectos.config import load_config
-    from projectos.core import clock
+    from project_os.config import load_config
+    from project_os.core import clock
 
     monkeypatch.setattr(clock, "lookup", lambda *a, **k: None)
     config = load_config()
@@ -58,7 +58,7 @@ def test_a_lookup_that_fails_leaves_the_clock_alone(monkeypatch):
 
 def test_rubbish_from_a_captive_portal_is_not_a_timezone():
     """A hotel wifi answering HTML must not end up in config."""
-    from projectos.core import clock
+    from project_os.core import clock
 
     assert clock._plausible("America/Sao_Paulo")
     assert clock._plausible("UTC")
@@ -71,7 +71,7 @@ def test_lookup_reads_whatever_field_the_provider_uses(monkeypatch):
     """Swapping the URL for another service should not need a code change."""
     import io
 
-    from projectos.core import clock
+    from project_os.core import clock
 
     for field in ("timezone", "time_zone", "timeZone", "tz"):
         payload = ('{"status":"success","%s":"America/Sao_Paulo"}' % field).encode()

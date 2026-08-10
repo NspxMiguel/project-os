@@ -5,7 +5,7 @@
 // sistema, poderia ser tbm algo q ajuda o rp, algum acessorio"* — one screen,
 // because the backend treats a laptop lending CPU and an ESP32 lending a
 // sensor pin as the same idea: something that paired and declared what it
-// can do (`projectos/core/helpers.py`).
+// can do (`project_os/core/helpers.py`).
 //
 // This is a job queue, not process migration — the backend says so in its own
 // docstring, and the copy here repeats it on purpose. A queued job waits for
@@ -65,7 +65,7 @@ setStrings('en', {
   'helpers.codes.revoke': 'Revoke',
   'helpers.codes.revoked': 'Code revoked',
   'helpers.codes.copy.pc.title': 'On a Windows, macOS or Linux machine',
-  'helpers.codes.copy.pc.body': 'Copy {file} from the ProjectOS repo onto that machine and run:',
+  'helpers.codes.copy.pc.body': 'Copy {file} from the project-os repo onto that machine and run:',
   'helpers.codes.copy.esp32.title': 'On an ESP32',
   'helpers.codes.copy.esp32.body': 'Flash MicroPython, copy {file} as main.py, and before rebooting fill in these settings:',
   'helpers.codes.copy.esp32.fields': 'WIFI_SSID, WIFI_PASSWORD, SERVER ({server}), PAIRING_CODE ({code}), and CAPABILITIES for whatever is actually wired up.',

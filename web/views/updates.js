@@ -1,4 +1,4 @@
-// views/updates.js — updating ProjectOS from ProjectOS.
+// views/updates.js — updating project-os from project-os.
 //
 //     "n precisa fica tirando o pendrive, puxa pela rede, tlvz até um dominio
 //      nosso"
@@ -31,7 +31,7 @@ setStrings('en', {
   'updates.installing': 'Installing…',
   'updates.restarting': 'Restarting into the new version…',
   'updates.back': 'Back on {version}.',
-  'updates.confirm': 'Update to {version}? ProjectOS will restart. Apps stop for a few seconds; your data is untouched.',
+  'updates.confirm': 'Update to {version}? project-os will restart. Apps stop for a few seconds; your data is untouched.',
   'updates.notes': 'What changed',
   'updates.source': 'Update source',
   'updates.error.check': 'Could not check for updates.',

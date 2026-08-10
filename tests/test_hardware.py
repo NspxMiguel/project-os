@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from projectos.core import hardware
+from project_os.core import hardware
 
 
 # Revision codes taken from shipping hardware.
@@ -137,7 +137,7 @@ def test_an_unknown_board_with_enough_ram_is_supported(tmp_path: Path) -> None:
 
 
 def test_a_plain_linux_box_is_supported(tmp_path: Path) -> None:
-    """ProjectOS is not Pi-only; the floor is RAM, not the board."""
+    """project-os is not Pi-only; the floor is RAM, not the board."""
     proc = tmp_path / "proc"
     proc.mkdir()
     (proc / "cpuinfo").write_text("processor\t: 0\nvendor_id\t: GenuineIntel\n")

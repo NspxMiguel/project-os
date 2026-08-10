@@ -1,13 +1,13 @@
-# ProjectOS — Architecture Contract
+# project-os — Architecture Contract
 
 > **This document is the build contract.** Every module must conform to it exactly.
 > Signatures, config keys, table names, event topics and HTTP paths below are
 > normative. If something is missing, follow the nearest established pattern —
 > do not invent a competing convention.
 
-## 0. What ProjectOS is
+## 0. What project-os is
 
-ProjectOS is **the system layer of a Raspberry Pi**, not a container and not an app.
+project-os is **the system layer of a Raspberry Pi**, not a container and not an app.
 You flash Raspberry Pi OS Lite, run the installer, and the Pi becomes a headless
 appliance you drive entirely from a browser on another machine — the same shape
 Home Assistant OS has, but general purpose: it hosts *your projects*.
@@ -46,12 +46,12 @@ Dependency versions verified working on Python 3.9:
 ## 2. File tree
 
 ```
-projectos/                        # python package (importable)
+project_os/                        # python package (importable)
 ├── __init__.py                   # __version__
-├── __main__.py                   # python -m projectos
+├── __main__.py                   # python -m project_os
 ├── main.py                       # create_app() -> FastAPI, lifespan, router wiring
 ├── config.py                     # layered config
-├── paths.py                      # PROJECTOS_HOME resolution
+├── paths.py                      # PROJECT_OS_HOME resolution
 ├── db.py                         # sqlite wrapper + schema
 ├── events.py                     # EventBus
 ├── auth.py                       # users, sessions, require_auth dependency
@@ -83,7 +83,7 @@ web/                              # core frontend (static, served at /)
 ├── lib/    dom.js store.js router.js api.js ws.js format.js toast.js icons.js
 └── views/  setup.js login.js dashboard.js devices.js apps.js store.js
             settings.js system.js files.js terminal.js logs.js services.js
-scripts/    install.sh uninstall.sh projectos.service make_test_tracks.py dev.sh
+scripts/    install.sh uninstall.sh project-os.service make_test_tracks.py dev.sh
 tests/      conftest.py test_*.py
 docs/       ARCHITECTURE.md API.md APPS.md INSTALL.md
 ```
@@ -95,18 +95,18 @@ docs/       ARCHITECTURE.md API.md APPS.md INSTALL.md
 `paths.py`
 
 ```python
-def home() -> Path            # $PROJECTOS_HOME or ~/.projectos ; created on demand
+def home() -> Path            # $PROJECT_OS_HOME or ~/.project_os ; created on demand
 def config_file() -> Path     # home()/config.yaml
-def db_file() -> Path         # home()/projectos.db
+def db_file() -> Path         # home()/project_os.db
 def apps_dir() -> Path        # home()/apps           (user-installed apps)
 def data_dir(app_id) -> Path  # home()/data/<app_id>
 def media_dir() -> Path       # home()/media
-def log_file() -> Path        # home()/projectos.log
+def log_file() -> Path        # home()/project_os.log
 def builtin_apps_dir() -> Path
 def web_dir() -> Path
 ```
 
-`config.py` — layered: **defaults → config.yaml → env (`PROJECTOS__SERVER__PORT=8099`, `__` = nesting) → runtime API writes (persisted)**.
+`config.py` — layered: **defaults → config.yaml → env (`PROJECT_OS__SERVER__PORT=8099`, `__` = nesting) → runtime API writes (persisted)**.
 
 ```python
 class Config:
@@ -128,7 +128,7 @@ security:
   allow_shell: false            # Advanced terminal — opt-in
   allow_service_control: false  # systemctl / reboot — opt-in
   allow_file_write: true
-  file_roots: []                # extra roots beyond PROJECTOS_HOME; [] = home only
+  file_roots: []                # extra roots beyond PROJECT_OS_HOME; [] = home only
 ui:       {default_mode: "simple", theme: "auto", accent: "#5ac8a8"}
 discovery:
   enabled: true
@@ -203,7 +203,7 @@ Topics: `system.stats`, `device.found`, `device.updated`, `device.lost`,
   Stored as `pbkdf2_sha256$200000$<salt_hex>$<hash_hex>`. Verify with `hmac.compare_digest`.
 - No users yet → **setup mode**: only `GET /api/health`, `POST /api/setup` and static
   assets work; everything else returns `428` with `{"error":"setup_required"}`.
-- `POST /api/auth/login` sets cookie `projectos_session` (HttpOnly, SameSite=Lax,
+- `POST /api/auth/login` sets cookie `project_os_session` (HttpOnly, SameSite=Lax,
   `Secure` only when request is https). Also accepted: `Authorization: Bearer <token>`.
 - `require_auth` FastAPI dependency on every router except health/setup/login/static.
 - `security.auth_enabled: false` bypasses auth (documented as LAN-only, warned in UI).
@@ -226,7 +226,7 @@ Topics: `system.stats`, `device.found`, `device.updated`, `device.lost`,
      "options": [{"value":"airplay","label":"AirPlay"}], "default": "airplay",
      "help": "..."}
   ],
-  "min_projectos": "0.1.0"
+  "min_project_os": "0.1.0"
 }
 ```
 
@@ -269,7 +269,7 @@ export default {
 `ctx = { api, ws, appApi, config, toast, navigate, fmt, h, mode }` where
 `appApi.get('/status')` → `/api/apps/birdtunes/status`.
 
-Discovery order: `~/.projectos/apps/<id>/` overrides `projectos/apps/<id>/`.
+Discovery order: `~/.project_os/apps/<id>/` overrides `project_os/apps/<id>/`.
 A failing app is isolated: it is marked `error`, its traceback is stored, and the
 rest of the system boots normally.
 
@@ -288,7 +288,7 @@ GET    /api/auth/me
 
 GET    /api/system/info                     host, model, os, kernel, python, uptime, version
 GET    /api/system/stats                    cpu%, per-core, mem, swap, disk[], temp_c, load, net, uptime
-GET    /api/system/services                 systemd units (allow-list + projectos*)
+GET    /api/system/services                 systemd units (allow-list + project_os*)
 POST   /api/system/services/{unit}/{start|stop|restart}
 GET    /api/system/logs?source=&lines=200
 POST   /api/system/power/{reboot|shutdown}

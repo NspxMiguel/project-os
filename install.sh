@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# ProjectOS installer.
+# project-os installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/NspxMiguel/projectos/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/NspxMiguel/project-os/main/install.sh | bash
 #
-# Installs ProjectOS natively: a virtualenv under /opt/projectos and a systemd
-# unit. Not a container. ProjectOS is the layer that runs your things -- it does
+# Installs project-os natively: a virtualenv under /opt/project-os and a systemd
+# unit. Not a container. project-os is the layer that runs your things -- it does
 # not itself live inside one.
 #
 # The script is written to be run twice. Every step checks before it acts, so a
@@ -14,16 +14,16 @@
 
 set -euo pipefail
 
-REPO="${PROJECTOS_REPO:-https://github.com/NspxMiguel/projectos.git}"
+REPO="${PROJECT_OS_REPO:-https://github.com/NspxMiguel/project-os.git}"
 BRANCH="${PROJECTOS_BRANCH:-main}"
-PREFIX="${PROJECTOS_PREFIX:-/opt/projectos}"
-STATE="${PROJECTOS_HOME:-/var/lib/projectos}"
-SERVICE_USER="${PROJECTOS_USER:-projectos}"
-PORT="${PROJECTOS_PORT:-8099}"
+PREFIX="${PROJECT_OS_PREFIX:-/opt/project-os}"
+STATE="${PROJECT_OS_HOME:-/var/lib/project-os}"
+SERVICE_USER="${PROJECT_OS_USER:-project-os}"
+PORT="${PROJECT_OS_PORT:-8099}"
 # Empty means "decide by how much RAM this board has" -- see choose_extras.
 EXTRAS="${PROJECTOS_EXTRAS:-}"
 
-UNIT=/etc/systemd/system/projectos.service
+UNIT=/etc/systemd/system/project-os.service
 
 # Progress goes to stderr so that a function can both narrate and return a value
 # on stdout -- check_memory does exactly that.
@@ -54,7 +54,7 @@ check_memory() {
     kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
     mb=$(( kb / 1024 ))
     if [ "$mb" -lt 700 ]; then
-        die "$mb MB de RAM. ProjectOS pede pelo menos 1 GB -- para placas menores veja docs/SIMPLEPROJECTOS.md"
+        die "$mb MB de RAM. project-os pede pelo menos 1 GB -- para placas menores veja docs/SIMPLE-PROJECT-OS.md"
     fi
     note "memória: ${mb} MB"
     echo "$mb"
@@ -64,7 +64,7 @@ check_python() {
     local version
     command -v python3 >/dev/null 2>&1 || die "python3 não encontrado"
     version=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
-    python3 - <<'PY' || die "ProjectOS precisa de Python 3.9 ou mais novo"
+    python3 - <<'PY' || die "project-os precisa de Python 3.9 ou mais novo"
 import sys
 raise SystemExit(0 if sys.version_info >= (3, 9) else 1)
 PY
@@ -93,7 +93,7 @@ install_packages() {
 # Which optional extras to install. The heavy ones (pyatv, PyChromecast) pull in
 # cryptography and protobuf, which on a 1 GB Pi 3B is a twenty-minute compile and
 # a real chunk of RAM at runtime. Everything here is optional by design: without
-# them ProjectOS still boots and each screen says what is missing.
+# them project-os still boots and each screen says what is missing.
 choose_extras() {
     local mb="$1"
     if [ -n "$EXTRAS" ]; then
@@ -160,8 +160,8 @@ write_unit() {
     say "Serviço do systemd"
     cat > "$UNIT" <<UNITFILE
 [Unit]
-Description=ProjectOS
-Documentation=https://github.com/NspxMiguel/projectos
+Description=project-os
+Documentation=https://github.com/NspxMiguel/project-os
 After=network-online.target
 Wants=network-online.target
 
@@ -169,16 +169,16 @@ Wants=network-online.target
 Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
-Environment=PROJECTOS_HOME=$STATE
+Environment=PROJECT_OS_HOME=$STATE
 WorkingDirectory=$PREFIX
-ExecStart=$PREFIX/.venv/bin/python3 -m projectos --port $PORT
+ExecStart=$PREFIX/.venv/bin/python3 -m project_os --port $PORT
 Restart=on-failure
 RestartSec=5
 
 # It is a Pi. A leak in an app should cost the app, not the SD card's swap.
 MemoryMax=70%
 
-# Hardening, kept deliberately loose in one place: ProjectOS manages the machine
+# Hardening, kept deliberately loose in one place: project-os manages the machine
 # it runs on, so ProtectSystem=strict would break the thing it exists to do.
 NoNewPrivileges=yes
 PrivateTmp=yes
@@ -189,8 +189,8 @@ ReadWritePaths=$STATE
 WantedBy=multi-user.target
 UNITFILE
     systemctl daemon-reload
-    systemctl enable --quiet projectos.service
-    systemctl restart projectos.service
+    systemctl enable --quiet project-os.service
+    systemctl restart project-os.service
 }
 
 wait_for_boot() {
@@ -205,7 +205,7 @@ wait_for_boot() {
     done
     printf '\n'
     note "não respondeu em 60s. O que aconteceu:"
-    journalctl -u projectos -n 30 --no-pager || true
+    journalctl -u project_os -n 30 --no-pager || true
     return 1
 }
 
@@ -219,7 +219,7 @@ finish() {
     fi
     cat <<DONE
 
-  ProjectOS instalado.
+  project-os instalado.
 
     http://$host.local:$PORT   (mDNS: $mdns)
     http://$(hostname -I 2>/dev/null | awk '{print $1}'):$PORT
@@ -229,9 +229,9 @@ finish() {
 
   Ele vem vazio. Os aplicativos ficam na loja, dentro da própria tela.
 
-    systemctl status projectos
-    journalctl -u projectos -f
-    $PREFIX/.venv/bin/python3 -m projectos --help
+    systemctl status project_os
+    journalctl -u project_os -f
+    $PREFIX/.venv/bin/python3 -m project_os --help
 
 DONE
 }

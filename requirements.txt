@@ -1,10 +1,10 @@
-# ProjectOS runtime dependencies.
+# project-os runtime dependencies.
 # Versions below are the ones verified working on Python 3.9 / Raspberry Pi OS.
 #
 #   python -m venv .venv && .venv/bin/pip install -r requirements.txt
 #
 # ---------------------------------------------------------------------------
-# Required. Without these there is no ProjectOS.
+# Required. Without these there is no project-os.
 # ---------------------------------------------------------------------------
 fastapi==0.128.8
 uvicorn[standard]==0.39.0
@@ -17,7 +17,7 @@ python-multipart==0.0.20
 
 # ---------------------------------------------------------------------------
 # Optional: device discovery and casting.
-# Safe to delete on a 1 GB Pi 3B -- ProjectOS boots without them, the affected
+# Safe to delete on a 1 GB Pi 3B -- project-os boots without them, the affected
 # features report the missing package and tell you how to install it.
 # pyatv and PyChromecast are the heavy ones (they pull in cryptography and
 # protobuf); zeroconf alone is enough to *find* devices without playing to them.
@@ -34,6 +34,6 @@ psutil==7.2.2
 
 # ---------------------------------------------------------------------------
 # Optional: Home Assistant integration.
-# Only needed if you point ProjectOS at a Home Assistant instance.
+# Only needed if you point project-os at a Home Assistant instance.
 # ---------------------------------------------------------------------------
 httpx==0.28.1

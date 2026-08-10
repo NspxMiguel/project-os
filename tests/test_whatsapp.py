@@ -27,7 +27,7 @@ import pytest
 
 
 def _wa(module: str = "app"):
-    return importlib.import_module("projectos.apps.whatsapp-bot.%s" % module)
+    return importlib.import_module("project_os.apps.whatsapp-bot.%s" % module)
 
 
 # --------------------------------------------------------------------------- fake httpx

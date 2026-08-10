@@ -21,7 +21,7 @@ pytestmark = pytest.mark.usefixtures("home")
 
 
 def test_scan_adds_sample_tracks_and_is_idempotent(db, media_dir, sample_tracks):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     result = library.scan(db, [str(media_dir)])
@@ -34,7 +34,7 @@ def test_scan_adds_sample_tracks_and_is_idempotent(db, media_dir, sample_tracks)
 
 
 def test_scan_marks_deleted_files_missing_but_keeps_the_row(db, media_dir, sample_tracks):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     library.scan(db, [str(media_dir)])
@@ -48,7 +48,7 @@ def test_scan_marks_deleted_files_missing_but_keeps_the_row(db, media_dir, sampl
 
 
 def test_compatible_with_matches_the_format_table():
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     assert library.compatible_with("mp3", "mp3", "airplay") is True
     assert library.compatible_with("m4a", "aac", "airplay") is False
@@ -60,7 +60,7 @@ def test_compatible_with_matches_the_format_table():
 
 
 def test_feedback_like_and_dislike_move_the_counters(db):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     db.execute(
@@ -85,7 +85,7 @@ def test_feedback_like_and_dislike_move_the_counters(db):
 
 
 def test_apply_feedback_rejects_an_unknown_action(db):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     db.execute(
@@ -96,7 +96,7 @@ def test_apply_feedback_rejects_an_unknown_action(db):
 
 
 def test_the_all_playlist_is_virtual_and_cannot_be_edited(db, media_dir, sample_tracks):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     library.scan(db, [str(media_dir)])
@@ -115,7 +115,7 @@ def test_the_all_playlist_is_virtual_and_cannot_be_edited(db, media_dir, sample_
 
 
 def test_playlist_crud_and_reorder(db, media_dir, sample_tracks):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     library.scan(db, [str(media_dir)])
@@ -139,7 +139,7 @@ def test_playlist_crud_and_reorder(db, media_dir, sample_tracks):
 
 
 def test_candidate_set_reports_no_tracks_for_an_empty_library(db):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     tracks, reason = library.candidate_set(db, library.ALL_PLAYLIST_ID, "airplay")
@@ -148,7 +148,7 @@ def test_candidate_set_reports_no_tracks_for_an_empty_library(db):
 
 
 def test_candidate_set_reports_all_incompatible_when_nothing_fits_the_backend(db):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     db.execute(
@@ -162,7 +162,7 @@ def test_candidate_set_reports_all_incompatible_when_nothing_fits_the_backend(db
 
 
 def test_candidate_set_excludes_blocked_tracks(db):
-    from projectos.apps.birdtunes import library
+    from project_os.apps.birdtunes import library
 
     library.register_schema(db)
     db.execute(
@@ -191,7 +191,7 @@ def _schedule(**overrides):
 
 
 def test_active_window_matches_inside_the_configured_hours():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     moment = dt.datetime(2026, 8, 10, 10, 0)  # Monday
     window = scheduler.active_window(moment, _schedule())
@@ -200,14 +200,14 @@ def test_active_window_matches_inside_the_configured_hours():
 
 
 def test_active_window_respects_weekday_filtering():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     saturday = dt.datetime(2026, 8, 15, 10, 0)
     assert scheduler.active_window(saturday, _schedule()) is None
 
 
 def test_active_window_first_enabled_match_wins_on_overlap():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     cfg = _schedule(windows=[
         {"id": "a", "start": "09:00", "end": "12:00", "days": [0], "enabled": True},
@@ -219,7 +219,7 @@ def test_active_window_first_enabled_match_wins_on_overlap():
 
 
 def test_active_window_handles_midnight_crossing():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     cfg = _schedule(windows=[
         {"id": "night", "start": "22:00", "end": "02:00", "days": list(range(7)), "enabled": True},
@@ -230,7 +230,7 @@ def test_active_window_handles_midnight_crossing():
 
 
 def test_quiet_hours_beats_an_otherwise_active_window():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     cfg = _schedule(windows=[
         {"id": "always", "start": "00:00", "end": "23:59", "days": list(range(7)), "enabled": True},
@@ -238,19 +238,19 @@ def test_quiet_hours_beats_an_otherwise_active_window():
     moment = dt.datetime(2026, 8, 10, 21, 0)
     window = scheduler.active_window(moment, cfg)
     assert window is not None  # the window itself still "matches"...
-    from projectos.apps.birdtunes import safety
+    from project_os.apps.birdtunes import safety
     assert safety.is_quiet_hours(moment, cfg) is True  # ...but quiet hours vetoes it
 
 
 def test_disabled_schedule_has_no_active_window():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     cfg = _schedule(enabled=False)
     assert scheduler.active_window(dt.datetime(2026, 8, 10, 10, 0), cfg) is None
 
 
 def test_next_change_reports_the_disabled_message():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     cfg = _schedule(enabled=False)
     result = scheduler.next_change(dt.datetime(2026, 8, 10, 10, 0), cfg)
@@ -259,7 +259,7 @@ def test_next_change_reports_the_disabled_message():
 
 
 def test_next_change_predicts_starts_and_stops():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     cfg = _schedule()
     before = scheduler.next_change(dt.datetime(2026, 8, 10, 8, 0), cfg)
@@ -273,7 +273,7 @@ def test_next_change_predicts_starts_and_stops():
 
 @pytest.mark.asyncio
 async def test_scheduler_loop_tick_fires_play_and_stop_callbacks():
-    from projectos.apps.birdtunes import scheduler
+    from project_os.apps.birdtunes import scheduler
 
     calls = {"play": 0, "stop": 0}
 
@@ -309,7 +309,7 @@ async def test_scheduler_loop_tick_fires_play_and_stop_callbacks():
 def test_source_error_when_yt_dlp_is_not_installed(monkeypatch):
     import sys
 
-    from projectos.apps.birdtunes import sources
+    from project_os.apps.birdtunes import sources
 
     monkeypatch.delitem(sys.modules, "yt_dlp", raising=False)
     monkeypatch.setattr(sources.importlib.util, "find_spec", lambda name: None, raising=False) \
@@ -318,7 +318,7 @@ def test_source_error_when_yt_dlp_is_not_installed(monkeypatch):
 
 
 def test_run_job_imports_a_single_video_and_records_it(db, fake_ytdl, tmp_path):
-    from projectos.apps.birdtunes import library, sources
+    from project_os.apps.birdtunes import library, sources
 
     library.register_schema(db)
     job = sources.create_job(db, "https://youtube.com/watch?v=dQw4w9WgXcQ", kind="video")
@@ -331,7 +331,7 @@ def test_run_job_imports_a_single_video_and_records_it(db, fake_ytdl, tmp_path):
 
 
 def test_run_job_dedupes_on_source_id_across_two_jobs(db, fake_ytdl, tmp_path):
-    from projectos.apps.birdtunes import library, sources
+    from project_os.apps.birdtunes import library, sources
 
     library.register_schema(db)
     job1 = sources.create_job(db, "https://youtube.com/watch?v=dQw4w9WgXcQ", kind="video")
@@ -346,7 +346,7 @@ def test_run_job_dedupes_on_source_id_across_two_jobs(db, fake_ytdl, tmp_path):
 def test_run_job_playlist_continues_past_one_failing_item(db, fake_ytdl, tmp_path):
     import sys
 
-    from projectos.apps.birdtunes import library, sources
+    from project_os.apps.birdtunes import library, sources
 
     library.register_schema(db)
     yt_dlp = sys.modules["yt_dlp"]
@@ -371,7 +371,7 @@ def test_run_job_playlist_continues_past_one_failing_item(db, fake_ytdl, tmp_pat
 
 
 def test_run_job_can_be_cancelled_mid_import(db, fake_ytdl, tmp_path):
-    from projectos.apps.birdtunes import library, sources
+    from project_os.apps.birdtunes import library, sources
 
     library.register_schema(db)
     job = sources.create_job(db, "https://youtube.com/watch?v=dQw4w9WgXcQ", kind="video")
@@ -380,7 +380,7 @@ def test_run_job_can_be_cancelled_mid_import(db, fake_ytdl, tmp_path):
 
 
 def test_preview_lists_items_without_downloading(fake_ytdl):
-    from projectos.apps.birdtunes import sources
+    from project_os.apps.birdtunes import sources
 
     result = sources.preview("https://youtube.com/watch?v=dQw4w9WgXcQ")
     assert result["kind"] == "video"
@@ -392,8 +392,8 @@ def test_preview_lists_items_without_downloading(fake_ytdl):
 
 @pytest.mark.asyncio
 async def test_null_player_reports_finished_after_a_short_track():
-    from projectos.apps.birdtunes.players.base import Track
-    from projectos.apps.birdtunes.players.null import NullPlayer
+    from project_os.apps.birdtunes.players.base import Track
+    from project_os.apps.birdtunes.players.null import NullPlayer
 
     player = NullPlayer()
     await player.connect({"id": "dev1", "name": "Test speaker"})
@@ -408,8 +408,8 @@ async def test_null_player_reports_finished_after_a_short_track():
 
 @pytest.mark.asyncio
 async def test_null_player_stop_reports_stopped_reason():
-    from projectos.apps.birdtunes.players.base import Track
-    from projectos.apps.birdtunes.players.null import NullPlayer
+    from project_os.apps.birdtunes.players.base import Track
+    from project_os.apps.birdtunes.players.null import NullPlayer
 
     player = NullPlayer()
     await player.connect({"id": "dev1"})
@@ -420,8 +420,8 @@ async def test_null_player_stop_reports_stopped_reason():
 
 @pytest.mark.asyncio
 async def test_null_player_pause_and_resume_change_state():
-    from projectos.apps.birdtunes.players.base import Track
-    from projectos.apps.birdtunes.players.null import NullPlayer
+    from project_os.apps.birdtunes.players.base import Track
+    from project_os.apps.birdtunes.players.null import NullPlayer
 
     player = NullPlayer()
     await player.connect({"id": "dev1"})
@@ -434,15 +434,15 @@ async def test_null_player_pause_and_resume_change_state():
 
 
 def test_null_player_is_always_available():
-    from projectos.apps.birdtunes.players.null import NullPlayer
+    from project_os.apps.birdtunes.players.null import NullPlayer
 
     ok, hint = NullPlayer.available()
     assert ok is True
 
 
 def test_chromecast_and_airplay_describe_without_raising():
-    from projectos.apps.birdtunes.players.airplay import AirPlayPlayer
-    from projectos.apps.birdtunes.players.chromecast import ChromecastPlayer
+    from project_os.apps.birdtunes.players.airplay import AirPlayPlayer
+    from project_os.apps.birdtunes.players.chromecast import ChromecastPlayer
 
     for cls in (AirPlayPlayer, ChromecastPlayer):
         info = cls.describe()
@@ -606,7 +606,7 @@ def test_compat_route_reports_zero_tracks_on_a_fresh_install(auth_client):
 
 
 def test_convert_route_returns_409_without_ffmpeg(auth_client, monkeypatch):
-    from projectos.apps.birdtunes import sources
+    from project_os.apps.birdtunes import sources
 
     monkeypatch.setattr(sources, "ffmpeg_available", lambda: False)
     response = auth_client.post("/api/apps/birdtunes/convert", json={"track_ids": []})
@@ -614,7 +614,7 @@ def test_convert_route_returns_409_without_ffmpeg(auth_client, monkeypatch):
 
 
 def test_import_preview_returns_503_without_yt_dlp(auth_client, monkeypatch):
-    from projectos.apps.birdtunes import sources
+    from project_os.apps.birdtunes import sources
 
     monkeypatch.setattr(sources, "available", lambda: False)
     response = auth_client.get("/api/apps/birdtunes/import/preview", params={"url": "https://youtube.com/x"})
@@ -677,7 +677,7 @@ def test_app_config_is_refused_for_an_app_that_is_not_installed(auth_client) -> 
 )
 def test_youtube_video_id_reads_every_shape_of_link(url, expected):
     """Pure string work: no network and no yt-dlp, so casting works without them."""
-    from projectos.apps.birdtunes import sources
+    from project_os.apps.birdtunes import sources
 
     assert sources.youtube_video_id(url) == expected
 

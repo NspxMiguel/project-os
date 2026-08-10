@@ -1,6 +1,6 @@
 """Shared fixtures.
 
-Every test runs against a throwaway PROJECTOS_HOME and a fresh SQLite file, with no
+Every test runs against a throwaway PROJECT_OS_HOME and a fresh SQLite file, with no
 network, no mDNS and no real speakers. The optional device libraries (zeroconf, pyatv,
 pychromecast, yt_dlp) are faked at the import seam so the suite behaves identically on a
 developer laptop, in CI, and on a Pi that has none of them installed.
@@ -26,49 +26,49 @@ if str(REPO_ROOT) not in sys.path:
 
 @pytest.fixture()
 def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """An isolated PROJECTOS_HOME for one test."""
-    h = tmp_path / "projectos-home"
+    """An isolated PROJECT_OS_HOME for one test."""
+    h = tmp_path / "project_os-home"
     h.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setenv("PROJECTOS_HOME", str(h))
-    # Any PROJECTOS__* left over from the developer's shell would leak into the config.
+    monkeypatch.setenv("PROJECT_OS_HOME", str(h))
+    # Any PROJECT_OS__* left over from the developer's shell would leak into the config.
     for key in list(os.environ):
-        if key.startswith("PROJECTOS__"):
+        if key.startswith("PROJECT_OS__"):
             monkeypatch.delenv(key, raising=False)
     # The dependency-free scanners (SSDP, ARP, Kasa, Tuya) talk to the actual
     # network, so they are off for the whole suite: a test whose result depends
     # on what happens to be plugged in at home is not a test. They have their own
     # coverage in tests/test_lan.py, against fed-in bytes.
-    monkeypatch.setenv("PROJECTOS__DISCOVERY__EXTRA_SCANNERS", "false")
+    monkeypatch.setenv("PROJECT_OS__DISCOVERY__EXTRA_SCANNERS", "false")
     # A real fresh machine now boots with nothing running -- that is the point of
     # the store. The suite, though, is mostly *about* the two bundled apps, so it
     # installs them the way the store would instead of relying on a default that
     # no longer exists.
-    monkeypatch.setenv("PROJECTOS__APPS__ENABLED", '["birdtunes", "whatsapp-bot"]')
+    monkeypatch.setenv("PROJECT_OS__APPS__ENABLED", '["birdtunes", "whatsapp-bot"]')
     # Booting asks the network which timezone this box is in. In the suite that
     # would be one real HTTP request per test, against someone else's server --
     # slow, flaky, and rude. The lookup has its own tests, with the network faked.
-    monkeypatch.setenv("PROJECTOS__SYSTEM__TIMEZONE_AUTO", "false")
+    monkeypatch.setenv("PROJECT_OS__SYSTEM__TIMEZONE_AUTO", "false")
     _reset_modules()
     return h
 
 
 def _reset_modules() -> None:
-    """Drop cached projectos modules so paths/config re-read the new environment."""
-    for name in [n for n in sys.modules if n == "projectos" or n.startswith("projectos.")]:
+    """Drop cached project_os modules so paths/config re-read the new environment."""
+    for name in [n for n in sys.modules if n == "project_os" or n.startswith("project_os.")]:
         del sys.modules[name]
 
 
 @pytest.fixture()
 def config(home: Path):
-    from projectos.config import load_config
+    from project_os.config import load_config
 
     return load_config()
 
 
 @pytest.fixture()
 def db(home: Path):
-    from projectos.db import Database
-    from projectos import paths
+    from project_os.db import Database
+    from project_os import paths
 
     database = Database(paths.db_file())
     database.migrate()
@@ -253,7 +253,7 @@ def daytime(monkeypatch):
     """
     import datetime as dt
 
-    from projectos.apps.birdtunes import app as birdtunes_app
+    from project_os.apps.birdtunes import app as birdtunes_app
 
     monkeypatch.setattr(birdtunes_app, "_now", lambda config=None: dt.datetime(2026, 1, 7, 10, 0))
     return dt.datetime(2026, 1, 7, 10, 0)
@@ -264,7 +264,7 @@ def daytime(monkeypatch):
 
 @pytest.fixture()
 def app(home: Path):
-    from projectos.main import create_app
+    from project_os.main import create_app
 
     return create_app()
 

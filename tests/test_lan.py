@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from projectos.core import discovery, lan
+from project_os.core import discovery, lan
 
 
 def ssdp_reply(**headers: str) -> bytes:
@@ -189,7 +189,7 @@ def test_multicast_and_broadcast_addresses_are_not_devices():
     Listing them turned "everything on your network" into a screen where real
     finds sat between rows like "232.17.191.193, unknown, online".
     """
-    from projectos.core import lan
+    from project_os.core import lan
 
     assert lan.is_real_host("10.0.0.95")
     assert lan.is_real_host("127.0.0.1")
@@ -201,7 +201,7 @@ def test_multicast_and_broadcast_addresses_are_not_devices():
 
 
 def test_neighbours_drops_the_multicast_rows(monkeypatch):
-    from projectos.core import lan
+    from project_os.core import lan
 
     monkeypatch.setattr(lan, "_read_proc_arp", lambda: [
         ("10.0.0.95", "3c:e8:75:a5:82:99"),

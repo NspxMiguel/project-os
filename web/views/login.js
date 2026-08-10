@@ -68,7 +68,7 @@ export default {
         submit.disabled = false;
         mount(submit, 'Sign in');
         if (err && err.status === 401) showProblem('Wrong username or password.');
-        else if (err && err.status === 428) showProblem('ProjectOS has not been set up yet.');
+        else if (err && err.status === 428) showProblem('project-os has not been set up yet.');
         else showProblem((err && err.message) || 'Could not sign in.');
         password.select();
         password.focus();
@@ -93,12 +93,12 @@ export default {
     mount(root, h('div', {class: 'auth__card'},
       h('div', {class: 'auth__brand'},
         h('span', {class: 'auth__mark'}, icon('chip', {size: 22})),
-        h('h1', {class: 'auth__title'}, 'ProjectOS'),
+        h('h1', {class: 'auth__title'}, 'project-os'),
       ),
       h('p', {class: 'auth__lead'}, 'Sign in to manage this machine.'),
       form,
       authDisabled
-        ? h('p', {class: 'auth__foot'}, 'Authentication is disabled in the configuration — anyone on this network can control ProjectOS.')
+        ? h('p', {class: 'auth__foot'}, 'Authentication is disabled in the configuration — anyone on this network can control project-os.')
         : null,
       h('p', {class: 'auth__foot'}, t('app.name') + (ctx.health && ctx.health.version ? ' ' + ctx.health.version : '')),
     ));

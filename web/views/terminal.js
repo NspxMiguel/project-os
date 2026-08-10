@@ -2,7 +2,7 @@
 //
 // This exists because of one request: a corner button that "serve pra
 // qualquer coisa, baixa apps e etc" -- something that can install a package
-// or poke at a file without SSH. projectos/api/shell.py backs it with a real
+// or poke at a file without SSH. project_os/api/shell.py backs it with a real
 // pty (TERM=xterm-256color), which means the byte stream can contain full
 // ANSI escape sequences (cursor moves, colors, alternate screens). There is
 // no xterm.js here by policy (zero build step, no bundler), so this view

@@ -15,13 +15,13 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from projectos.core import containers
+from project_os.core import containers
 
 
 def _live_containers():
-    """Resolve whatever module ``projectos.core.containers`` is bound to right now.
+    """Resolve whatever module ``project_os.core.containers`` is bound to right now.
 
-    conftest.py's ``home`` fixture drops every ``projectos.*`` entry from
+    conftest.py's ``home`` fixture drops every ``project_os.*`` entry from
     ``sys.modules`` before a test that builds the FastAPI app, so that
     ``api/store.py`` and ``plugins.py`` get a clean re-import per test. The
     ``containers`` name this file imported at collection time keeps pointing
@@ -32,7 +32,7 @@ def _live_containers():
     """
     import sys
 
-    return sys.modules.get("projectos.core.containers", containers)
+    return sys.modules.get("project_os.core.containers", containers)
 
 
 # --------------------------------------------------------------------------- fakes
@@ -122,7 +122,7 @@ def fake_runtime(monkeypatch: pytest.MonkeyPatch) -> FakeRuntime:
     # whatever is in sys.modules after conftest's purge. Patching only one of
     # them leaves the other talking to a real docker socket -- which is how a
     # green suite started failing the moment an unrelated test happened to
-    # re-import projectos.core.containers first.
+    # re-import project_os.core.containers first.
     monkeypatch.setattr(containers, "_run", fake.run)
     live = _live_containers()
     if live is not containers:
@@ -244,7 +244,7 @@ def test_create_argv_is_an_argument_list_not_a_shell_string(tmp_path: Path) -> N
     spec = containers.parse_spec("audiobookshelf", VALID_SPEC_RAW)
     argv = containers.create_argv("docker", "audiobookshelf", spec, tmp_path)
     assert argv[:2] == ["docker", "create"]
-    assert "--name" in argv and "projectos-audiobookshelf" in argv
+    assert "--name" in argv and "project_os-audiobookshelf" in argv
     assert "-p" in argv and "8080:80" in argv
     assert "-e" in argv and "TZ=America/Sao_Paulo" in argv
     volume_flag_index = argv.index("-v")
@@ -256,7 +256,7 @@ def test_create_argv_is_an_argument_list_not_a_shell_string(tmp_path: Path) -> N
 
 
 def test_container_name_is_namespaced() -> None:
-    assert containers.container_name("n8n") == "projectos-n8n"
+    assert containers.container_name("n8n") == "project_os-n8n"
 
 
 # --------------------------------------------------------------------------- lifecycle against the fake runtime
@@ -284,7 +284,7 @@ def test_stop_is_a_noop_on_a_container_that_was_never_created(fake_runtime: Fake
     containers.stop("docker", "never-installed")
     # stop() has to inspect first to know there is nothing to stop -- that
     # one lookup is the only command that should ever run.
-    assert fake_runtime.calls == [["docker", "inspect", "projectos-never-installed"]]
+    assert fake_runtime.calls == [["docker", "inspect", "project_os-never-installed"]]
 
 
 def test_remove_deletes_the_container(fake_runtime: FakeRuntime, tmp_path: Path) -> None:
@@ -338,8 +338,8 @@ def container_engine(monkeypatch: pytest.MonkeyPatch, auth_client, fake_runtime:
     """Make the store believe docker is installed and drive it through the fake.
 
     ``auth_client`` is a real dependency here, not an unused convenience --
-    building it is what makes ``projectos.main`` re-import the whole
-    ``projectos.*`` tree (see ``_live_containers`` above). Only after that has
+    building it is what makes ``project_os.main`` re-import the whole
+    ``project_os.*`` tree (see ``_live_containers`` above). Only after that has
     happened does ``sys.modules`` hold the same ``containers`` object that
     ``api/store.py`` and ``plugins.py`` are actually calling into, so both
     patches are (re)applied to that object rather than trusted to whatever
@@ -382,7 +382,7 @@ def test_store_install_still_refuses_an_oversize_container_app(
     auth_client, container_engine: FakeRuntime, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The container installer does not bypass the RAM speed bump."""
-    from projectos.core import catalog
+    from project_os.core import catalog
 
     class TinyBoard(object):
         model = "test"

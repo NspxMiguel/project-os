@@ -1,6 +1,6 @@
 name: release
 
-# The other half of the updater. The image is how the Pi gets ProjectOS the
+# The other half of the updater. The image is how the Pi gets project-os the
 # first time; this is how it gets every version after that, without the card
 # ever leaving the machine:
 #
@@ -31,7 +31,7 @@ jobs:
       - name: Work out the version
         id: v
         run: |
-          version=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' projectos/__init__.py | head -n1 | tr -d '"')
+          version=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' project_os/__init__.py | head -n1 | tr -d '"')
           tag="${GITHUB_REF_NAME}"
           case "$tag" in v*) ;; *) tag="v${version}" ;; esac
           # A tag that disagrees with the code would ship a version the running
@@ -47,8 +47,8 @@ jobs:
         id: pack
         run: |
           set -e
-          name="projectos-${{ steps.v.outputs.version }}.tar.gz"
-          git archive --format=tar.gz --prefix="projectos-${{ steps.v.outputs.version }}/" \
+          name="project-os-${{ steps.v.outputs.version }}.tar.gz"
+          git archive --format=tar.gz --prefix="project-os-${{ steps.v.outputs.version }}/" \
             -o "$name" HEAD
           sha=$(sha256sum "$name" | cut -d' ' -f1)
           echo "name=$name" >> "$GITHUB_OUTPUT"
@@ -61,7 +61,7 @@ jobs:
         run: |
           tag="${{ steps.v.outputs.tag }}"
           gh release view "$tag" >/dev/null 2>&1 || \
-            gh release create "$tag" --title "ProjectOS ${{ steps.v.outputs.version }}" --generate-notes
+            gh release create "$tag" --title "project-os ${{ steps.v.outputs.version }}" --generate-notes
           gh release upload "$tag" "${{ steps.pack.outputs.name }}" --clobber
 
       - name: Update the manifest on main

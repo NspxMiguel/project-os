@@ -1,8 +1,8 @@
 // views/logs.js — Advanced mode: a live tail over system and app logs.
 //
 // Two sources feed the same list: the history from GET /system/logs (sqlite,
-// via projectos/db.py's `log` table) and the live "log" websocket topic that
-// projectos/main.py's EventLogHandler publishes for every log record as it
+// via project_os/db.py's `log` table) and the live "log" websocket topic that
+// project_os/main.py's EventLogHandler publishes for every log record as it
 // happens. The websocket payload is {level, source, message} with no
 // timestamp of its own -- the outer ws frame carries `ts` -- so a live line
 // is stamped from the frame, not the payload.

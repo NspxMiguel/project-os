@@ -1,6 +1,6 @@
 """The catalog is data, so these tests guard the data.
 
-A typo in :file:`projectos/data/catalog.yaml` cannot be caught by the type
+A typo in :file:`project_os/data/catalog.yaml` cannot be caught by the type
 checker or by importing anything -- it shows up as a store entry with a blank
 icon, or an app the install endpoint cannot act on. That is what this file is
 for.
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from projectos.core import catalog
+from project_os.core import catalog
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 
@@ -90,6 +90,6 @@ def test_the_apps_he_asked_for_are_in_the_store(app_id: str) -> None:
 
 def test_a_clean_install_has_no_apps_enabled() -> None:
     """> "quero q por padrao ele venha so com apps normais po, sem nada, q nem o ha" """
-    from projectos import config
+    from project_os import config
 
     assert config.DEFAULTS["apps"]["enabled"] == []

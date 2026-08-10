@@ -1,4 +1,4 @@
-// app.js — ProjectOS shell.
+// app.js — project-os shell.
 //
 // Boot order: /api/health decides whether we go to the setup wizard, the login
 // screen, or the full shell. From there the hash router owns the content area
@@ -26,10 +26,10 @@ import {t} from './lib/format.js';
 import {toast, confirm} from './lib/toast.js';
 import {icon, appIcon} from './lib/icons.js';
 
-const LS_MODE = 'projectos.mode';
-const LS_THEME = 'projectos.theme';
-const LS_ACCENT = 'projectos.accent';
-const LS_DOCK = 'projectos.dockTerminal';
+const LS_MODE = 'project_os.mode';
+const LS_THEME = 'project_os.theme';
+const LS_ACCENT = 'project_os.accent';
+const LS_DOCK = 'project_os.dockTerminal';
 
 const store = createStore({
   ready: false,
@@ -46,7 +46,7 @@ const store = createStore({
   devices: [],
   suggestions: [],
   wsState: {status: 'idle'},
-  title: 'ProjectOS',
+  title: 'project-os',
 });
 
 let ws = null;
@@ -372,7 +372,7 @@ async function logout() {
 
 function buildShell() {
   navEl = h('nav', {class: 'nav', 'aria-label': 'Main'});
-  titleEl = h('h1', {class: 'topbar__title'}, 'ProjectOS');
+  titleEl = h('h1', {class: 'topbar__title'}, 'project-os');
   pillsEl = h('div', {class: 'pills', 'aria-label': 'System load'});
   controlsEl = h('div', {class: 'topbar__group'});
   contentEl = h('main', {class: 'content', id: 'view', tabindex: '-1'});
@@ -382,7 +382,7 @@ function buildShell() {
       h('a', {class: 'brand', href: '#/'},
         h('span', {class: 'brand__mark'}, icon('chip', {size: 18})),
         h('span', {class: 'brand__text'},
-          h('span', null, 'ProjectOS'),
+          h('span', null, 'project-os'),
           h('span', {class: 'brand__sub'}, dig(store.get('health'), 'version', '') || ''),
         ),
       ),
@@ -428,9 +428,9 @@ function useAuthLayout() {
 }
 
 function setTitle(title) {
-  store.set({title: title || 'ProjectOS'});
-  document.title = title && title !== 'ProjectOS' ? title + ' · ProjectOS' : 'ProjectOS';
-  if (titleEl) mount(titleEl, title || 'ProjectOS');
+  store.set({title: title || 'project-os'});
+  document.title = title && title !== 'project-os' ? title + ' · project-os' : 'project-os';
+  if (titleEl) mount(titleEl, title || 'project-os');
 }
 
 /* ----------------------------------------------------------- view states */
@@ -553,7 +553,7 @@ async function showView(name, routeCtx, {layout = 'shell', title = ''} = {}) {
   else ensureShell();
   if (token !== bootToken) return;
 
-  setTitle(title || (name ? fmt.humanize(name) : 'ProjectOS'));
+  setTitle(title || (name ? fmt.humanize(name) : 'project-os'));
   renderNav();
 
   mount(contentEl, layout === 'auth'
@@ -884,7 +884,7 @@ function buildRouter() {
       navigate('#/', {replace: true});
       return;
     }
-    return showView('setup', routeCtx, {layout: 'auth', title: 'Set up ProjectOS'});
+    return showView('setup', routeCtx, {layout: 'auth', title: 'Set up project-os'});
   });
 
   r.notFound((routeCtx) => {
@@ -898,7 +898,7 @@ function buildRouter() {
     mount(contentEl, h('div', {class: 'empty'},
       h('span', {class: 'empty__icon'}, icon('search', {size: 20})),
       h('p', {class: 'empty__title'}, 'Nothing at ' + routeCtx.path),
-      h('p', {class: 'empty__text'}, 'That page does not exist in this build of ProjectOS.'),
+      h('p', {class: 'empty__text'}, 'That page does not exist in this build of project-os.'),
       h('a', {class: 'btn btn--primary', href: '#/'}, t('nav.dashboard')),
     ));
   });
@@ -931,7 +931,7 @@ function fatal(error) {
     h('div', {class: 'auth__card'},
       h('div', {class: 'auth__brand'},
         h('span', {class: 'auth__mark'}, icon('warning', {size: 22})),
-        h('h1', {class: 'auth__title'}, 'ProjectOS is not responding'),
+        h('h1', {class: 'auth__title'}, 'project-os is not responding'),
       ),
       h('p', {class: 'auth__lead'}, message),
       h('button', {class: 'btn btn--primary btn--block', type: 'button', onClick: () => boot()},
@@ -1054,7 +1054,7 @@ export async function boot() {
 // o terminal ali no canto, q serve pra qualquer coisa ne, baixa apps e etc"*
 //
 // The switch lives in Settings, which cannot reach into the shell, so it asks
-// by dispatching `projectos:dock-terminal` on window. Keeping the dock here is
+// by dispatching `project_os:dock-terminal` on window. Keeping the dock here is
 // what makes it survive navigation: it is a sibling of the router's content
 // area, so changing screens never unmounts it -- which is the whole point of
 // pinning a terminal to a corner.
@@ -1119,7 +1119,7 @@ function setDock(on) {
   else closeDock();
 }
 
-window.addEventListener('projectos:dock-terminal', (event) => {
+window.addEventListener('project_os:dock-terminal', (event) => {
   setDock(!!(event.detail && event.detail.on));
 });
 
@@ -1139,7 +1139,7 @@ function restoreDock() {
 }
 
 // Escape hatch for app panels and for debugging from the console.
-window.ProjectOS = {
+window.project-os = {
   store, api, apiFor, fmt, h, icon, toast, confirm, navigate, readStats,
   get ws() { return ws; },
   get router() { return router; },

@@ -10,21 +10,21 @@ O pedido que gerou isto:
 > de casa inteligente... suporte a tuya ekaza, tudo. deixe a casa inteligente de vdd"
 
 Home Assistant não é um caso especial. Ele é o primeiro item de um catálogo, e o
-catálogo é o que transforma o ProjectOS de "painel com um tocador de música" em
+catálogo é o que transforma o project-os de "painel com um tocador de música" em
 sistema de casa inteligente.
 
 ---
 
 ## 1. As três espécies de app
 
-O ProjectOS é o sistema operacional, não um container — ele hospeda processos, não
+O project-os é o sistema operacional, não um container — ele hospeda processos, não
 roda dentro de um. Isso dá três formas de um app existir, e a escolha entre elas é
 quase sempre uma decisão de memória.
 
 | `kind` | O que é | Custo de RAM | Exemplos |
 | --- | --- | --- | --- |
-| `builtin` | Módulo Python dentro do venv do ProjectOS. Sem processo próprio. | 0–8 MB | BirdTunes, Kasa, Tuya, MQTT |
-| `service` | Processo externo que o ProjectOS instala, supervisiona e serve. | 40–500 MB | Home Assistant, Zigbee2MQTT, Node-RED, Argos |
+| `builtin` | Módulo Python dentro do venv do project-os. Sem processo próprio. | 0–8 MB | BirdTunes, Kasa, Tuya, MQTT |
+| `service` | Processo externo que o project-os instala, supervisiona e serve. | 40–500 MB | Home Assistant, Zigbee2MQTT, Node-RED, Argos |
 | `link` | Nada é instalado; aponta pra algo que já roda em outro lugar. | 0 | HA que já existe na rede |
 
 **A regra do Pi 3B.** Esta máquina tem 1 GB e nada de swap decente num cartão SD.
@@ -89,7 +89,7 @@ que segue é o que `service` acrescenta.
   "settings_schema": {
     "trusted_proxy": {
       "type": "boolean", "default": true,
-      "label": "Confiar no proxy do ProjectOS",
+      "label": "Confiar no proxy do project-os",
       "help": "Escreve http_trusted_proxies no configuration.yaml do HA."
     }
   }
@@ -111,7 +111,7 @@ nesta ordem, e o que acontece quando falha:
 4. **`python` / `node`** — versão insuficiente vira um passo de instalação a mais
    (ver `node` abaixo), não uma recusa.
 5. **`apt`** — pacotes ausentes viram passos; se não houver `sudo` sem senha, o
-   ProjectOS mostra a linha exata pro usuário colar num terminal em vez de fingir
+   project-os mostra a linha exata pro usuário colar num terminal em vez de fingir
    que instalou.
 
 **Nada disso é estimativa inventada.** Cada `ram_mb` no catálogo é o RSS medido em
@@ -126,7 +126,7 @@ de uma instalação boa não deve fazer nada.
 | `type` | Faz | Observação |
 | --- | --- | --- |
 | `apt` | `apt-get install -y` | Só com privilégio; senão, instrui o usuário. |
-| `venv` | Cria um venv isolado dentro do `app_dir` | Nunca no venv do ProjectOS. |
+| `venv` | Cria um venv isolado dentro do `app_dir` | Nunca no venv do project-os. |
 | `pip` | Instala dentro daquele venv | `--no-cache-dir` — o cartão SD agradece. |
 | `node` | Garante Node ≥ N via NodeSource | Uma vez só; compartilhado entre apps. |
 | `npm` | `npm install --omit=dev` no `app_dir` | |
@@ -144,13 +144,13 @@ pior que nenhuma.
 
 ### `service` — a unidade systemd
 
-O ProjectOS gera `/etc/systemd/system/projectos-app-<id>.service` a partir do
+O project-os gera `/etc/systemd/system/project_os-app-<id>.service` a partir do
 manifesto, com o mínimo de superfície:
 
 ```ini
 [Service]
-User=projectos
-Group=projectos
+User=project_os
+Group=project_os
 ExecStart=...
 Restart=on-failure
 RestartSec=10
@@ -158,25 +158,25 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/projectos/apps/<id>
+ReadWritePaths=/var/lib/project-os/apps/<id>
 MemoryMax=<requires.ram_mb * 1.5>M
 ```
 
 `MemoryMax` existe por causa desta máquina: um app com vazamento leva o kernel a
-matar *ele*, não o ProjectOS e não o SSH. Numa placa de 1 GB, a diferença entre
+matar *ele*, não o project-os e não o SSH. Numa placa de 1 GB, a diferença entre
 "um app morreu" e "a placa sumiu da rede" é essa linha.
 
-Se não houver privilégio pra escrever unidade, há um degradê honesto: o ProjectOS
+Se não houver privilégio pra escrever unidade, há um degradê honesto: o project-os
 supervisiona o processo ele mesmo (`asyncio.create_subprocess_exec` + reinício com
 backoff), com o aviso de que sem systemd o app não sobe sozinho no boot.
 
 ### `ui.mode` — como o app aparece
 
-- **`proxy`** (padrão): o ProjectOS serve o app em `/app/<id>/`, repassando HTTP e
+- **`proxy`** (padrão): o project-os serve o app em `/app/<id>/`, repassando HTTP e
   WebSocket pro `127.0.0.1:<port>`. É o que faz "tudo integrado" ser verdade — uma
   URL, um login, e o app do celular não precisa saber de porta nenhuma.
 - **`panel`**: o app traz o próprio `panel.js` e é desenhado dentro da UI do
-  ProjectOS, como o BirdTunes.
+  project-os, como o BirdTunes.
 - **`external`**: só um link. Pra quem se recusa a rodar em iframe.
 
 O proxy é reverso de verdade, não iframe puro: reescreve `Location`, injeta
@@ -189,13 +189,13 @@ oferece o link em vez de uma moldura vazia.
 
 ## 3. O catálogo
 
-Nada aqui é código embutido no ProjectOS. É `apps/catalog.json`, e a lista de
+Nada aqui é código embutido no project-os. É `apps/catalog.json`, e a lista de
 repositórios que o alimenta está em `apps.repositories` na config — o repo oficial
 vem configurado, e qualquer um pode apontar pro seu. Um app de terceiro instala
 exatamente pelo mesmo caminho que os oficiais.
 
 Os números de RAM abaixo são de repouso, num ARM. `cabe?` é contra um Pi 3B de
-1 GB com o ProjectOS rodando (≈ 700 MB livres).
+1 GB com o project-os rodando (≈ 700 MB livres).
 
 ### Casa inteligente
 
@@ -255,7 +255,7 @@ cabe, `fits_reason` já em texto pronto pra tela.
 | `PUT` | `/api/apps/{id}/settings` | Config do app, validada pelo `settings_schema`. |
 | `ANY` | `/app/{id}/{path:path}` | O proxy reverso, com WebSocket. |
 
-Tudo atrás da mesma sessão do ProjectOS. Instalar app é operação privilegiada: se
+Tudo atrás da mesma sessão do project-os. Instalar app é operação privilegiada: se
 `security.allow_service_control` estiver desligado, `install`/`start`/`stop`
 respondem 403 nomeando a chave, igual ao shell.
 
@@ -267,14 +267,14 @@ Ele entra de duas formas, e a loja pergunta qual antes de qualquer coisa:
 
 **"Você já tem um Home Assistant?"**
 
-- **Tenho** → `kind: link`. O ProjectOS já acha ele sozinho no mDNS
+- **Tenho** → `kind: link`. O project-os já acha ele sozinho no mDNS
   (`_home-assistant._tcp`), pede só o token de longa duração, e a partir daí as
-  entidades do HA aparecem no ProjectOS como qualquer outro dispositivo. Custo: 0.
+  entidades do HA aparecem no project-os como qualquer outro dispositivo. Custo: 0.
 - **Não tenho** → `kind: service`, instalação de verdade, com o aviso de RAM na
   cara. Nesta placa, isso significa **HA e mais nada**: BirdTunes continua (é
   builtin), mas Zigbee2MQTT junto não vai passar.
 
-Instalando pelo ProjectOS, três coisas são feitas que o usuário não deveria
+Instalando pelo project-os, três coisas são feitas que o usuário não deveria
 precisar saber:
 
 1. `http.use_x_forwarded_for` + `http.trusted_proxies: [127.0.0.1]` no

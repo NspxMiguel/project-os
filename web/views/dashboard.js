@@ -655,7 +655,7 @@ export default {
               ),
             )))
           : emptyState('Nothing discovered yet',
-              'ProjectOS looks for AirPlay speakers, Chromecasts and hubs with mDNS.',
+              'project-os looks for AirPlay speakers, Chromecasts and hubs with mDNS.',
               h('button', {class: 'btn btn--sm', type: 'button', onClick: scanDevices},
                 icon('search', {size: 15}), 'Scan now')),
         footer: visible.length

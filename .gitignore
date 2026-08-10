@@ -12,8 +12,8 @@ build/
 .coverage
 htmlcov/
 
-# ProjectOS runtime state
-.projectos/
+# project-os runtime state
+.project_os/
 config.yaml
 *.db
 *.db-wal
@@ -21,7 +21,7 @@ config.yaml
 *.log
 /media
 # The helper agent writes its token next to itself.
-agents/projectos-helper.json
+agents/project-os-helper.json
 
 # Notes that stay on the machine
 PEDIDOS.md

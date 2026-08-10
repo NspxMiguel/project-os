@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""ProjectOS helper agent -- lends this computer to the Pi.
+"""project-os helper agent -- lends this computer to the Pi.
 
 *"tem um pc ligado, sem nada processando, e o rp ta sofrendo... se ele tiver com
 o app baixado nele dale. suporte a windows mac e linux"*
 
 Run it on the machine you want to lend:
 
-    python3 helper_agent.py --pair http://projectos.local:8099 123456
+    python3 helper_agent.py --pair http://project-os.local:8099 123456
     python3 helper_agent.py
 
 The first form trades a pairing code for a token and writes it next to this
@@ -37,7 +37,7 @@ import time
 import urllib.error
 import urllib.request
 
-CONFIG_NAME = "projectos-helper.json"
+CONFIG_NAME = "project-os-helper.json"
 DEFAULT_POLL = 15.0
 #: Backoff when the Pi is unreachable. It is a Raspberry Pi -- it reboots, it
 #: gets unplugged, someone re-flashes it. That is not a reason to give up or to
@@ -325,10 +325,10 @@ def serve(server: str, token: str) -> int:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="ProjectOS helper agent")
+    parser = argparse.ArgumentParser(description="project-os helper agent")
     parser.add_argument(
         "--pair", nargs=2, metavar=("SERVER", "CODE"),
-        help="pair with a ProjectOS using a six-digit code from its Ajudantes screen",
+        help="pair with a project-os using a six-digit code from its Ajudantes screen",
     )
     parser.add_argument("--name", default="", help="what to call this machine")
     parser.add_argument("--kind", default="pc", choices=["pc", "pi", "other"])
@@ -344,7 +344,7 @@ def main(argv=None) -> int:
 
     settings = load_config()
     if not settings.get("token"):
-        print("not paired yet. run:\n  %s --pair http://projectos.local:8099 CODIGO"
+        print("not paired yet. run:\n  %s --pair http://project-os.local:8099 CODIGO"
               % os.path.basename(sys.argv[0]))
         return 1
     try:

@@ -3,7 +3,7 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "projectos"
+name = "project-os"
 version = "0.1.0"
 description = "The system layer of a Raspberry Pi, driven entirely from a browser."
 requires-python = ">=3.9"
@@ -58,21 +58,21 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/NspxMiguel/ProjectOS"
-Source = "https://github.com/NspxMiguel/ProjectOS"
+Homepage = "https://github.com/NspxMiguel/project-os"
+Source = "https://github.com/NspxMiguel/project-os"
 
 [project.scripts]
-projectos = "projectos.__main__:main"
+project_os = "project_os.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["projectos*"]
+include = ["project_os*"]
 namespaces = false
 
 [tool.setuptools.package-data]
 # The "web/*" entries cover a wheel build that copies the root web/ tree into
-# projectos/web/ -- which is the first location paths.web_dir() looks in.
+# project_os/web/ -- which is the first location paths.web_dir() looks in.
 # Running from a git clone uses the repo-root web/ directory instead.
-"projectos" = [
+"project_os" = [
     "apps/*/manifest.json",
     "apps/*/web/*",
     "apps/*/web/**/*",

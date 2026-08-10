@@ -32,7 +32,7 @@ function strength(password) {
 
 export default {
   id: 'setup',
-  title: 'Set up ProjectOS',
+  title: 'Set up project-os',
 
   async mount(root, ctx) {
     let step = 0;
@@ -65,10 +65,10 @@ export default {
 
     function renderWelcome() {
       mount(host, [
-        brand('Welcome to ProjectOS', 'This machine is not set up yet. It takes one minute.'),
+        brand('Welcome to project-os', 'This machine is not set up yet. It takes one minute.'),
         h('ul', {class: 'stack stack--sm small muted', style: {listStyle: 'none', padding: '0', margin: '0'}},
           h('li', {class: 'row row--tight'}, icon('lock', {size: 16}), h('span', null, 'Create an administrator account for this box.')),
-          h('li', {class: 'row row--tight'}, icon('devices', {size: 16}), h('span', null, 'ProjectOS then looks for speakers, TVs and hubs on your network.')),
+          h('li', {class: 'row row--tight'}, icon('devices', {size: 16}), h('span', null, 'project-os then looks for speakers, TVs and hubs on your network.')),
           h('li', {class: 'row row--tight'}, icon('apps', {size: 16}), h('span', null, 'Apps you install show up in the sidebar and on the dashboard.')),
         ),
         h('button', {
@@ -233,7 +233,7 @@ export default {
             h('div', {class: 'notice__body'},
               h('span', {class: 'notice__title'}, 'Find your devices'),
               h('span', {class: 'small muted'},
-                'ProjectOS scans the network for AirPlay speakers, Chromecasts, Home Assistant and more. That is where BirdTunes gets its output.'),
+                'project-os scans the network for AirPlay speakers, Chromecasts, Home Assistant and more. That is where BirdTunes gets its output.'),
             ),
           ),
           h('div', {class: 'notice'},

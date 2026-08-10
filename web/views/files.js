@@ -1,4 +1,4 @@
-// views/files.js — Advanced mode: a file browser over projectos/api/files.py.
+// views/files.js — Advanced mode: a file browser over project_os/api/files.py.
 //
 // The server enforces the sandbox (home dir + media dir + configured extra
 // roots, symlinks resolved before the check); this view's only job is to be
@@ -20,7 +20,7 @@ import {navigate} from '../lib/router.js';
 
 setStrings('en', {
   'files.title': 'Files',
-  'files.lead': 'Browse, edit and move files ProjectOS is allowed to touch.',
+  'files.lead': 'Browse, edit and move files project-os is allowed to touch.',
   'files.roots': 'Allowed locations',
   'files.readonly': 'Writing is turned off in Settings (security.allow_file_write).',
   'files.upload': 'Upload',

@@ -9,7 +9,7 @@
 //
 // Everything here writes through `PUT /api/settings` with a flat dotted-path
 // body (`{values: {"ui.theme": "dark"}}`) — see api/settings.py. A field with
-// no home in `projectos/config.py` DEFAULTS (instance name, language) still
+// no home in `project_os/config.py` DEFAULTS (instance name, language) still
 // persists, because the backend accepts any dotted path; it is simply not
 // read by anything else on the server today. Both are called out in the
 // delivery report as guessed, not officially supported, fields.
@@ -30,7 +30,7 @@ import {toast, confirm} from '../lib/toast.js';
 import {navigate} from '../lib/router.js';
 
 setStrings('en', {
-  'settings.lead': 'How ProjectOS behaves, and who can get in.',
+  'settings.lead': 'How project-os behaves, and who can get in.',
   'settings.section.general': 'General',
   'settings.section.account': 'Account',
   'settings.section.network': 'Network',
@@ -41,7 +41,7 @@ setStrings('en', {
   'settings.action.save': 'Save',
   'settings.action.saved': 'Saved.',
   'settings.action.saveFailed': 'Could not save that.',
-  'settings.restartRequired': 'This takes effect after ProjectOS restarts.',
+  'settings.restartRequired': 'This takes effect after project-os restarts.',
   // general
   'settings.general.instanceName': 'Instance name',
   'settings.general.instanceName.hint': 'A label for this box. Shown nowhere else yet — this is not read by any other screen.',
@@ -75,27 +75,27 @@ setStrings('en', {
   'settings.network.host.hint': '0.0.0.0 answers on every network interface. Restart required after a change.',
   'settings.network.port': 'Port',
   'settings.network.discovery': 'Network discovery',
-  'settings.network.discovery.hint': 'Lets ProjectOS look for smart-home devices and speakers on the local network (mDNS).',
+  'settings.network.discovery.hint': 'Lets project-os look for smart-home devices and speakers on the local network (mDNS).',
   // updates
   'settings.updates.version': 'Version',
-  'settings.updates.about': 'ProjectOS ships empty and grows from the Store — this box has no apps until you add them there.',
+  'settings.updates.about': 'project-os ships empty and grows from the Store — this box has no apps until you add them there.',
   'settings.updates.docs': 'API documentation',
   // developer
-  'settings.developer.warning': 'These are for people comfortable with what they turn on. Nothing here is required to use ProjectOS.',
+  'settings.developer.warning': 'These are for people comfortable with what they turn on. Nothing here is required to use project-os.',
   'settings.developer.terminal': 'Dock a terminal in the corner',
   'settings.developer.terminal.hint': 'Pins a small terminal over every screen — for installing things by hand, poking at logs, anything a shell is faster for.',
   'settings.developer.card': 'Developer tools',
   'settings.developer.terminal.needsShell': 'Shell access is off above, so a docked terminal would have nothing to run against.',
   'settings.developer.allowShell': 'Allow shell access',
-  'settings.developer.allowShell.hint': 'Lets ProjectOS (and the docked terminal) run commands on this machine.',
+  'settings.developer.allowShell.hint': 'Lets project-os (and the docked terminal) run commands on this machine.',
   'settings.developer.verboseLogging': 'Verbose logging',
   'settings.developer.verboseLogging.hint': 'Switches the log level to DEBUG. Noisy — turn it off again once you have what you needed.',
   'settings.developer.docsLink': 'Open /api/docs',
 }, {activate: false});
 
-const LS_THEME = 'projectos.theme';
-const LS_MODE = 'projectos.mode';
-const LS_DOCK_TERMINAL = 'projectos.dockTerminal';
+const LS_THEME = 'project_os.theme';
+const LS_MODE = 'project_os.mode';
+const LS_DOCK_TERMINAL = 'project_os.dockTerminal';
 
 const SECTIONS = ['general', 'account', 'network', 'updates', 'developer'];
 
@@ -362,7 +362,7 @@ export default {
       writeLocal(LS_DOCK_TERMINAL, on ? '1' : '0');
       // app.js does not know about the docked terminal — this event is the
       // documented handoff. See the delivery report for the exact contract.
-      window.dispatchEvent(new CustomEvent('projectos:dock-terminal', {detail: {on}}));
+      window.dispatchEvent(new CustomEvent('project_os:dock-terminal', {detail: {on}}));
       saveValues({'ui.dock_terminal': on});
     }
 
