@@ -36,9 +36,54 @@
 import {h, mount, clear} from '../lib/dom.js';
 import {icon, hasIcon, appIcon} from '../lib/icons.js';
 import * as fmt from '../lib/format.js';
+import {t, setStrings} from '../lib/format.js';
 import * as api from '../lib/api.js';
 import {toast, confirm} from '../lib/toast.js';
 import {navigate} from '../lib/router.js';
+
+setStrings('en', {
+  'dash.lead': 'Everything running on this machine, at a glance.',
+  'dash.systemDetails': 'System details',
+  'dash.gotIt': 'Got it',
+  'dash.error.suggestions': 'Could not load suggestions.',
+  'dash.error.apply': 'Could not apply that suggestion.',
+  'dash.error.dismiss': 'Could not dismiss that suggestion.',
+  'dash.error.action': 'That action failed.',
+  'dash.app.failed': 'This app failed to start. Check the logs.',
+  'dash.app.noStatus': 'No status reported.',
+  'dash.error.apps': 'Could not load apps.',
+  'dash.apps.empty.title': 'No apps running yet',
+  'dash.apps.empty.text': 'Install one from the store and it will show up here with its own card.',
+  'dash.apps.empty.action': 'Open the store',
+  'dash.error.devices': 'Could not load devices.',
+  'dash.devices.all': 'All devices',
+  'dash.devices.empty': 'Nothing discovered yet',
+  'dash.devices.scan': 'Scan now',
+  'dash.devices.more': 'All {count}',
+  'dash.scan.started': 'Scanning the network…',
+  'dash.scan.failed': 'The scan failed.',
+  'dash.error.stats': 'Could not read system stats.',
+  'dash.greeting.night': 'Good night',
+  'dash.greeting.morning': 'Good morning',
+  'dash.greeting.afternoon': 'Good afternoon',
+  'dash.greeting.evening': 'Good evening',
+  'dash.card.system': 'System',
+  'dash.card.apps': 'Apps',
+  'dash.card.devices': 'Devices',
+  'dash.card.suggestion': 'Suggestion',
+  'dash.card.suggestions': 'Suggestions',
+  'dash.up': 'Up {time}',
+  'dash.yes': 'Yes',
+  'dash.no': 'No',
+  'dash.action.install': 'Install',
+  'dash.action.open': 'Open',
+  'dash.action.apply': 'Apply',
+  'dash.action.dismiss': 'Dismiss',
+  'dash.action.run': 'Run',
+  'dash.action.done': 'Done',
+  'dash.action.applied': 'Applied',
+  'dash.action.scan': 'Scan',
+}, {activate: false});
 
 /* --------------------------------------------------------------- helpers */
 
@@ -89,7 +134,7 @@ function errorState(message, onRetry) {
       onRetry
         ? h('div', {class: 'notice__actions'},
             h('button', {class: 'btn btn--sm', type: 'button', onClick: onRetry},
-              icon('refresh', {size: 14}), 'Retry'),
+              icon('refresh', {size: 14}), t('action.retry')),
           )
         : null,
     ),
@@ -194,7 +239,7 @@ function renderValue(field) {
     case 'relative':
       return h('span', {class: 'field-row__value'}, fmt.relativeTime(value));
     case 'boolean':
-      return h('span', {class: 'badge ' + (value ? 'badge--ok' : 'badge--plain')}, value ? 'Yes' : 'No');
+      return h('span', {class: 'badge ' + (value ? 'badge--ok' : 'badge--plain')}, value ? t('dash.yes') : t('dash.no'));
     case 'badge':
       return h('span', {class: 'badge' + (field.level ? ' badge--' + field.level : '')}, String(value));
     case 'progress': {
@@ -303,7 +348,7 @@ function deviceIcon(kind) {
 
 export default {
   id: 'dashboard',
-  title: 'Dashboard',
+  get title() { return t('nav.dashboard'); },
 
   async mount(root, ctx) {
     const store = ctx.store;
@@ -328,13 +373,13 @@ export default {
     const refreshBtn = h('button', {
       class: 'btn btn--sm', type: 'button',
       onClick: () => loadAll(true),
-    }, icon('refresh', {size: 15}), 'Refresh');
+    }, icon('refresh', {size: 15}), t('action.refresh'));
 
     mount(root, [
       h('div', {class: 'page__header'},
         h('div', null,
           h('h2', null, greeting(ctx)),
-          h('p', {class: 'page__lead'}, 'Everything running on this machine, at a glance.'),
+          h('p', {class: 'page__lead'}, t('dash.lead')),
         ),
         h('div', {class: 'page__actions'}, refreshBtn),
       ),
@@ -351,7 +396,7 @@ export default {
       }
       if (!raw && state.errors.system) {
         mount(systemSlot, card({
-          title: 'System',
+          title: t('dash.card.system'),
           iconName: 'cpu',
           variant: 'danger',
           body: errorState(state.errors.system, () => loadStats()),
@@ -368,23 +413,23 @@ export default {
         : null;
 
       mount(systemSlot, card({
-        title: 'System',
-        sub: isFinite(s.uptime) ? 'Up ' + fmt.uptime(s.uptime) : null,
+        title: t('dash.card.system'),
+        sub: isFinite(s.uptime) ? t('dash.up', {time: fmt.uptime(s.uptime)}) : null,
         iconName: 'cpu',
-        tools: h('a', {class: 'btn btn--icon btn--sm', href: '#/system', title: 'System details', 'aria-label': 'System details'},
+        tools: h('a', {class: 'btn btn--icon btn--sm', href: '#/system', title: t('dash.systemDetails'), 'aria-label': t('dash.systemDetails')},
           icon('chevron', {size: 16})),
         body: [
-          meterRow('CPU', s.cpu, s.cpu === null ? null : fmt.percent(s.cpu)),
-          meterRow('Memory', s.memPercent,
+          meterRow(t('unit.cpu'), s.cpu, s.cpu === null ? null : fmt.percent(s.cpu)),
+          meterRow(t('unit.ram'), s.memPercent,
             isFinite(s.memUsed) && isFinite(s.memTotal)
               ? fmt.bytes(s.memUsed) + ' / ' + fmt.bytes(s.memTotal)
               : null),
           s.diskPercent !== null
-            ? meterRow('Disk', s.diskPercent, diskLabel, {warn: 85, danger: 93})
+            ? meterRow(t('unit.disk'), s.diskPercent, diskLabel, {warn: 85, danger: 93})
             : null,
           h('div', {class: 'stats'},
             h('div', {class: 'stat'},
-              h('span', {class: 'stat__label'}, 'Temp'),
+              h('span', {class: 'stat__label'}, t('unit.temp')),
               h('span', {class: 'stat__value' + (s.temp !== null && s.temp >= 80 ? ' danger' : s.temp !== null && s.temp >= 70 ? ' warn' : '')},
                 s.temp === null ? '—' : fmt.temperature(s.temp, {digits: 0})),
             ),
@@ -394,7 +439,7 @@ export default {
                 Array.isArray(s.load) && s.load.length ? Number(s.load[0]).toFixed(2) : '—'),
             ),
             h('div', {class: 'stat'},
-              h('span', {class: 'stat__label'}, 'Uptime'),
+              h('span', {class: 'stat__label'}, t('unit.uptime')),
               h('span', {class: 'stat__value'}, isFinite(s.uptime) ? fmt.uptime(s.uptime) : '—'),
             ),
           ),
@@ -411,12 +456,12 @@ export default {
       const busy = state.pendingSuggestions.has(suggestion.id);
 
       const applyLabel = !action
-        ? 'Got it'
+        ? t('dash.gotIt')
         : action.type === 'install_app'
-          ? 'Install'
+          ? t('dash.action.install')
           : action.type === 'open'
-            ? 'Open'
-            : 'Apply';
+            ? t('dash.action.open')
+            : t('dash.action.apply');
 
       const applyBtn = external
         ? h('a', {
@@ -446,7 +491,7 @@ export default {
           h('button', {
             class: 'btn btn--ghost btn--sm', type: 'button', disabled: busy,
             onClick: () => dismissSuggestion(suggestion),
-          }, 'Dismiss'),
+          }, t('dash.action.dismiss')),
         ],
       });
     }
@@ -459,9 +504,9 @@ export default {
       }
       if (state.suggestions === 'error') {
         mount(suggestionSlot, card({
-          title: 'Suggestions',
+          title: t('dash.card.suggestions'),
           iconName: 'info',
-          body: errorState(state.errors.suggestions || 'Could not load suggestions.', () => loadSuggestions()),
+          body: errorState(state.errors.suggestions || t('dash.error.suggestions'), () => loadSuggestions()),
         }));
         return;
       }
@@ -482,14 +527,14 @@ export default {
       renderSuggestions();
       try {
         await api.post('/suggestions/' + encodeURIComponent(suggestion.id) + '/apply', {});
-        toast(suggestion.title ? suggestion.title + ' applied' : 'Applied', {type: 'success'});
+        toast(suggestion.title ? suggestion.title + ' — ' + t('dash.action.applied') : t('dash.action.applied'), {type: 'success'});
         if (navigateTo) navigate(navigateTo);
         loadApps();
         loadSuggestions();
       } catch (err) {
         store.set({suggestions: before});
         renderSuggestions();
-        toast((err && err.message) || 'Could not apply that suggestion.', {type: 'error'});
+        toast((err && err.message) || t('dash.error.apply'), {type: 'error'});
       } finally {
         state.pendingSuggestions.delete(suggestion.id);
       }
@@ -506,7 +551,7 @@ export default {
       } catch (err) {
         store.set({suggestions: before});
         renderSuggestions();
-        toast((err && err.message) || 'Could not dismiss that suggestion.', {type: 'error'});
+        toast((err && err.message) || t('dash.error.dismiss'), {type: 'error'});
       } finally {
         state.pendingSuggestions.delete(suggestion.id);
       }
@@ -529,7 +574,7 @@ export default {
       if (state.busyActions.has(key)) return;
       if (action.confirm) {
         const ok = await confirm(String(action.confirm), {
-          title: action.label || 'Confirm',
+          title: action.label || t('action.confirm'),
           danger: action.variant === 'danger',
         });
         if (!ok) return;
@@ -541,9 +586,9 @@ export default {
         const method = String(action.method || 'POST').toUpperCase();
         const path = action.path || ('/' + (action.id || ''));
         await appApi.request(method, path, action.body === undefined ? {} : action.body);
-        toast((action.label || 'Done') + ' · ' + (app.name || app.id), {type: 'success', timeout: 2500});
+        toast((action.label || t('dash.action.done')) + ' · ' + (app.name || app.id), {type: 'success', timeout: 2500});
       } catch (err) {
-        toast((err && err.message) || 'That action failed.', {type: 'error'});
+        toast((err && err.message) || t('dash.error.action'), {type: 'error'});
       } finally {
         state.busyActions.delete(key);
         await loadApps();
@@ -569,11 +614,11 @@ export default {
           busy
             ? h('span', {class: 'spinner spinner--sm'})
             : (action.icon && hasIcon(action.icon) ? icon(action.icon, {size: 15}) : null),
-          action.label || fmt.humanize(action.id || 'Run'),
+          action.label || fmt.humanize(action.id || t('dash.action.run')),
         ));
       }
       footer.push(h('a', {class: 'btn btn--ghost btn--sm', href, style: {marginLeft: 'auto'}},
-        'Open', icon('chevron', {size: 14})));
+        t('dash.action.open'), icon('chevron', {size: 14})));
 
       return card({
         title: app.name || app.id,
@@ -583,8 +628,8 @@ export default {
         tools: appStateBadge(app),
         variant: app.state === 'error' ? 'danger' : '',
         body: app.state === 'error'
-          ? h('p', {class: 'small muted'}, app.error || app.message || 'This app failed to start. Check the logs.')
-          : (fieldsBlock(fields) || h('p', {class: 'small faint'}, 'No status reported.')),
+          ? h('p', {class: 'small muted'}, app.error || app.message || t('dash.app.failed'))
+          : (fieldsBlock(fields) || h('p', {class: 'small faint'}, t('dash.app.noStatus'))),
         footer,
       });
     }
@@ -596,20 +641,20 @@ export default {
       }
       if (state.apps === 'error') {
         mount(appSlot, card({
-          title: 'Apps',
+          title: t('dash.card.apps'),
           iconName: 'apps',
-          body: errorState(state.errors.apps || 'Could not load apps.', () => loadApps()),
+          body: errorState(state.errors.apps || t('dash.error.apps'), () => loadApps()),
         }));
         return;
       }
       const apps = (store.get('apps') || []).filter((app) => app && app.id && app.enabled !== false);
       if (!apps.length) {
         mount(appSlot, card({
-          title: 'Apps',
+          title: t('dash.card.apps'),
           iconName: 'apps',
-          body: emptyState('No apps running yet',
-            'Install one from the store and it will show up here with its own card.',
-            h('a', {class: 'btn btn--primary btn--sm', href: '#/store'}, icon('download', {size: 15}), 'Open the store')),
+          body: emptyState(t('dash.apps.empty.title'),
+            t('dash.apps.empty.text'),
+            h('a', {class: 'btn btn--primary btn--sm', href: '#/store'}, icon('download', {size: 15}), t('dash.apps.empty.action'))),
         }));
         return;
       }
@@ -625,9 +670,9 @@ export default {
       }
       if (state.devices === 'error') {
         mount(deviceSlot, card({
-          title: 'Devices',
+          title: t('dash.card.devices'),
           iconName: 'devices',
-          body: errorState(state.errors.devices || 'Could not load devices.', () => loadDevices()),
+          body: errorState(state.errors.devices || t('dash.error.devices'), () => loadDevices()),
         }));
         return;
       }
@@ -635,10 +680,10 @@ export default {
       const visible = devices.slice(0, 5);
 
       mount(deviceSlot, card({
-        title: 'Devices',
+        title: t('dash.card.devices'),
         sub: devices.length ? devices.length + ' found on your network' : null,
         iconName: 'devices',
-        tools: h('a', {class: 'btn btn--icon btn--sm', href: '#/devices', title: 'All devices', 'aria-label': 'All devices'},
+        tools: h('a', {class: 'btn btn--icon btn--sm', href: '#/devices', title: t('dash.devices.all'), 'aria-label': t('dash.devices.all')},
           icon('chevron', {size: 16})),
         body: visible.length
           ? h('div', {class: 'list'}, visible.map((device) => h('div', {class: 'list__row'},
@@ -654,17 +699,17 @@ export default {
                   : h('span', {class: 'badge badge--ok'}, 'online'),
               ),
             )))
-          : emptyState('Nothing discovered yet',
+          : emptyState(t('dash.devices.empty'),
               'project-os looks for AirPlay speakers, Chromecasts and hubs with mDNS.',
               h('button', {class: 'btn btn--sm', type: 'button', onClick: scanDevices},
-                icon('search', {size: 15}), 'Scan now')),
+                icon('search', {size: 15}), t('dash.devices.scan'))),
         footer: visible.length
           ? [
               h('button', {class: 'btn btn--ghost btn--sm', type: 'button', onClick: scanDevices},
-                icon('refresh', {size: 15}), 'Scan'),
+                icon('refresh', {size: 15}), t('dash.action.scan')),
               devices.length > visible.length
                 ? h('a', {class: 'btn btn--ghost btn--sm', href: '#/devices', style: {marginLeft: 'auto'}},
-                    'All ' + devices.length, icon('chevron', {size: 14}))
+                    t('dash.devices.more', {count: devices.length}), icon('chevron', {size: 14}))
                 : null,
             ]
           : null,
@@ -675,7 +720,7 @@ export default {
     async function scanDevices() {
       if (scanning) return;
       scanning = true;
-      toast('Scanning the network…', {type: 'info', timeout: 2500});
+      toast(t('dash.scan.started'), {type: 'info', timeout: 2500});
       try {
         const raw = await api.post('/devices/scan', {});
         const devices = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.devices) ? raw.devices : null);
@@ -683,7 +728,7 @@ export default {
         else await loadDevices();
         renderDevices();
       } catch (err) {
-        toast((err && err.message) || 'The scan failed.', {type: 'error'});
+        toast((err && err.message) || t('dash.scan.failed'), {type: 'error'});
       } finally {
         scanning = false;
       }
@@ -702,7 +747,7 @@ export default {
       } catch (err) {
         if (disposed) return;
         state.system = 'error';
-        state.errors.system = (err && err.message) || 'Could not read system stats.';
+        state.errors.system = (err && err.message) || t('dash.error.stats');
         renderSystem();
       }
     }
@@ -720,7 +765,7 @@ export default {
       } catch (err) {
         if (disposed) return;
         state.suggestions = 'error';
-        state.errors.suggestions = (err && err.message) || 'Could not load suggestions.';
+        state.errors.suggestions = (err && err.message) || t('dash.error.suggestions');
         renderSuggestions();
       }
     }
@@ -736,7 +781,7 @@ export default {
       } catch (err) {
         if (disposed) return;
         state.apps = 'error';
-        state.errors.apps = (err && err.message) || 'Could not load apps.';
+        state.errors.apps = (err && err.message) || t('dash.error.apps');
         renderApps();
       }
     }
@@ -752,7 +797,7 @@ export default {
       } catch (err) {
         if (disposed) return;
         state.devices = 'error';
-        state.errors.devices = (err && err.message) || 'Could not load devices.';
+        state.errors.devices = (err && err.message) || t('dash.error.devices');
         renderDevices();
       }
     }
@@ -796,6 +841,8 @@ export default {
 function greeting(ctx) {
   const name = ctx.user && ctx.user.username ? ctx.user.username : '';
   const hour = new Date().getHours();
-  const part = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const part = hour < 5 ? t('dash.greeting.night')
+    : hour < 12 ? t('dash.greeting.morning')
+      : hour < 18 ? t('dash.greeting.afternoon') : t('dash.greeting.evening');
   return name ? part + ', ' + name : part;
 }

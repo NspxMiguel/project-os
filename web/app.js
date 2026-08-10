@@ -22,9 +22,16 @@ import * as api from './lib/api.js';
 import {apiFor, ApiError} from './lib/api.js';
 import {connect} from './lib/ws.js';
 import * as fmt from './lib/format.js';
-import {t} from './lib/format.js';
+import {t, setStrings} from './lib/format.js';
+import {PT_BR} from './lib/strings-pt.js';
 import {toast, confirm} from './lib/toast.js';
 import {icon, appIcon} from './lib/icons.js';
+
+// A interface fala português. As views registram o inglês delas ao serem
+// importadas (e só como reserva, com activate:false), então esta linha tem de
+// vir antes de qualquer uma: quem não tiver tradução aparece em inglês, e não
+// quebrado.
+setStrings('pt-BR', PT_BR);
 
 const LS_MODE = 'project_os.mode';
 const LS_THEME = 'project_os.theme';

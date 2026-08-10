@@ -51,7 +51,7 @@ setStrings('en', {
   'packages.jobs.recent': 'Recent',
   'packages.error.load': 'Could not read the package managers.',
   'packages.action.retry': 'Retry',
-});
+}, {activate: false});
 
 const POLL_MS = 1500;
 

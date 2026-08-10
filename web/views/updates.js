@@ -38,7 +38,7 @@ setStrings('en', {
   'updates.rollback': 'Go back to the previous version',
   'updates.disabled': 'Updates are turned off in settings.',
   'updates.log': 'Log',
-});
+}, {activate: false});
 
 const POLL_MS = 1200;
 const RESTART_GRACE_MS = 120000;

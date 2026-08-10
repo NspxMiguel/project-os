@@ -2,12 +2,24 @@
 
 import {h, mount} from '../lib/dom.js';
 import {icon} from '../lib/icons.js';
-import {t} from '../lib/format.js';
+import {t, setStrings} from '../lib/format.js';
 import * as api from '../lib/api.js';
+
+setStrings('en', {
+  'login.title': 'Sign in',
+  'login.lead': 'Sign in to manage this machine.',
+  'login.username': 'Username',
+  'login.password': 'Password',
+  'login.submit': 'Sign in',
+  'login.submitting': 'Signing in…',
+  'login.needBoth': 'Enter your username and password.',
+  'login.wrong': 'Wrong username or password.',
+  'login.failed': 'Could not sign in.',
+}, {activate: false});
 
 export default {
   id: 'login',
-  title: 'Sign in',
+  get title() { return t('login.title'); },
 
   async mount(root, ctx) {
     let busy = false;
@@ -28,7 +40,7 @@ export default {
       autocomplete: 'current-password', required: true,
     });
 
-    const submit = h('button', {class: 'btn btn--primary btn--block btn--lg', type: 'submit'}, 'Sign in');
+    const submit = h('button', {class: 'btn btn--primary btn--block btn--lg', type: 'submit'}, t('login.submit'));
 
     function showProblem(message) {
       const target = problem.querySelector('.problem-text');
@@ -48,7 +60,7 @@ export default {
       const user = username.value.trim();
       const pass = password.value;
       if (!user || !pass) {
-        showProblem('Enter your username and password.');
+        showProblem(t('login.needBoth'));
         (user ? password : username).focus();
         return;
       }
@@ -56,7 +68,7 @@ export default {
       busy = true;
       submit.classList.add('is-busy');
       submit.disabled = true;
-      mount(submit, [h('span', {class: 'spinner spinner--sm'}), 'Signing in…']);
+      mount(submit, [h('span', {class: 'spinner spinner--sm'}), t('login.submitting')]);
 
       try {
         await api.post('/auth/login', {username: user, password: pass}, {redirectOnAuth: false});
@@ -66,10 +78,10 @@ export default {
         busy = false;
         submit.classList.remove('is-busy');
         submit.disabled = false;
-        mount(submit, 'Sign in');
-        if (err && err.status === 401) showProblem('Wrong username or password.');
+        mount(submit, t('login.submit'));
+        if (err && err.status === 401) showProblem(t('login.wrong'));
         else if (err && err.status === 428) showProblem('project-os has not been set up yet.');
-        else showProblem((err && err.message) || 'Could not sign in.');
+        else showProblem((err && err.message) || t('login.failed'));
         password.select();
         password.focus();
       }
@@ -78,11 +90,11 @@ export default {
     const form = h('form', {class: 'form', onSubmit: onSubmit, novalidate: true},
       problem,
       h('div', {class: 'field'},
-        h('label', {class: 'field__label', for: 'login-username'}, 'Username'),
+        h('label', {class: 'field__label', for: 'login-username'}, t('login.username')),
         username,
       ),
       h('div', {class: 'field'},
-        h('label', {class: 'field__label', for: 'login-password'}, 'Password'),
+        h('label', {class: 'field__label', for: 'login-password'}, t('login.password')),
         password,
       ),
       submit,
@@ -95,7 +107,7 @@ export default {
         h('span', {class: 'auth__mark'}, icon('chip', {size: 22})),
         h('h1', {class: 'auth__title'}, 'project-os'),
       ),
-      h('p', {class: 'auth__lead'}, 'Sign in to manage this machine.'),
+      h('p', {class: 'auth__lead'}, t('login.lead')),
       form,
       authDisabled
         ? h('p', {class: 'auth__foot'}, 'Authentication is disabled in the configuration — anyone on this network can control project-os.')
