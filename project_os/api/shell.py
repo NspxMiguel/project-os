@@ -103,7 +103,7 @@ async def status(
         "websocket": "/api/shell/ws",
         "reason": None
         if enabled
-        else "security.allow_shell is off. Settings > Developer turns it on.",
+        else "O security.allow_shell está desligado. Ligue em Configurações › Desenvolvedor.",
     }
 
 

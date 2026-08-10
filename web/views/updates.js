@@ -61,7 +61,7 @@ function card(options) {
 
 export default {
   id: 'updates',
-  title: 'Updates',
+  get title() { return t('nav.updates'); },
 
   async mount(root, ctx) {
     let disposed = false;

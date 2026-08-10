@@ -87,7 +87,7 @@ function jobConnState(state) {
 
 export default {
   id: 'packages',
-  title: 'Software',
+  get title() { return t('nav.packages'); },
 
   async mount(root, ctx) {
     let disposed = false;

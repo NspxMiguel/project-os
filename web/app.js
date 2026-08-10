@@ -916,7 +916,7 @@ function buildRouter() {
       navigate('#/', {replace: true});
       return;
     }
-    return showView('login', routeCtx, {layout: 'auth', title: 'Sign in'});
+    return showView('login', routeCtx, {layout: 'auth', title: t('login.title')});
   });
 
   r.add('#/setup', (routeCtx) => {
@@ -929,7 +929,7 @@ function buildRouter() {
       navigate(store.get('authenticated') ? '#/' : '#/login', {replace: true});
       return;
     }
-    return showView('setup', routeCtx, {layout: 'auth', title: 'Set up project-os'});
+    return showView('setup', routeCtx, {layout: 'auth', title: t('setup.title')});
   });
 
   r.notFound((routeCtx) => {

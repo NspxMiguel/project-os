@@ -161,7 +161,7 @@ function mmss(seconds) {
 
 export default {
   id: 'helpers',
-  title: 'Ajudantes',
+  get title() { return t('nav.helpers'); },
 
   async mount(root, ctx) {
     let disposed = false;

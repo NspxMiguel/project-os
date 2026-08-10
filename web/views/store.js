@@ -36,6 +36,15 @@ import {toast, confirm} from '../lib/toast.js';
 
 setStrings('en', {
   'store.lead': 'project-os ships empty. Everything below is something you can add.',
+  'store.category.automation': 'Automation',
+  'store.category.camera': 'Cameras',
+  'store.category.dev': 'Development',
+  'store.category.home': 'Home',
+  'store.category.media': 'Media',
+  'store.category.network': 'Network',
+  'store.category.productivity': 'Productivity',
+  'store.category.server': 'Server',
+  'store.category.storage': 'Storage',
   'store.search.placeholder': 'Search apps, categories, tags…',
   'store.filter.all': 'All',
   'store.board.title': 'This machine',
@@ -108,7 +117,12 @@ function categoryIcon(name) {
 }
 
 function categoryLabel(name) {
-  return fmt.humanize(name || '');
+  // A categoria vem do catálogo como um id em inglês ("network", "storage").
+  // Sem isto, o filtro da loja ficava em inglês no meio de uma tela em
+  // português. Um id novo cai no humanize e aparece como está, não quebrado.
+  const key = 'store.category.' + String(name || '');
+  const label = t(key);
+  return label === key ? fmt.humanize(name || '') : label;
 }
 
 function card(options) {
@@ -178,7 +192,7 @@ const TIER_KEYS = {roomy: 'store.board.tier.roomy', comfortable: 'store.board.ti
 
 export default {
   id: 'store',
-  title: 'Store',
+  get title() { return t('nav.store'); },
 
   async mount(root, ctx) {
     let disposed = false;

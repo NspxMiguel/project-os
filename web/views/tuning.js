@@ -148,7 +148,7 @@ async function confirmReboot() {
 
 export default {
   id: 'tuning',
-  title: 'Ajustes de hardware',
+  get title() { return t('tuning.title'); },
 
   async mount(root, ctx) {
     let disposed = false;

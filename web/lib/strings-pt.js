@@ -562,6 +562,15 @@ export const PT_BR = {
 
   // --------------------------------------------------------------------- loja
   'store.lead': 'O project-os nasce vazio. Tudo abaixo é coisa que você pode acrescentar.',
+  'store.category.automation': 'Automação',
+  'store.category.camera': 'Câmeras',
+  'store.category.dev': 'Desenvolvimento',
+  'store.category.home': 'Casa',
+  'store.category.media': 'Mídia',
+  'store.category.network': 'Rede',
+  'store.category.productivity': 'Produtividade',
+  'store.category.server': 'Servidor',
+  'store.category.storage': 'Armazenamento',
   'store.search.placeholder': 'Procurar aplicativos, categorias, etiquetas…',
   'store.filter.all': 'Tudo',
   'store.board.title': 'Esta máquina',

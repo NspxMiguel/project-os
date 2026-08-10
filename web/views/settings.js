@@ -174,7 +174,7 @@ function dig(obj, path, fallback) {
 
 export default {
   id: 'settings',
-  title: 'Settings',
+  get title() { return t('nav.settings'); },
 
   async mount(root, ctx) {
     let disposed = false;

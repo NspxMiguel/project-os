@@ -144,12 +144,12 @@ def backends() -> List[Dict[str, Any]]:
     apt_present = _have("apt-get") and _have("apt-cache")
     apt_reason = ""
     if not apt_present:
-        apt_reason = "apt is not on this machine (it is not a Debian-based system)."
+        apt_reason = "O apt não existe nesta máquina (ela não é baseada em Debian)."
     elif not (_is_root() or _sudo_without_password("apt-get")):
-        apt_reason = "apt is here, but this service cannot become root to use it."
+        apt_reason = "O apt está aqui, mas este serviço não consegue virar root para usá-lo."
     result.append({
         "id": "apt",
-        "name": "System packages (apt)",
+        "name": "Pacotes do sistema (apt)",
         "present": apt_present,
         "can_install": apt_present and not apt_reason,
         "reason": apt_reason,
@@ -162,7 +162,7 @@ def backends() -> List[Dict[str, Any]]:
         "name": "Flatpak",
         "present": flatpak_present,
         "can_install": flatpak_present,
-        "reason": "" if flatpak_present else "flatpak is not installed. Install it with apt first.",
+        "reason": "" if flatpak_present else "O flatpak não está instalado. Instale ele pelo apt primeiro.",
         "needs_root": False,
     })
     return result
