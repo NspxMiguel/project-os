@@ -47,7 +47,7 @@ export default {
       'bt.library.blocked': 'Blocked',
       'bt.library.missing': 'file missing',
       'bt.section.compat': 'Compatibility',
-      'bt.compat.ok': 'All tracks are compatible with the current output.',
+      'bt.compat.ok': 'Todas as faixas funcionam na saída atual.',
       'bt.compat.warn': '%d of %d tracks cannot be played on this output.',
       'bt.compat.convert': 'Convert to MP3',
       'bt.compat.no_ffmpeg': 'Install ffmpeg to convert incompatible tracks.',

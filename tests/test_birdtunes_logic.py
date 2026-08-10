@@ -82,7 +82,7 @@ def test_cannot_play_during_quiet_hours_even_with_a_reachable_device() -> None:
         dt.datetime(2026, 8, 10, 23, 0), _schedule_cfg(), device_available=True
     )
     assert ok is False
-    assert "quiet" in reason.lower()
+    assert "silêncio" in reason.lower()
 
 
 def test_cannot_play_when_the_speaker_is_unreachable() -> None:

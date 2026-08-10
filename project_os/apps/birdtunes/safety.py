@@ -108,9 +108,9 @@ def check_can_play(
     the scheduler's retry-with-backoff has something to show the user.
     """
     if is_quiet_hours(moment, schedule_cfg):
-        return False, "It's quiet hours right now, so BirdTunes will not play."
+        return False, "Agora é hora do silêncio, então o BirdTunes não vai tocar."
     if not device_available:
-        return False, "The output device is not reachable right now."
+        return False, "A saída de som não está acessível agora."
     return True, ""
 
 

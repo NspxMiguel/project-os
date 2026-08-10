@@ -13,7 +13,7 @@ export default {
     fmtMod.setStrings('en', {
       'wa.title': 'WhatsApp bot',
       'wa.provider': 'Provider',
-      'wa.provider.null': 'None (log only)',
+      'wa.provider.null': 'Nenhum (só registra)',
       'wa.provider.cloud_api': 'Cloud API (Meta)',
       'wa.provider.bridge': 'Local bridge',
       'wa.status.connected': 'Connected',

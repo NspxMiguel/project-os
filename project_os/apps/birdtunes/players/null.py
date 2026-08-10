@@ -40,7 +40,7 @@ MIN_SIMULATED_SECONDS = 0.05
 class NullPlayer(Player):
     """Logs playback instead of producing sound. Always available."""
 
-    name = "None (log only)"
+    name = "Nenhuma (só registra)"
     kind = "null"
     device_kinds = []  # type: List[str]
     can_pause = True

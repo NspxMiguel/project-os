@@ -80,11 +80,11 @@ def _verify_media(secret: str, track_id: str, exp: int, token: str) -> bool:
 def _empty_reason_message(reason: Optional[str]) -> str:
     return {
         None: "",
-        "no_tracks": "This playlist has no playable tracks yet.",
-        "all_incompatible": "Every track here is in a format the current output cannot play.",
-        "output_unreachable": "The output device is not reachable right now.",
-        "quiet_hours": "It's quiet hours right now, so BirdTunes will not play.",
-    }.get(reason, "Nothing to play right now.")
+        "no_tracks": "Essa playlist ainda não tem faixa que dê para tocar.",
+        "all_incompatible": "Todas as faixas daqui estão num formato que a saída atual não toca.",
+        "output_unreachable": "A saída de som não está acessível agora.",
+        "quiet_hours": "Agora é hora do silêncio, então o BirdTunes não vai tocar.",
+    }.get(reason, "Não tem nada para tocar agora.")
 
 
 def build_router(instance: "BirdTunesApp") -> APIRouter:
