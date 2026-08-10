@@ -15,7 +15,7 @@ import {icon} from '../lib/icons.js';
 import * as fmt from '../lib/format.js';
 import {t, setStrings} from '../lib/format.js';
 import * as api from '../lib/api.js';
-import {toast, confirm} from '../lib/toast.js';
+import {toast, confirm, promptText} from '../lib/toast.js';
 import {navigate} from '../lib/router.js';
 
 setStrings('en', {
@@ -337,7 +337,11 @@ export default {
     /* ------------------------------------------------------------ writes */
 
     async function makeFolder() {
-      const name = window.prompt(t('files.mkdir.prompt'));
+      const name = await promptText(t('files.mkdir.prompt'), {
+        title: t('files.newFolder'),
+        confirmLabel: t('files.newFolder'),
+        placeholder: 'nova-pasta',
+      });
       if (!name) return;
       try {
         await api.post('/files/mkdir', {path: joinPath(currentPath, name.trim())});
@@ -348,7 +352,11 @@ export default {
     }
 
     async function renameEntry(entry) {
-      const name = window.prompt(t('files.rename.prompt', {name: entry.name}), entry.name);
+      const name = await promptText(t('files.rename.prompt', {name: entry.name}), {
+        title: t('files.action.rename'),
+        confirmLabel: t('files.action.rename'),
+        value: entry.name,
+      });
       if (!name || name === entry.name) return;
       try {
         await api.post('/files/move', {source: entry.path, destination: joinPath(dirname(entry.path), name.trim())});

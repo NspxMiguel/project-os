@@ -118,12 +118,30 @@ const FOCUSABLE = [
 
 /** Modal confirmation. Resolves true on confirm, false on cancel/Escape. */
 export function confirm(message, options = {}) {
+  return openDialog(message, options);
+}
+
+/** Modal that asks for one line of text. Resolves the string, or null.
+ *
+ * window.prompt() was doing this job, and it is not available everywhere --
+ * embedded webviews block it outright, and where it exists it cannot be styled
+ * or translated. Naming a new folder threw "prompt() is not supported" and the
+ * button simply did nothing.
+ */
+export function promptText(message, options = {}) {
+  return openDialog(message, Object.assign({}, options, {
+    input: {value: options.value || '', placeholder: options.placeholder || ''},
+  })).then((value) => (value === false ? null : value));
+}
+
+function openDialog(message, options = {}) {
   const {
     title = '',
     confirmLabel = t('action.confirm'),
     cancelLabel = t('action.cancel'),
     danger = false,
     detail = '',
+    input = null,
   } = options;
 
   return new Promise((resolve) => {
@@ -137,10 +155,24 @@ export function confirm(message, options = {}) {
       resolve(value);
     };
 
+    const field = input
+      ? h('input', {
+        class: 'input', type: 'text', value: input.value || '',
+        placeholder: input.placeholder || '', spellcheck: 'false',
+      })
+      : null;
+
+    const accept = () => {
+      if (!field) return finish(true);
+      const value = field.value.trim();
+      if (!value) { field.focus(); return undefined; }
+      return finish(value);
+    };
+
     const confirmBtn = h('button', {
       class: 'btn ' + (danger ? 'btn--danger' : 'btn--primary'),
       type: 'button',
-      onClick: () => finish(true),
+      onClick: accept,
     }, confirmLabel);
 
     const cancelBtn = h('button', {
@@ -153,6 +185,7 @@ export function confirm(message, options = {}) {
       title ? h('h2', {class: 'modal__title'}, title) : null,
       h('p', {class: 'modal__message'}, String(message === null || message === undefined ? '' : message)),
       detail ? h('p', {class: 'modal__detail'}, detail) : null,
+      field,
       h('div', {class: 'modal__actions'}, cancelBtn, confirmBtn),
     );
 
@@ -163,6 +196,11 @@ export function confirm(message, options = {}) {
     let backdrop = null;
 
     const onKeyDown = (event) => {
+      if (event.key === 'Enter' && field && document.activeElement === field) {
+        event.preventDefault();
+        accept();
+        return;
+      }
       if (event.key === 'Escape') {
         event.preventDefault();
         finish(false);
@@ -225,7 +263,7 @@ export function confirm(message, options = {}) {
     }
 
     document.addEventListener('keydown', onKeyDown, true);
-    confirmBtn.focus();
+    if (field) { field.focus(); field.select(); } else { confirmBtn.focus(); }
   });
 }
 
@@ -234,4 +272,4 @@ export function clearToasts() {
   if (region) clear(region);
 }
 
-export default {toast, confirm, notify, clearToasts};
+export default {toast, confirm, promptText, notify, clearToasts};

@@ -16,7 +16,7 @@ import {icon} from '../lib/icons.js';
 import * as fmt from '../lib/format.js';
 import {setStrings, t} from '../lib/format.js';
 import * as api from '../lib/api.js';
-import {toast, confirm} from '../lib/toast.js';
+import {toast, confirm, promptText} from '../lib/toast.js';
 
 setStrings('en', {
   'helpers.title': 'Helpers',
@@ -244,7 +244,11 @@ export default {
     }
 
     async function renameHelper(helper) {
-      const next = window.prompt(t('helpers.rename.prompt', {name: helper.name}), helper.name);
+      const next = await promptText(t('helpers.rename.prompt', {name: helper.name}), {
+        title: t('helpers.rename'),
+        confirmLabel: t('helpers.rename'),
+        value: helper.name,
+      });
       if (next === null) return;
       const name = next.trim();
       if (!name || name === helper.name) return;
