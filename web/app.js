@@ -395,7 +395,7 @@ function buildShell() {
       h('a', {class: 'brand', href: '#/'},
         h('span', {class: 'brand__mark'}, icon('chip', {size: 18})),
         h('span', {class: 'brand__text'},
-          h('span', null, 'project-os'),
+          h('span', {class: 'brand__name'}, boxName()),
           h('span', {class: 'brand__sub'}, dig(store.get('health'), 'version', '') || ''),
         ),
       ),
@@ -440,10 +440,24 @@ function useAuthLayout() {
   mount(root, contentEl);
 }
 
+/** What this box is called: the name someone gave it, or the product name.
+ *
+ * Settings has always had an "Instance name" field, and its own hint admitted
+ * the truth -- "Shown nowhere else yet -- this is not read by any other
+ * screen". A control that changes nothing is worse than no control. It belongs
+ * exactly here: the sidebar and the tab title, the two places you look when you
+ * have more than one of these on the network.
+ */
+function boxName() {
+  const named = dig(store.get('config'), 'ui.instance_name', '');
+  return (typeof named === 'string' && named.trim()) || 'project-os';
+}
+
 function setTitle(title) {
-  store.set({title: title || 'project-os'});
-  document.title = title && title !== 'project-os' ? title + ' · project-os' : 'project-os';
-  if (titleEl) mount(titleEl, title || 'project-os');
+  const box = boxName();
+  store.set({title: title || box});
+  document.title = title && title !== box ? title + ' · ' + box : box;
+  if (titleEl) mount(titleEl, title || box);
 }
 
 /* ----------------------------------------------------------- view states */
@@ -843,6 +857,12 @@ function wireEvents() {
 
 store.subscribe((next, prev) => {
   if (!Object.is(next.stats, prev.stats)) renderPills();
+  // Renaming the box in Settings has to be visible without a reload.
+  if (!Object.is(next.config, prev.config) && shellEl) {
+    const brand = shellEl.querySelector('.brand__name');
+    if (brand) mount(brand, boxName());
+    setTitle(store.get('title'));
+  }
 });
 
 /* --------------------------------------------------------------- routes */

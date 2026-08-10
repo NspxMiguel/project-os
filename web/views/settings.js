@@ -44,9 +44,7 @@ setStrings('en', {
   'settings.restartRequired': 'This takes effect after project-os restarts.',
   // general
   'settings.general.instanceName': 'Instance name',
-  'settings.general.instanceName.hint': 'A label for this box. Shown nowhere else yet — this is not read by any other screen.',
-  'settings.general.language': 'Language',
-  'settings.general.language.hint': 'Only English is translated today; this is saved for when more are.',
+  'settings.general.instanceName.hint': 'What this box is called. Shows in the sidebar and the browser tab — useful once there is more than one.',
   'settings.general.theme': 'Theme',
   'settings.general.timezone': 'Timezone',
   'settings.general.timezone.hint': 'Decides when scheduled things happen. The image boots on UTC, because it cannot know where it will be plugged in.',
@@ -254,6 +252,9 @@ export default {
         const data = await api.put('/settings', {values});
         if (disposed) return;
         state.settings = data.settings || state.settings;
+        // The shell reads the box's name straight from here, so the sidebar and
+        // the tab title change the moment the save lands.
+        if (data.settings && ctx.store) ctx.store.set({config: data.settings});
         if (data.restart_required && data.restart_required.length) {
           state.restartRequired = Array.from(new Set(state.restartRequired.concat(data.restart_required)));
           toast(t('settings.restartRequired'), {type: 'info'});
@@ -406,12 +407,9 @@ export default {
                 class: 'input', type: 'text', value: state.instanceName,
                 onChange: (e) => { state.instanceName = e.target.value; saveValues({'ui.instance_name': state.instanceName}); },
               })),
-            field(t('settings.general.language'), t('settings.general.language.hint'),
-              h('select', {
-                class: 'input',
-                value: state.language,
-                onChange: (e) => { state.language = e.target.value; saveValues({'ui.language': state.language}); },
-              }, h('option', {value: 'en'}, 'English'))),
+            // No language row: there is exactly one language to choose, so the
+            // dropdown was a control that could not change anything. It comes
+            // back the day a second translation exists.
             field(t('settings.general.timezone'), t('settings.general.timezone.hint'),
               h('div', {class: 'input-group'},
                 h('input', {

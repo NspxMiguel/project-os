@@ -51,7 +51,13 @@ const ESCAPE_RE = new RegExp(
   '\\x1b(' +
     '\\][^\\x07\\x1b]*(\\x07|\\x1b\\\\)' + // OSC ... BEL or ST
     '|\\[[0-9;?]*[ -/]*[@-~]' + // CSI ... final byte
+    '|[()*+][ -~]' + // charset designation: ESC ( B
     '|[@-Z\\\\-_]' + // two-byte escapes
+    // The single-character ones: ESC = and ESC > (keypad mode), ESC 7 / ESC 8
+    // (save and restore cursor), ESC c (reset). zsh sends the keypad pair
+    // around every prompt, and with only the ESC removed the shell's own
+    // scrollback read "=eecho ...>" -- the stray = and > were these.
+    '|[0-9=><#%]' +
   ')',
   'g'
 );
