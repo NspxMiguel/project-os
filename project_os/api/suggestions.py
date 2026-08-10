@@ -71,7 +71,7 @@ async def apply(
     if kind == "enable_app":
         plugins = getattr(request.app.state, "plugins", None)
         if plugins is None:
-            raise ApiError(503, "not_ready", "The app manager is not available.")
+            raise ApiError(503, "not_ready", "O gerenciador de apps não está disponível.")
         app_id = action.get("app")
         if not app_id or app_id not in plugins:
             raise ApiError(404, "app_not_found", "No app called %r." % app_id)

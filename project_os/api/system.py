@@ -205,7 +205,7 @@ async def control_service_by_path(
     request body to validate.
     """
     if action not in ("start", "stop", "restart"):
-        raise ApiError(400, "unknown_action", "No such service action %r." % action)
+        raise ApiError(400, "unknown_action", "Não existe a ação de serviço %r." % action)
     return await _control(unit, action, config, user)
 
 
@@ -216,15 +216,15 @@ async def _control(
         raise ApiError(
             403,
             "service_control_disabled",
-            "Turn on security.allow_service_control to start and stop services.",
+            "Ligue o security.allow_service_control para iniciar e parar serviços.",
         )
     stem = unit[: -len(".service")] if unit.endswith(".service") else unit
     if not any(stem.startswith(prefix) for prefix in MANAGED_UNIT_PREFIXES):
         raise ApiError(
-            403, "unit_not_managed", "project-os does not manage the unit %r." % unit
+            403, "unit_not_managed", "O project-os não cuida da unidade %r." % unit
         )
     if not shutil.which("systemctl"):
-        raise ApiError(503, "no_systemd", "There is no systemctl on this machine.")
+        raise ApiError(503, "no_systemd", "Não existe systemctl nesta máquina.")
     await _run(["systemctl", action, "%s.service" % stem], check=True)
     log.info("%s %s.service (by %s)", action, stem, user.get("username"))
     return {"ok": True, "unit": "%s.service" % stem, "action": action}
@@ -247,13 +247,13 @@ async def power(
         raise ApiError(
             403,
             "power_control_disabled",
-            "Turn on security.allow_service_control to reboot from the browser.",
+            "Ligue o security.allow_service_control para reiniciar pelo navegador.",
         )
     if not payload.confirm:
         raise ApiError(400, "confirm_required", "Send confirm=true to %s." % payload.action)
     command = ["systemctl", "reboot" if payload.action == "reboot" else "poweroff"]
     if not shutil.which("systemctl"):
-        raise ApiError(503, "no_systemd", "There is no systemctl on this machine.")
+        raise ApiError(503, "no_systemd", "Não existe systemctl nesta máquina.")
     log.warning("%s requested by %s", payload.action, user.get("username"))
     # Fire and forget: the box goes away before the command returns, so awaiting
     # it would guarantee a timeout error on an operation that actually worked.
@@ -270,9 +270,9 @@ async def _run(command: List[str], check: bool = False) -> Optional[str]:
         )
         stdout, stderr = await asyncio.wait_for(process.communicate(), SYSTEMCTL_TIMEOUT)
     except asyncio.TimeoutError:
-        raise ApiError(504, "command_timeout", "%s took too long." % command[0])
+        raise ApiError(504, "command_timeout", "%s demorou demais." % command[0])
     except (OSError, ValueError) as exc:
-        raise ApiError(503, "command_failed", "Could not run %s: %s" % (command[0], exc))
+        raise ApiError(503, "command_failed", "Não consegui rodar %s: %s" % (command[0], exc))
     if check and process.returncode != 0:
         message = (stderr or b"").decode("utf-8", "replace").strip()
         raise ApiError(500, "command_failed", message or "%s failed." % " ".join(command))

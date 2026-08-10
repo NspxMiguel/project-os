@@ -328,7 +328,7 @@ def _safe_child(root: Path, relative: str) -> Optional[Path]:
 def _from_state(request: Request, name: str, label: str) -> Any:
     value = getattr(request.app.state, name, None)
     if value is None:
-        raise ApiError(503, "not_ready", "%s is not available yet." % label)
+        raise ApiError(503, "not_ready", "%s ainda não está disponível." % label)
     return value
 
 
@@ -519,14 +519,14 @@ def create_app() -> FastAPI:
         plugins = getattr(request.app.state, "plugins", None)
         root = plugins.ui_path(app_id) if plugins is not None else None
         if root is None:
-            raise ApiError(404, "app_ui_not_found", "App %r has no UI files." % app_id)
+            raise ApiError(404, "app_ui_not_found", "O app %r não tem arquivos de tela." % app_id)
         target = _safe_child(root, file_path)
         if target is None:
-            raise ApiError(403, "forbidden_path", "That path is outside the app.")
+            raise ApiError(403, "forbidden_path", "Esse caminho está fora do app.")
         if target.is_dir():
             target = target / "index.html"
         if not target.is_file():
-            raise ApiError(404, "not_found", "No such file: %s" % file_path)
+            raise ApiError(404, "not_found", "Não existe esse arquivo: %s" % file_path)
         media_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         # Same reasoning as SpaStaticFiles: unversioned names, so revalidate.
         # Upgrading an app while a browser kept its old panel.js is a real way

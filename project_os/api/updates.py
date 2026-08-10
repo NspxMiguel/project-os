@@ -191,7 +191,7 @@ async def install(
             "Ligue updates.enabled em Configurações para atualizar por aqui.",
         )
     if _job.state in (STATE_RUNNING, STATE_RESTARTING):
-        raise ApiError(409, "busy", "An update is already running.")
+        raise ApiError(409, "busy", "Já tem uma atualização rodando.")
 
     try:
         info = await anyio.to_thread.run_sync(
@@ -202,12 +202,12 @@ async def install(
 
     if not info.get("update_available"):
         raise ApiError(
-            409, "already_current", "This box is already running %s." % __version__,
+            409, "already_current", "Esta caixa já está na %s." % __version__,
         )
     if body.version and body.version != info.get("latest"):
         raise ApiError(
             409, "version_moved",
-            "The latest version is now %s, not %s. Check again."
+            "A versão mais nova agora é %s, não %s. Verifique de novo."
             % (info.get("latest"), body.version),
         )
 
@@ -222,7 +222,7 @@ async def install(
 async def rollback(user: Dict[str, Any] = Depends(auth.require_auth)) -> Dict[str, Any]:
     previous = _job.previous
     if not previous:
-        raise ApiError(404, "no_previous", "There is no previous version to go back to.")
+        raise ApiError(404, "no_previous", "Não existe versão anterior para voltar.")
     try:
         await anyio.to_thread.run_sync(lambda: updates.rollback(previous))
     except updates.UpdateError as exc:

@@ -69,7 +69,7 @@ def bad_request(message: str, code: str = "bad_request", detail: Any = None) -> 
     return ApiError(400, code, message, detail)
 
 
-def unauthenticated(message: str = "Sign in to continue.", detail: Any = None) -> ApiError:
+def unauthenticated(message: str = "Entre na sua conta para continuar.", detail: Any = None) -> ApiError:
     return ApiError(401, "unauthenticated", message, detail)
 
 
@@ -86,7 +86,7 @@ def conflict(message: str, code: str = "conflict", detail: Any = None) -> ApiErr
 
 
 def setup_required(
-    message: str = "project-os has no user yet. Finish setup first.",
+    message: str = "O project-os ainda não tem usuário. Termine a configuração primeiro.",
 ) -> ApiError:
     return ApiError(428, "setup_required", message)
 
@@ -127,7 +127,7 @@ async def validation_error_handler(
         status_code=422,
         content={
             "error": "validation_error",
-            "message": "The request body or query is not valid.",
+            "message": "O que foi enviado não está válido.",
             "detail": errors,
         },
     )
@@ -162,7 +162,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         status_code=500,
         content={
             "error": "internal_error",
-            "message": "Something went wrong on the project-os side.",
+            "message": "Deu problema aqui no project-os.",
             "detail": {"type": type(exc).__name__},
         },
     )

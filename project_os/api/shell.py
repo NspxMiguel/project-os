@@ -71,7 +71,7 @@ def _require_shell(config: Any) -> None:
         raise ApiError(
             403,
             "shell_disabled",
-            "The terminal is off. Turn on security.allow_shell in Settings > Developer.",
+            "O terminal está desligado. Ligue o security.allow_shell em Configurações › Desenvolvedor.",
         )
 
 
@@ -123,7 +123,7 @@ async def execute(
     _require_shell(config)
     cwd = body.cwd or str(paths.home())
     if not os.path.isdir(cwd):
-        raise ApiError(400, "bad_cwd", "%s is not a directory." % cwd)
+        raise ApiError(400, "bad_cwd", "%s não é uma pasta." % cwd)
 
     try:
         process = await asyncio.create_subprocess_shell(
@@ -136,7 +136,7 @@ async def execute(
             start_new_session=True,
         )
     except OSError as exc:
-        raise ApiError(500, "spawn_failed", "Could not start a shell: %s" % exc)
+        raise ApiError(500, "spawn_failed", "Não consegui abrir um terminal: %s" % exc)
 
     timed_out = False
     try:
@@ -275,7 +275,7 @@ async def terminal(websocket: WebSocket) -> None:
     try:
         session.spawn(str(paths.home()))
     except OSError as exc:
-        await websocket.send_json({"type": "error", "message": "Could not open a shell: %s" % exc})
+        await websocket.send_json({"type": "error", "message": "Não consegui abrir um terminal: %s" % exc})
         await websocket.close(code=CLOSE_NO_PTY)
         return
 

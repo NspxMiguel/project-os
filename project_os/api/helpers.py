@@ -111,7 +111,7 @@ async def create_code(
 ) -> Dict[str, Any]:
     """Mint a pairing code to type into the agent."""
     if body.ttl <= 0 or body.ttl > 86400:
-        raise ApiError(400, "bad_ttl", "A pairing code lives between a second and a day.")
+        raise ApiError(400, "bad_ttl", "Um código de pareamento dura de um segundo a um dia.")
     try:
         return core.new_code(db, kind=body.kind, ttl=body.ttl)
     except RuntimeError as exc:  # pragma: no cover - needs 20 collisions in a row
@@ -162,7 +162,7 @@ async def create_job(
     the screen can say "nothing here can do this yet" instead of pretending.
     """
     if not body.kind.strip():
-        raise ApiError(400, "kind_required", "A job needs a kind.")
+        raise ApiError(400, "kind_required", "Uma tarefa precisa de um tipo.")
     unknown = [n for n in body.needs if n not in core.CAPABILITIES]
     if unknown:
         raise ApiError(400, "unknown_capability", "Nothing offers: %s." % ", ".join(unknown))
@@ -178,7 +178,7 @@ async def cancel_job(
 ) -> Dict[str, Any]:
     job = core.cancel(db, job_id)
     if job is None:
-        raise ApiError(404, "job_not_found", "No job with id %r." % job_id)
+        raise ApiError(404, "job_not_found", "Não existe tarefa com id %r." % job_id)
     return {"job": job}
 
 
@@ -227,7 +227,7 @@ async def delete_helper(
 def _need(db: Any, helper_id: str) -> Dict[str, Any]:
     helper = core.get(db, helper_id)
     if helper is None:
-        raise ApiError(404, "helper_not_found", "No helper with id %r." % helper_id)
+        raise ApiError(404, "helper_not_found", "Não existe ajudante com id %r." % helper_id)
     return helper
 
 
@@ -265,7 +265,7 @@ async def pair(body: Pairing, db: Any = Depends(get_db)) -> Dict[str, Any]:
 def _agent(db: Any, token: Optional[str]) -> Dict[str, Any]:
     helper = core.authenticate(db, token or "")
     if helper is None:
-        raise ApiError(401, "bad_helper_token", "This token belongs to no active helper.")
+        raise ApiError(401, "bad_helper_token", "Esse token não é de nenhum ajudante ativo.")
     return helper
 
 
@@ -300,9 +300,9 @@ async def job_done(
     helper = _agent(db, token)
     job = core.get_job(db, job_id)
     if job is None:
-        raise ApiError(404, "job_not_found", "No job with id %r." % job_id)
+        raise ApiError(404, "job_not_found", "Não existe tarefa com id %r." % job_id)
     if job.get("helper_id") not in (None, helper["id"]):
-        raise ApiError(409, "not_your_job", "That job belongs to another helper.")
+        raise ApiError(409, "not_your_job", "Essa tarefa é de outro ajudante.")
     if body.error:
         return {"job": core.fail(db, job_id, body.error)}
     return {"job": core.finish(db, job_id, body.result)}

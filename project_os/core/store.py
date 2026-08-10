@@ -206,7 +206,7 @@ def _read_json_bytes(payload: bytes, where: str) -> Any:
     try:
         return json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as exc:
-        raise ApiError(502, "invalid_index", "%s is not valid JSON: %s" % (where, exc))
+        raise ApiError(502, "invalid_index", "%s não é um JSON válido: %s" % (where, exc))
 
 
 def _lenient_manifest(directory: Path) -> Optional[Dict[str, Any]]:
@@ -240,20 +240,20 @@ def _lenient_manifest(directory: Path) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 def _reject_member_name(name: str) -> None:
     if not name or name in (".", "./"):
-        raise ApiError(400, "unsafe_archive", "The archive contains an unnamed entry.")
+        raise ApiError(400, "unsafe_archive", "O pacote tem um item sem nome.")
     if "\x00" in name:
-        raise ApiError(400, "unsafe_archive", "The archive contains a NUL byte in a path.")
+        raise ApiError(400, "unsafe_archive", "O pacote tem um byte nulo num caminho.")
     if "\\" in name:
         raise ApiError(
-            400, "unsafe_archive", "The archive contains a backslash path: %s" % name
+            400, "unsafe_archive", "O pacote tem um caminho com barra invertida: %s" % name
         )
     if name.startswith("/") or _WINDOWS_DRIVE_RE.match(name):
         raise ApiError(
-            400, "unsafe_archive", "The archive contains an absolute path: %s" % name
+            400, "unsafe_archive", "O pacote tem um caminho absoluto: %s" % name
         )
     if any(part == ".." for part in name.split("/")):
         raise ApiError(
-            400, "unsafe_archive", "The archive tries to escape its directory: %s" % name
+            400, "unsafe_archive", "O pacote tenta escapar da própria pasta: %s" % name
         )
 
 
@@ -277,7 +277,7 @@ def safe_extract_zip(
     try:
         handle = zipfile.ZipFile(str(archive))
     except (zipfile.BadZipFile, OSError) as exc:
-        raise ApiError(400, "invalid_archive", "That download is not a usable zip: %s" % exc)
+        raise ApiError(400, "invalid_archive", "Esse download não é um zip que dê para usar: %s" % exc)
 
     written = 0
     with handle:
@@ -286,14 +286,14 @@ def safe_extract_zip(
             raise ApiError(
                 413,
                 "archive_too_large",
-                "The archive has %d entries; the limit is %d." % (len(infos), max_entries),
+                "O pacote tem %d itens; o limite é %d." % (len(infos), max_entries),
             )
         declared = sum(int(info.file_size or 0) for info in infos)
         if declared > max_bytes:
             raise ApiError(
                 413,
                 "archive_too_large",
-                "The archive unpacks to %d bytes; the limit is %d." % (declared, max_bytes),
+                "O pacote descompactado dá %d bytes; o limite é %d." % (declared, max_bytes),
             )
 
         for info in infos:
@@ -302,18 +302,18 @@ def safe_extract_zip(
             mode = (int(info.external_attr) >> 16) & 0xFFFF
             if stat.S_ISLNK(mode):
                 raise ApiError(
-                    400, "unsafe_archive", "The archive contains a symlink: %s" % name
+                    400, "unsafe_archive", "O pacote tem um atalho (symlink): %s" % name
                 )
             if mode and not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
                 raise ApiError(
                     400,
                     "unsafe_archive",
-                    "The archive contains something that is not a file: %s" % name,
+                    "O pacote tem algo que não é arquivo: %s" % name,
                 )
             target = (dest / name).resolve()
             if target != dest_resolved and dest_resolved not in target.parents:
                 raise ApiError(
-                    400, "unsafe_archive", "The archive tries to write outside itself: %s" % name
+                    400, "unsafe_archive", "O pacote tenta escrever fora de si mesmo: %s" % name
                 )
 
         for info in infos:
@@ -333,7 +333,7 @@ def safe_extract_zip(
                             raise ApiError(
                                 413,
                                 "archive_too_large",
-                                "The archive unpacks to more than %d bytes." % max_bytes,
+                                "O pacote descompactado passa de %d bytes." % max_bytes,
                             )
                         out.write(chunk)
     return written
@@ -350,7 +350,7 @@ def find_app_root(root: Path) -> Path:
     try:
         children = [child for child in sorted(root.iterdir()) if child.is_dir()]
     except OSError as exc:  # pragma: no cover - unreadable temp dir
-        raise ApiError(500, "install_failed", "Cannot read the download: %s" % exc)
+        raise ApiError(500, "install_failed", "Não dá para ler o download: %s" % exc)
     candidates = [child for child in children if (child / "manifest.json").is_file()]
     if len(candidates) == 1:
         return candidates[0]
@@ -360,9 +360,9 @@ def find_app_root(root: Path) -> Path:
         raise ApiError(
             400,
             "ambiguous_download",
-            "That download holds %d apps; install them one at a time." % len(candidates),
+            "Esse download tem %d apps; instale um de cada vez." % len(candidates),
         )
-    raise ApiError(400, "invalid_app", "No manifest.json was found in that download.")
+    raise ApiError(400, "invalid_app", "Não achei nenhum manifest.json nesse download.")
 
 
 # ---------------------------------------------------------------------------
@@ -387,14 +387,14 @@ def _urlopen_bytes(url: str, limit: int, timeout: float) -> bytes:
                 total += len(chunk)
                 if total > limit:
                     raise ApiError(
-                        413, "download_too_large", "That download is larger than %d bytes." % limit
+                        413, "download_too_large", "Esse download é maior que %d bytes." % limit
                     )
                 chunks.append(chunk)
             return b"".join(chunks)
     except urllib.error.HTTPError as exc:
         raise ApiError(502, "repository_unreachable", "%s returned HTTP %s." % (url, exc.code))
     except (urllib.error.URLError, OSError, ValueError) as exc:
-        raise ApiError(502, "repository_unreachable", "Cannot reach %s: %s" % (url, exc))
+        raise ApiError(502, "repository_unreachable", "Não consigo alcançar %s: %s" % (url, exc))
 
 
 async def fetch_bytes(url: str, limit: int = MAX_DOWNLOAD_BYTES, timeout: float = HTTP_TIMEOUT) -> bytes:
@@ -405,7 +405,7 @@ async def fetch_bytes(url: str, limit: int = MAX_DOWNLOAD_BYTES, timeout: float 
     """
     scheme = urlparse(url).scheme.lower()
     if scheme not in ("http", "https", "file"):
-        raise ApiError(400, "unsupported_url", "%r is not a downloadable URL." % url)
+        raise ApiError(400, "unsupported_url", "%r não é um endereço que dê para baixar." % url)
 
     if scheme in ("http", "https"):
         try:
@@ -432,14 +432,14 @@ async def fetch_bytes(url: str, limit: int = MAX_DOWNLOAD_BYTES, timeout: float 
                                 raise ApiError(
                                     413,
                                     "download_too_large",
-                                    "That download is larger than %d bytes." % limit,
+                                    "Esse download é maior que %d bytes." % limit,
                                 )
                             chunks.append(chunk)
                         return b"".join(chunks)
             except ApiError:
                 raise
             except Exception as exc:
-                raise ApiError(502, "repository_unreachable", "Cannot reach %s: %s" % (url, exc))
+                raise ApiError(502, "repository_unreachable", "Não consigo alcançar %s: %s" % (url, exc))
 
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _urlopen_bytes, url, limit, timeout)
@@ -472,10 +472,10 @@ async def git_clone(url: str, dest: Path, ref: Optional[str] = None, timeout: fl
         raise ApiError(
             501,
             "git_missing",
-            "git is not installed. Install it with: sudo apt install git",
+            "O git não está instalado. Instale com: sudo apt install git",
         )
     except OSError as exc:  # pragma: no cover - exotic exec failures
-        raise ApiError(500, "git_failed", "Could not run git: %s" % exc)
+        raise ApiError(500, "git_failed", "Não consegui rodar o git: %s" % exc)
 
     try:
         _, stderr = await asyncio.wait_for(process.communicate(), timeout)
@@ -488,7 +488,7 @@ async def git_clone(url: str, dest: Path, ref: Optional[str] = None, timeout: fl
     if process.returncode != 0:
         message = (stderr or b"").decode("utf-8", "replace").strip().splitlines()
         tail = message[-1] if message else "git exited with %s" % process.returncode
-        raise ApiError(502, "git_failed", "Could not clone %s: %s" % (url, tail))
+        raise ApiError(502, "git_failed", "Não consegui clonar %s: %s" % (url, tail))
 
 
 class _suppress_process_errors(object):
@@ -606,7 +606,7 @@ class AppStore(object):
         url = str(url or "").strip()
         name = str(name or "").strip() or _name_from_url(url)
         if not url:
-            raise ApiError(400, "invalid_repository", "A repository needs a URL.")
+            raise ApiError(400, "invalid_repository", "Um repositório precisa de um endereço.")
         kind = repository_kind(url)
         if kind == "unknown":
             raise ApiError(
@@ -617,9 +617,9 @@ class AppStore(object):
         repositories = self.repositories()
         for repo in repositories:
             if repo["url"] == url:
-                raise ApiError(409, "repository_exists", "That repository is already configured.")
+                raise ApiError(409, "repository_exists", "Esse repositório já está configurado.")
             if repo["name"].lower() == name.lower():
-                raise ApiError(409, "repository_exists", "A repository is already called %r." % name)
+                raise ApiError(409, "repository_exists", "Já existe um repositório chamado %r." % name)
         entry = {"name": name, "url": url, "kind": kind, "enabled": True}
         repositories.append(entry)
         self._persist_repositories(repositories)
@@ -629,7 +629,7 @@ class AppStore(object):
     def remove_repository(self, name_or_url: str) -> Dict[str, Any]:
         needle = str(name_or_url or "").strip()
         if not needle:
-            raise ApiError(400, "invalid_repository", "Name the repository to remove.")
+            raise ApiError(400, "invalid_repository", "Diga qual repositório remover.")
         repositories = self.repositories()
         for index, repo in enumerate(repositories):
             if repo["url"] != needle and repo["name"].lower() != needle.lower():
@@ -638,7 +638,7 @@ class AppStore(object):
                 raise ApiError(
                     400,
                     "repository_protected",
-                    "The builtin repository lists the apps shipped with project-os; it cannot be removed.",
+                    "O repositório interno lista os apps que já vêm no project-os; ele não pode ser removido.",
                 )
             repositories.pop(index)
             self._persist_repositories(repositories)
@@ -746,7 +746,7 @@ class AppStore(object):
                 return entries
             children = sorted(directory.iterdir())
         except OSError as exc:  # pragma: no cover
-            raise ApiError(500, "repository_unreadable", "Cannot read %s: %s" % (directory, exc))
+            raise ApiError(500, "repository_unreadable", "Não dá para ler %s: %s" % (directory, exc))
         for child in children:
             if not child.is_dir() or child.name.startswith((".", "_")):
                 continue
@@ -773,10 +773,10 @@ class AppStore(object):
             if not path.is_file():
                 raise ApiError(404, "repository_missing", "No index at %s." % path)
             if path.stat().st_size > MAX_INDEX_BYTES:
-                raise ApiError(413, "index_too_large", "%s is too large to be an index." % path)
+                raise ApiError(413, "index_too_large", "%s é grande demais para ser um índice." % path)
             return path.read_bytes()
         except OSError as exc:
-            raise ApiError(502, "repository_unreadable", "Cannot read %s: %s" % (path, exc))
+            raise ApiError(502, "repository_unreadable", "Não dá para ler %s: %s" % (path, exc))
 
     async def _git_index(self, repo: Dict[str, Any]) -> bytes:
         parent = Path(tempfile.mkdtemp(prefix="project_os-repo-"))
@@ -795,11 +795,11 @@ class AppStore(object):
                 try:
                     return target.read_bytes()
                 except OSError as exc:  # pragma: no cover
-                    raise ApiError(502, "repository_unreadable", "Cannot read %s: %s" % (target, exc))
+                    raise ApiError(502, "repository_unreadable", "Não dá para ler %s: %s" % (target, exc))
         raise ApiError(
             502,
             "repository_missing",
-            "%s has no index.json (looked for %s)." % (repo["url"], ", ".join(INDEX_FILENAMES)),
+            "%s não tem index.json (procurei em %s)." % (repo["url"], ", ".join(INDEX_FILENAMES)),
         )
 
     async def _fetch_entries(self, repo: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -820,7 +820,7 @@ class AppStore(object):
         data = _read_json_bytes(payload, repo["url"])
         raw_apps = data.get("apps") if isinstance(data, dict) else data
         if not isinstance(raw_apps, list):
-            raise ApiError(502, "invalid_index", "%s does not list any apps." % repo["url"])
+            raise ApiError(502, "invalid_index", "%s não lista nenhum app." % repo["url"])
         entries = []  # type: List[Dict[str, Any]]
         for raw in raw_apps:
             entry = self._normalise_entry(raw, repo)
@@ -958,7 +958,7 @@ class AppStore(object):
             raise ApiError(
                 400,
                 "unsupported_url",
-                "Install from a git URL, a .zip, or a local directory.",
+                "Instale a partir de um endereço git, um .zip ou uma pasta local.",
             )
         return {
             "id": _id_from_url(url),
@@ -984,7 +984,7 @@ class AppStore(object):
             raise ApiError(
                 409,
                 "already_installed",
-                "%s %s is already installed. Retry with update=true to replace it."
+                "%s %s já está instalado. Repita com update=true para substituir."
                 % (record["name"], record["version"]),
             )
         return record is not None
@@ -1011,7 +1011,7 @@ class AppStore(object):
                 entry = self._entry_from_url(target, ref)
             else:
                 if not APP_ID_RE.match(target):
-                    raise ApiError(400, "invalid_app_id", "%r is not a valid app id." % target)
+                    raise ApiError(400, "invalid_app_id", "%r não é um id de app válido." % target)
                 found = await self.find(target)
                 if found is None:
                     raise ApiError(
@@ -1031,13 +1031,13 @@ class AppStore(object):
                 raise ApiError(
                     400,
                     "already_bundled",
-                    "%s ships with project-os; enable it instead of installing it." % entry["id"],
+                    "%s já vem no project-os; ligue ele em vez de instalar." % entry["id"],
                 )
             if download_type not in ("git", "zip", "dir"):
                 raise ApiError(
                     400,
                     "unsupported_download",
-                    "Do not know how to install a %r download." % (download_type or "missing"),
+                    "Não sei instalar um download do tipo %r." % (download_type or "missing"),
                 )
 
             installed = await self.installed_map_async()
@@ -1062,7 +1062,7 @@ class AppStore(object):
                     raise ApiError(
                         409,
                         "app_id_mismatch",
-                        "The download calls itself %r, not %r." % (app_id, expected_id),
+                        "O download se chama %r, não %r." % (app_id, expected_id),
                     )
                 if not expected_id:
                     self._guard_target(app_id, installed, update)
@@ -1124,14 +1124,14 @@ class AppStore(object):
 
         if download_type == "git":
             if not url:
-                raise ApiError(400, "invalid_download", "That entry has no git URL.")
+                raise ApiError(400, "invalid_download", "Esse item não tem endereço git.")
             await git_clone(url, unpacked, ref)
             # A shallow clone still carries a .git directory; the app is code we
             # own now, and an SD card has better uses for those blocks.
             await loop.run_in_executor(None, _rmtree, unpacked / ".git")
         elif download_type == "zip":
             if not url:
-                raise ApiError(400, "invalid_download", "That entry has no download URL.")
+                raise ApiError(400, "invalid_download", "Esse item não tem endereço de download.")
             payload = await fetch_bytes(url, MAX_DOWNLOAD_BYTES)
             archive = staging / "download.zip"
             await loop.run_in_executor(None, archive.write_bytes, payload)
@@ -1152,13 +1152,13 @@ class AppStore(object):
         try:
             raw = json.loads(manifest_file.read_text("utf-8"))
         except OSError as exc:
-            raise ApiError(400, "invalid_app", "Cannot read manifest.json: %s" % exc)
+            raise ApiError(400, "invalid_app", "Não dá para ler o manifest.json: %s" % exc)
         except ValueError as exc:
-            raise ApiError(400, "invalid_app", "manifest.json is not valid JSON: %s" % exc)
+            raise ApiError(400, "invalid_app", "O manifest.json não é um JSON válido: %s" % exc)
         try:
             return validate_manifest(raw)
         except ManifestError as exc:
-            raise ApiError(400, "invalid_app", "That app's manifest is not usable: %s" % exc)
+            raise ApiError(400, "invalid_app", "O manifesto desse app não serve: %s" % exc)
 
     def _swap_into_place(self, source: Path, final: Path) -> None:
         """Rename ``source`` onto ``final``, keeping the old copy until it works."""
@@ -1175,7 +1175,7 @@ class AppStore(object):
                     os.replace(str(backup), str(final))
                 except OSError:  # pragma: no cover - both moves failing is fatal
                     self.log.error("could not restore %s after a failed install", final)
-            raise ApiError(500, "install_failed", "Could not move the app into place: %s" % exc)
+            raise ApiError(500, "install_failed", "Não consegui pôr o app no lugar: %s" % exc)
         finally:
             if had_previous:
                 _rmtree(backup)
@@ -1202,7 +1202,7 @@ class AppStore(object):
         """Remove a user-installed app. Bundled apps are refused."""
         app_id = str(app_id or "").strip()
         if not APP_ID_RE.match(app_id):
-            raise ApiError(400, "invalid_app_id", "%r is not a valid app id." % app_id)
+            raise ApiError(400, "invalid_app_id", "%r não é um id de app válido." % app_id)
 
         async with self._get_lock():
             target = paths.apps_dir() / app_id
@@ -1211,9 +1211,9 @@ class AppStore(object):
                     raise ApiError(
                         400,
                         "app_bundled",
-                        "%s ships with project-os and cannot be uninstalled. Disable it instead." % app_id,
+                        "%s já vem no project-os e não dá para desinstalar. Desligue ele em vez disso." % app_id,
                     )
-                raise ApiError(404, "app_not_installed", "%s is not installed." % app_id)
+                raise ApiError(404, "app_not_installed", "%s não está instalado." % app_id)
 
             name = app_id
             manifest = _lenient_manifest(target)
@@ -1287,7 +1287,7 @@ def _copy_tree(source: Path, dest: Path) -> None:
                 raise ApiError(
                     400,
                     "unsafe_source",
-                    "That directory contains a symlink pointing outside itself: %s" % name,
+                    "Essa pasta tem um atalho apontando para fora dela: %s" % name,
                 )
 
 

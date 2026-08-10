@@ -52,13 +52,13 @@ def available(helper: str = HELPER) -> Dict[str, Any]:
                 "This installation has no password helper, so the system "
                 "password cannot be changed from here."
             ),
-            "hint": "It ships with the project-os image; a manual install sets the password with passwd.",
+            "hint": "Ele vem na imagem do project-os; numa instalação manual, a senha se define com passwd.",
         }
     if not os.access(helper, os.X_OK):
         return {
             "available": False,
             "user": SERVICE_USER,
-            "reason": "The password helper is not executable.",
+            "reason": "O ajudante de senha não está executável.",
             "hint": None,
         }
     return {"available": True, "user": SERVICE_USER, "reason": None, "hint": None}
@@ -92,7 +92,7 @@ def set_password(password: str, helper: str = HELPER, user: str = "") -> Dict[st
         return {
             "ok": False,
             "code": "empty",
-            "message": "The system password cannot be empty.",
+            "message": "A senha do sistema não pode ficar vazia.",
             "hint": None,
         }
     if "\n" in password or ":" in password:
@@ -100,7 +100,7 @@ def set_password(password: str, helper: str = HELPER, user: str = "") -> Dict[st
         return {
             "ok": False,
             "code": "bad_password",
-            "message": "The system password cannot contain a colon or a line break.",
+            "message": "A senha do sistema não pode ter dois-pontos nem quebra de linha.",
             "hint": None,
         }
 
@@ -109,7 +109,7 @@ def set_password(password: str, helper: str = HELPER, user: str = "") -> Dict[st
         return {
             "ok": False,
             "code": "needs_root",
-            "message": "This service cannot become root to set the password.",
+            "message": "Este serviço não consegue virar root para definir a senha.",
             "hint": None,
         }
 
@@ -122,7 +122,7 @@ def set_password(password: str, helper: str = HELPER, user: str = "") -> Dict[st
             timeout=TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        return {"ok": False, "code": "failed", "message": "Could not run the password helper: %s" % exc, "hint": None}
+        return {"ok": False, "code": "failed", "message": "Não consegui rodar o ajudante de senha: %s" % exc, "hint": None}
 
     if completed.returncode != 0:
         detail = (completed.stdout or b"").decode("utf-8", "replace").strip()
@@ -130,7 +130,7 @@ def set_password(password: str, helper: str = HELPER, user: str = "") -> Dict[st
         return {
             "ok": False,
             "code": "failed",
-            "message": "The password helper refused: %s" % (detail or "no reason given"),
+            "message": "O ajudante de senha recusou: %s" % (detail or "no reason given"),
             "hint": None,
         }
 

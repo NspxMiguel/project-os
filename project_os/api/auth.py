@@ -66,7 +66,7 @@ async def setup(
     an open box from being claimed twice by whoever finds it second.
     """
     if not auth.setup_required(db):
-        raise ApiError(409, "already_configured", "project-os already has a user.")
+        raise ApiError(409, "already_configured", "O project-os já tem um usuário.")
     user = await auth.create_user_async(db, payload.username, payload.password)
     session = auth.create_session(
         db, user["id"], user_agent=request.headers.get("user-agent"), config=config
@@ -87,12 +87,12 @@ async def login(
     config: Any = Depends(get_config),
 ) -> Dict[str, Any]:
     if auth.setup_required(db):
-        raise ApiError(428, "setup_required", "project-os has no user yet.")
+        raise ApiError(428, "setup_required", "O project-os ainda não tem usuário.")
     user = await auth.authenticate_async(db, payload.username, payload.password)
     if user is None:
         # One message for both "no such user" and "wrong password": telling them
         # apart is a free list of valid usernames.
-        raise ApiError(401, "invalid_credentials", "Wrong username or password.")
+        raise ApiError(401, "invalid_credentials", "Usuário ou senha errados.")
     session = auth.create_session(
         db, user["id"], user_agent=request.headers.get("user-agent"), config=config
     )
@@ -135,10 +135,10 @@ async def change_password(
     trying to invalidate.
     """
     if user.get("anonymous"):
-        raise ApiError(400, "no_account", "Authentication is disabled; there is no account.")
+        raise ApiError(400, "no_account", "O login está desligado; não existe conta.")
     current = await auth.authenticate_async(db, user["username"], payload.current_password)
     if current is None:
-        raise ApiError(403, "wrong_password", "The current password is not right.")
+        raise ApiError(403, "wrong_password", "A senha atual não está certa.")
     await auth.set_password_async(db, user["id"], payload.new_password)
     auth.delete_user_sessions(db, user["id"])
     log.info("password changed for %r; all sessions revoked", user["username"])

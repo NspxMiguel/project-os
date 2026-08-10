@@ -265,7 +265,7 @@ def next_change(moment: dt.datetime, schedule_cfg: Dict[str, Any]) -> Dict[str, 
     days out, for the next point where "would a session be playing" flips.
     """
     if not schedule_cfg.get("enabled", True):
-        return {"event": "none", "at": None, "window_id": None, "message": "Schedule is disabled."}
+        return {"event": "none", "at": None, "window_id": None, "message": "A agenda está desligada."}
 
     playing_now, current = _would_play(moment, schedule_cfg)
     cursor = moment

@@ -155,7 +155,7 @@ class AirPlayPlayer(Player):
             raise PlayerError(
                 "AirPlay scan failed",
                 code="airplay_scan_failed",
-                hint="Check that the Pi is on the same network (and VLAN) as the speaker.",
+                hint="Veja se o Pi está na mesma rede (e VLAN) da caixa de som.",
             ) from exc
 
     @staticmethod
@@ -202,7 +202,7 @@ class AirPlayPlayer(Player):
             raise PlayerError(
                 "No AirPlay receiver answered at %s." % (address or name),
                 code="airplay_not_found",
-                hint="Make sure the speaker is powered on and on this network.",
+                hint="Veja se a caixa de som está ligada e nesta rede.",
             )
 
         if wanted:
@@ -223,7 +223,7 @@ class AirPlayPlayer(Player):
         raise PlayerError(
             "Could not match %s to any AirPlay receiver on the network." % name,
             code="airplay_not_found",
-            hint="Re-run device discovery, then pick the output again.",
+            hint="Rode a busca de aparelhos de novo e escolha a saída outra vez.",
         )
 
     def _lookup_device(self, device_id: str) -> Any:
@@ -259,7 +259,7 @@ class AirPlayPlayer(Player):
             raise PlayerError(
                 message,
                 code="airplay_timeout",
-                hint="The device may be asleep; try again or wake it with the remote.",
+                hint="O aparelho pode estar dormindo; tente de novo ou acorde ele pelo controle.",
             ) from exc
         except asyncio.CancelledError:
             self._set_state(PlaybackState.IDLE)
@@ -317,7 +317,7 @@ class AirPlayPlayer(Player):
                 raise PlayerError(
                     "Track %s has no playable file or URL." % (item.label,),
                     code="track_unplayable",
-                    hint="Re-scan the library; the file may have moved.",
+                    hint="Releia a biblioteca; o arquivo pode ter mudado de lugar.",
                 )
 
         metadata = None
@@ -406,7 +406,7 @@ class AirPlayPlayer(Player):
         raise PlayerError(
             "This AirPlay speaker cannot pause a stream; stopping instead is the only option.",
             code="pause_unsupported",
-            hint="Use Stop, then Play to start the track again.",
+            hint="Use Parar e depois Tocar para começar a faixa de novo.",
             retryable=False,
         )
 
@@ -426,7 +426,7 @@ class AirPlayPlayer(Player):
         raise PlayerError(
             "This AirPlay speaker cannot resume a stream.",
             code="resume_unsupported",
-            hint="Press Play to start the track from the beginning.",
+            hint="Aperte Tocar para começar a faixa do início.",
             retryable=False,
         )
 
@@ -537,7 +537,7 @@ class AirPlayPlayer(Player):
             raise PlayerError(
                 "Could not start pairing with %s" % device_label(device),
                 code="pairing_failed",
-                hint="Make sure the speaker is awake and try again.",
+                hint="Veja se a caixa de som está acordada e tente de novo.",
             ) from exc
 
         provides_pin = bool(getattr(handler, "device_provides_pin", True))
@@ -579,7 +579,7 @@ class AirPlayPlayer(Player):
             raise PlayerError(
                 "No pairing in progress.",
                 code="no_pairing",
-                hint="Start pairing again from the Outputs list.",
+                hint="Comece o pareamento de novo pela lista de saídas.",
                 retryable=False,
             )
         handler = session["handler"]
@@ -603,7 +603,7 @@ class AirPlayPlayer(Player):
             raise PlayerError(
                 "Pairing failed",
                 code="pairing_failed",
-                hint="Check the PIN and try again.",
+                hint="Confira o PIN e tente de novo.",
             ) from exc
         await self._close_pairing()
         if paired:

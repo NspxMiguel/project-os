@@ -58,7 +58,7 @@ async def get_device(
 ) -> Dict[str, Any]:
     device = registry.get(device_id)
     if device is None:
-        raise ApiError(404, "device_not_found", "No device with id %r." % device_id)
+        raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % device_id)
     # to_dict, not the object: this route says it returns a mapping, and FastAPI
     # believes it. Returning the dataclass raised ResponseValidationError, so
     # every device's own page answered 500 -- the whole screen was dead.
@@ -81,7 +81,7 @@ async def device_recipes(
 
     device = registry.get(device_id)
     if device is None:
-        raise ApiError(404, "device_not_found", "No device with id %r." % device_id)
+        raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % device_id)
     installed = [item["id"] for item in plugins.list_apps()]
     # recipes.for_device reads the device like a mapping (device.get(...)), so it
     # gets the mapping. Handing it the dataclass raised AttributeError and the
@@ -104,7 +104,7 @@ async def update_device(
     user: Dict[str, Any] = Depends(auth.require_auth),
 ) -> Dict[str, Any]:
     if registry.get(device_id) is None:
-        raise ApiError(404, "device_not_found", "No device with id %r." % device_id)
+        raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % device_id)
     if payload.name is not None:
         registry.rename(device_id, payload.name.strip() or None)
     if payload.pinned is not None:
@@ -126,7 +126,7 @@ async def forget_device(
     next scan, minus its custom name. Use ``ignored`` to make it stay away.
     """
     if not registry.forget(device_id):
-        raise ApiError(404, "device_not_found", "No device with id %r." % device_id)
+        raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % device_id)
     return {"ok": True, "id": device_id}
 
 

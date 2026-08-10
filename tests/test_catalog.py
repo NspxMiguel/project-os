@@ -106,7 +106,7 @@ def test_a_builtin_that_is_not_written_yet_is_not_offered(auth_client) -> None:
 
     assert items["birdtunes"]["installable"] is True
     assert items["kasa"]["installable"] is False
-    assert "not built yet" in items["kasa"]["install_reason"]
+    assert "ainda não foi feito" in items["kasa"]["install_reason"]
 
 
 def test_installing_one_says_so_instead_of_failing_with_an_internal_error(auth_client) -> None:
@@ -114,5 +114,7 @@ def test_installing_one_says_so_instead_of_failing_with_an_internal_error(auth_c
     assert response.status_code == 501, response.text
     body = response.json()
     assert body["error"] == "installer_pending"
-    assert "not built yet" in body["message"]
-    assert "No app called" not in body["message"]
+    assert "ainda não foi feito" in body["message"]
+    # A resposta antiga era "Nenhum app chamado 'kasa'", que soa como defeito da
+    # caixa em vez de app que ainda não existe.
+    assert "Nenhum app chamado" not in body["message"]

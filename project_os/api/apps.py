@@ -36,7 +36,7 @@ class AppAction(BaseModel):
 def _require(plugins: Any, app_id: str) -> Any:
     record = plugins.get(app_id)
     if record is None:
-        raise ApiError(404, "app_not_found", "No app called %r is installed." % app_id)
+        raise ApiError(404, "app_not_found", "Nenhum app chamado %r está instalado." % app_id)
     return record
 
 
@@ -89,7 +89,7 @@ async def act(
     _require(plugins, app_id)
     method = getattr(plugins, payload.action, None)
     if method is None:  # pragma: no cover - ACTIONS is closed
-        raise ApiError(400, "unknown_action", "No such action %r." % payload.action)
+        raise ApiError(400, "unknown_action", "Não existe a ação %r." % payload.action)
     result = await method(app_id)
     log.info("app %s: %s (by %s)", app_id, payload.action, user.get("username"))
     return {"ok": True, "action": payload.action, "app": result}
@@ -111,7 +111,7 @@ async def app_logs(
     record = plugins.get(app_id)
     lines = db.recent_log(limit=limit, source="app.%s" % app_id)
     if not lines and record is None:
-        raise ApiError(404, "app_not_found", "No app called %r is installed." % app_id)
+        raise ApiError(404, "app_not_found", "Nenhum app chamado %r está instalado." % app_id)
     status = plugins.status_of(record) if record is not None else {"state": "missing"}
     return {"id": app_id, "state": status.get("state"), "lines": lines}
 

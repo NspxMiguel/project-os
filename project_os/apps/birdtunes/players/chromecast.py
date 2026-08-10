@@ -128,7 +128,7 @@ class ChromecastPlayer(Player):
             message = self._fail("Timed out connecting to %s" % device_label(device))
             raise PlayerError(
                 message, code="chromecast_timeout",
-                hint="The device may be asleep; try again or wake it from the Google Home app.",
+                hint="O aparelho pode estar dormindo; tente de novo ou acorde ele pelo app Google Home.",
             ) from exc
         except asyncio.CancelledError:
             self._set_state(PlaybackState.IDLE)
@@ -159,7 +159,7 @@ class ChromecastPlayer(Player):
             raise PlayerError(
                 "Track %s has no LAN-reachable URL." % item.label,
                 code="track_unplayable",
-                hint="Chromecast needs the app's signed media URL, not a local path.",
+                hint="O Chromecast precisa do endereço de mídia assinado do app, não de um caminho local.",
             )
         content_type = content_type_for(target)
         loop = asyncio.get_event_loop()
@@ -241,7 +241,7 @@ class ChromecastPlayer(Player):
             raise PlayerError(
                 "Timed out asking %s to play the video." % device_label(self.device),
                 code="youtube_timeout",
-                hint="The device may be asleep.",
+                hint="O aparelho pode estar dormindo.",
             ) from exc
         except Exception as exc:
             raise PlayerError(

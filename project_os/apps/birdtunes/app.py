@@ -128,7 +128,7 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
         try:
             float(raw)
         except (TypeError, ValueError):
-            raise ApiError(400, "bad_request", "The volume must be a number between 0 and 1.")
+            raise ApiError(400, "bad_request", "O volume tem que ser um número entre 0 e 1.")
         return await instance.set_volume(raw)
 
     # -- library -------------------------------------------------------
@@ -156,7 +156,7 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
     async def delete_library_track(track_id: str, _: Any = auth_dep) -> Dict[str, Any]:
         ok = library.delete_track(instance.ctx.db, track_id)
         if not ok:
-            raise ApiError(404, "not_found", "Track not found.")
+            raise ApiError(404, "not_found", "Faixa não encontrada.")
         instance.ctx.emit("library", {"kind": "track_deleted", "track_id": track_id})
         return {"deleted": True}
 
@@ -184,7 +184,7 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
         video_id = sources.youtube_video_id(url)
         if not video_id:
             raise ApiError(
-                400, "bad_url", "That does not look like a YouTube video link.",
+                400, "bad_url", "Isso não parece um link de vídeo do YouTube.",
                 "Paste a link like https://www.youtube.com/watch?v=... or https://youtu.be/...",
             )
         return await instance.play_youtube(video_id, str(body.get("title") or ""))
@@ -224,7 +224,7 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
     async def post_playlists(body: Dict[str, Any], _: Any = auth_dep) -> Dict[str, Any]:
         name = str(body.get("name") or "").strip()
         if not name:
-            raise ApiError(400, "bad_request", "A playlist needs a name.")
+            raise ApiError(400, "bad_request", "Uma playlist precisa de nome.")
         playlist = library.create_playlist(
             instance.ctx.db, name,
             description=body.get("description", ""), color=body.get("color", ""),
@@ -237,7 +237,7 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
     async def get_playlist(playlist_id: str, _: Any = auth_dep) -> Dict[str, Any]:
         playlist = library.get_playlist(instance.ctx.db, playlist_id)
         if playlist is None:
-            raise ApiError(404, "not_found", "Playlist not found.")
+            raise ApiError(404, "not_found", "Playlist não encontrada.")
         playlist = dict(playlist)
         playlist["tracks"] = library.playlist_tracks(instance.ctx.db, playlist_id)
         return {"playlist": playlist}
@@ -249,7 +249,7 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
         except ValueError as exc:
             raise ApiError(400, "bad_request", str(exc)) from exc
         if playlist is None:
-            raise ApiError(404, "not_found", "Playlist not found.")
+            raise ApiError(404, "not_found", "Playlist não encontrada.")
         return {"playlist": playlist}
 
     @router.delete("/playlists/{playlist_id}")
@@ -259,7 +259,7 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
         except ValueError as exc:
             raise ApiError(400, "bad_request", str(exc)) from exc
         if not ok:
-            raise ApiError(404, "not_found", "Playlist not found.")
+            raise ApiError(404, "not_found", "Playlist não encontrada.")
         return {"deleted": True}
 
     @router.post("/playlists/{playlist_id}/tracks")
@@ -344,7 +344,7 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
     @router.post("/convert")
     async def post_convert(body: Dict[str, Any], _: Any = auth_dep) -> Dict[str, Any]:
         if not sources.ffmpeg_available():
-            raise ApiError(409, "ffmpeg_missing", "ffmpeg is not installed, so tracks cannot be converted.")
+            raise ApiError(409, "ffmpeg_missing", "O ffmpeg não está instalado, então não dá para converter as faixas.")
         return {"queued": list(body.get("track_ids") or [])}
 
     # -- stats / history -------------------------------------------------
@@ -363,12 +363,12 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
     @router.get("/media/{track_id}")
     async def get_media(track_id: str, exp: int, t: str) -> FileResponse:
         if not _verify_media(instance.media_secret, track_id, exp, t):
-            raise ApiError(403, "forbidden", "This media link is invalid or has expired.")
+            raise ApiError(403, "forbidden", "Esse link de mídia é inválido ou já venceu.")
         track = library.get_track(instance.ctx.db, track_id)
         if track is None or track.get("missing") or not track.get("path"):
-            raise ApiError(404, "not_found", "Track not found.")
+            raise ApiError(404, "not_found", "Faixa não encontrada.")
         if not os.path.isfile(track["path"]):
-            raise ApiError(404, "not_found", "The file for this track is missing on disk.")
+            raise ApiError(404, "not_found", "O arquivo dessa faixa sumiu do disco.")
         return FileResponse(track["path"], media_type=content_type_for(track["path"]))
 
     return router
@@ -491,7 +491,7 @@ class BirdTunesApp(AppInstance):
              "kind": "percent"},
         ]
         if snapshot.get("queue_len"):
-            fields.append({"label": "In the queue", "value": snapshot["queue_len"], "kind": "number"})
+            fields.append({"label": "Na fila", "value": snapshot["queue_len"], "kind": "number"})
         if snapshot.get("next_change"):
             fields.append({"label": "Next change", "value": snapshot["next_change"], "kind": "relative"})
         return fields
@@ -604,7 +604,7 @@ class BirdTunesApp(AppInstance):
         begin = getattr(player, "begin_pairing", None)
         finish = getattr(player, "finish_pairing", None)
         if not callable(begin) or not callable(finish):
-            raise ApiError(400, "bad_request", "This output does not support pairing.")
+            raise ApiError(400, "bad_request", "Essa saída de som não aceita pareamento.")
         if pin is None:
             device = self._resolve_device(device_id)
             return await begin(device, protocol or "raop")
@@ -647,7 +647,7 @@ class BirdTunesApp(AppInstance):
         if not callable(caster):
             raise ApiError(
                 409, "output_cannot_cast_youtube",
-                "The %s output cannot play a YouTube video without downloading it."
+                "A saída %s não consegue tocar vídeo do YouTube sem baixar antes."
                 % getattr(player, "name", "current"),
                 "Chromecast can. For AirPlay, import the audio instead.",
             )
@@ -686,7 +686,7 @@ class BirdTunesApp(AppInstance):
         if track_id:
             track = library.get_track(self.ctx.db, track_id)
             if track is None:
-                raise ApiError(404, "not_found", "Track not found.")
+                raise ApiError(404, "not_found", "Faixa não encontrada.")
         else:
             track = self._pick_next(kind)
 
@@ -753,13 +753,13 @@ class BirdTunesApp(AppInstance):
 
     async def pause(self) -> Dict[str, Any]:
         if self._player is None:
-            raise ApiError(409, "not_playing", "Nothing is playing.")
+            raise ApiError(409, "not_playing", "Não tem nada tocando.")
         await self._player.pause()
         return self.status()
 
     async def resume(self) -> Dict[str, Any]:
         if self._player is None:
-            raise ApiError(409, "not_playing", "Nothing is playing.")
+            raise ApiError(409, "not_playing", "Não tem nada tocando.")
         await self._player.resume()
         return self.status()
 

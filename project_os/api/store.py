@@ -62,7 +62,9 @@ def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None) 
         # the card beats an Install button that answers "No app called 'kasa'".
         item["installable"] = plugins is None or bool(plugins.has(entry["id"]))
         if not item["installable"]:
-            item["install_reason"] = "%s is not built yet -- it is on the list." % entry["name"]
+            item["install_reason"] = (
+                "%s ainda não foi feito — está na lista." % entry["name"]
+            )
     if item["kind"] == "container":
         # Said up front, on the card, before the install button: a machine
         # with neither docker nor podman should not find that out mid-spinner.
@@ -116,7 +118,7 @@ async def detail(
 ) -> Dict[str, Any]:
     entry = catalog.get(app_id)
     if entry is None:
-        raise ApiError(404, "not_in_catalog", "The store has no entry called %r." % app_id)
+        raise ApiError(404, "not_in_catalog", "A loja não tem nenhum item chamado %r." % app_id)
     return _decorate(entry, _installed_ids(plugins), plugins)
 
 
@@ -130,9 +132,9 @@ async def install(
 ) -> Dict[str, Any]:
     entry = catalog.get(app_id)
     if entry is None:
-        raise ApiError(404, "not_in_catalog", "The store has no entry called %r." % app_id)
+        raise ApiError(404, "not_in_catalog", "A loja não tem nenhum item chamado %r." % app_id)
     if app_id in _installed_ids(plugins):
-        raise ApiError(409, "already_installed", "%s is already installed." % entry["name"])
+        raise ApiError(409, "already_installed", "%s já está instalado." % entry["name"])
 
     if not entry["fits"] and not body.accept_oversize:
         # Not a refusal -- a speed bump with the numbers on it. Send
@@ -153,7 +155,7 @@ async def install(
             raise ApiError(
                 501,
                 "installer_pending",
-                "%s is in the catalog but is not built yet -- it is on the list."
+                "%s está no catálogo mas ainda não foi feito — está na lista."
                 % entry["name"],
                 detail={"id": app_id, "kind": entry["kind"]},
             )
@@ -179,7 +181,7 @@ async def install(
             raise ApiError(
                 500,
                 "invalid_container_spec",
-                "%s has a container spec that is not usable: %s" % (entry["name"], exc),
+                "%s tem uma configuração de contêiner que não serve: %s" % (entry["name"], exc),
             )
         result = await plugins.install_container(app_id, entry, spec, engine)
         log.info("installed container app %s via %s (by %s)", app_id, engine, user.get("username"))
@@ -190,7 +192,7 @@ async def install(
     raise ApiError(
         501,
         "installer_pending",
-        "%s installs as a %s, and that installer is not finished yet."
+        "%s instala como %s, e esse instalador ainda não está pronto."
         % (entry["name"], entry["kind"]),
         detail={"id": app_id, "kind": entry["kind"], "plan": entry.get("install")},
     )
@@ -209,7 +211,7 @@ async def uninstall(
     Clearing data is a separate, explicit action.
     """
     if app_id not in _installed_ids(plugins):
-        raise ApiError(404, "not_installed", "%s is not installed." % app_id)
+        raise ApiError(404, "not_installed", "%s não está instalado." % app_id)
     info = plugins.info(app_id) or {}
     if info.get("source") == "container":
         result = await plugins.uninstall_container(app_id)

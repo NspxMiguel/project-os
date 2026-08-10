@@ -77,7 +77,7 @@ async def run_step(
 ) -> Dict[str, Any]:
     device = registry.get(body.device_id)
     if device is None:
-        raise ApiError(404, "device_not_found", "No device with id %r." % body.device_id)
+        raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % body.device_id)
     return await _run(body, device, plugins, config, None, user)
 
 
@@ -92,7 +92,7 @@ async def run_step_of(
 ) -> Dict[str, Any]:
     device = registry.get(body.device_id)
     if device is None:
-        raise ApiError(404, "device_not_found", "No device with id %r." % body.device_id)
+        raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % body.device_id)
     return await _run(body, device, plugins, config, recipe_id, user)
 
 
@@ -108,19 +108,19 @@ async def _run(
     if recipe_id and recipe is None:
         raise ApiError(404, "recipe_not_found", "No recipe called %r." % recipe_id)
     if recipe is None:
-        raise ApiError(400, "recipe_required", "Say which recipe the step belongs to.")
+        raise ApiError(400, "recipe_required", "Diga de qual receita é esse passo.")
     if not recipes_core.matches(recipe, device):
         # Recipes are matched to devices for a reason: "point Zigbee2MQTT at this
         # serial port" makes no sense aimed at a television.
         raise ApiError(
             409,
             "recipe_does_not_apply",
-            "%s does not apply to %s." % (recipe["id"], device.get("name") or device["id"]),
+            "%s não vale para %s." % (recipe["id"], device.get("name") or device["id"]),
         )
 
     steps = recipe["steps"]
     if body.step < 0 or body.step >= len(steps):
-        raise ApiError(404, "no_such_step", "%s has %d steps." % (recipe["id"], len(steps)))
+        raise ApiError(404, "no_such_step", "%s tem %d passos." % (recipe["id"], len(steps)))
 
     rendered = recipes_core.render(recipe, device)["steps"][body.step]
     step = steps[body.step]
@@ -130,7 +130,7 @@ async def _run(
         raise ApiError(
             400,
             "manual_step",
-            "This step is for you to do; the box cannot do it. %s" % rendered["text"],
+            "Esse passo é você que faz; a caixa não consegue. %s" % rendered["text"],
         )
 
     if kind == recipes_core.STEP_OPEN:

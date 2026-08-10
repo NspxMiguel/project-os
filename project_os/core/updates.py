@@ -160,18 +160,18 @@ def _fetch_json(url: str, timeout: float = NETWORK_TIMEOUT) -> Dict[str, Any]:
             raw = response.read()
     except HTTPError as exc:
         raise UpdateError(
-            "The update server answered %d." % exc.code, code="manifest_http_error",
-            hint="Check updates.manifest_url in Settings.",
+            "O servidor de atualização respondeu %d." % exc.code, code="manifest_http_error",
+            hint="Confira o updates.manifest_url nas Configurações.",
         )
     except URLError as exc:
         raise UpdateError(
-            "Could not reach the update server: %s" % exc.reason, code="offline",
-            hint="This box needs internet access to check for updates.",
+            "Não consegui alcançar o servidor de atualização: %s" % exc.reason, code="offline",
+            hint="Esta caixa precisa de internet para procurar atualização.",
         )
     try:
         return json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as exc:
-        raise UpdateError("The update manifest is not valid JSON.", code="bad_manifest") from exc
+        raise UpdateError("O manifesto de atualização não é um JSON válido.", code="bad_manifest") from exc
 
 
 def check_tarball(manifest_url: str) -> Dict[str, Any]:
@@ -181,13 +181,13 @@ def check_tarball(manifest_url: str) -> Dict[str, Any]:
     sha256 = str(manifest.get("sha256") or "").strip().lower()
     if not version or not url:
         raise UpdateError(
-            "The manifest is missing \"version\" or \"url\".", code="bad_manifest",
+            "Falta \"version\" ou \"url\" no manifesto.", code="bad_manifest",
         )
     if not sha256:
         raise UpdateError(
-            "The manifest has no sha256, so the download cannot be verified.",
+            "O manifesto não tem sha256, então não dá para conferir o download.",
             code="unverifiable",
-            hint="Every release must publish a checksum; refusing to install without one.",
+            hint="Toda versão tem que publicar a soma de verificação; sem ela, não instalo.",
         )
     return {
         "method": METHOD_TARBALL,
@@ -257,9 +257,9 @@ def _download(url: str, dest: str, expected_sha256: str,
     if actual != expected_sha256.lower():
         os.remove(dest)
         raise UpdateError(
-            "The download does not match the checksum in the manifest.",
+            "O download não bate com a soma de verificação do manifesto.",
             code="checksum_mismatch",
-            hint="Nothing was installed. Either the release is corrupt or it is not the one advertised.",
+            hint="Nada foi instalado. Ou a versão está corrompida, ou não é a que foi anunciada.",
         )
     if on_line:
         on_line("downloaded %.1f MB, sha256 ok" % (total / 1048576.0))
@@ -280,14 +280,14 @@ def _safe_extract(archive: str, into: str) -> str:
             target = os.path.realpath(os.path.join(into, member.name))
             if target != base and not target.startswith(base + os.sep):
                 raise UpdateError(
-                    "The archive tries to write outside the install directory (%s)." % member.name,
+                    "O pacote tenta escrever fora da pasta de instalação (%s)." % member.name,
                     code="unsafe_archive",
                 )
             if member.issym() or member.islnk():
                 link = os.path.realpath(os.path.join(os.path.dirname(target), member.linkname))
                 if link != base and not link.startswith(base + os.sep):
                     raise UpdateError(
-                        "The archive contains a link pointing outside (%s)." % member.name,
+                        "O pacote tem um atalho apontando para fora (%s)." % member.name,
                         code="unsafe_archive",
                     )
         tar.extractall(into)
@@ -322,7 +322,7 @@ def apply_tarball(info: Dict[str, Any], root: Optional[str] = None,
         extracted = _safe_extract(archive, os.path.join(workdir, "tree"))
         if not _looks_like_project_os(extracted):
             raise UpdateError(
-                "The archive does not contain a project-os tree.", code="bad_archive",
+                "O pacote não contém uma árvore do project-os.", code="bad_archive",
             )
 
         # Anything that must survive the swap is carried across rather than
@@ -371,7 +371,7 @@ def rollback(previous: str, root: Optional[str] = None) -> None:
     """Put a tarball update back the way it was."""
     where = os.path.abspath(root or root_dir())
     if not os.path.isdir(previous):
-        raise UpdateError("There is no previous version at %s." % previous, code="no_previous")
+        raise UpdateError("Não existe versão anterior em %s." % previous, code="no_previous")
     broken = "%s.failed" % where
     shutil.rmtree(broken, ignore_errors=True)
     if os.path.exists(where):

@@ -96,12 +96,12 @@ def _within(path: Path, root: Path) -> bool:
 def _resolve(config: Any, raw: str, must_exist: bool = True) -> Path:
     """Turn a client-supplied path into a real one inside a root, or raise."""
     if not raw or raw in (".", "./"):
-        raise ApiError(400, "bad_path", "A path is required.")
+        raise ApiError(400, "bad_path", "Falta o caminho.")
     if "\x00" in raw:
-        raise ApiError(400, "bad_path", "That path contains a null byte.")
+        raise ApiError(400, "bad_path", "Esse caminho tem um byte nulo.")
     roots = _roots(config)
     if not roots:  # pragma: no cover - home() creates itself
-        raise ApiError(503, "no_roots", "No readable directory is configured.")
+        raise ApiError(503, "no_roots", "Nenhuma pasta legível está configurada.")
 
     candidate = Path(raw).expanduser()
     if not candidate.is_absolute():
@@ -111,7 +111,7 @@ def _resolve(config: Any, raw: str, must_exist: bool = True) -> Path:
         # and its parent symlinks followed.
         resolved = candidate.resolve(strict=False)
     except (OSError, RuntimeError):
-        raise ApiError(400, "bad_path", "That path cannot be resolved.")
+        raise ApiError(400, "bad_path", "Não consigo resolver esse caminho.")
 
     if not any(_within(resolved, root) for root in roots):
         # The message names the roots on purpose: refusing without saying what is
@@ -119,17 +119,17 @@ def _resolve(config: Any, raw: str, must_exist: bool = True) -> Path:
         raise ApiError(
             403,
             "outside_sandbox",
-            "%s is outside the allowed directories (%s)."
+            "%s está fora das pastas permitidas (%s)."
             % (resolved, ", ".join(str(r) for r in roots)),
         )
     if must_exist and not resolved.exists():
-        raise ApiError(404, "not_found", "%s does not exist." % resolved)
+        raise ApiError(404, "not_found", "%s não existe." % resolved)
     return resolved
 
 
 def _require_write(config: Any) -> None:
     if not config.get("security.allow_file_write", True):
-        raise ApiError(403, "read_only", "File writing is turned off in the settings.")
+        raise ApiError(403, "read_only", "A escrita de arquivos está desligada nas configurações.")
 
 
 def _entry(path: Path) -> Dict[str, Any]:
@@ -186,11 +186,11 @@ async def list_directory(
     roots = _roots(config)
     target = _resolve(config, path) if path else roots[0]
     if not target.is_dir():
-        raise ApiError(400, "not_a_directory", "%s is a file." % target)
+        raise ApiError(400, "not_a_directory", "%s é um arquivo." % target)
     try:
         children = sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
     except PermissionError:
-        raise ApiError(403, "permission_denied", "Cannot read %s." % target)
+        raise ApiError(403, "permission_denied", "Não dá para ler %s." % target)
     entries = [
         _entry(child)
         for child in children
@@ -214,20 +214,20 @@ async def read_file(
 ) -> str:
     target = _resolve(config, path)
     if target.is_dir():
-        raise ApiError(400, "is_a_directory", "%s is a directory." % target)
+        raise ApiError(400, "is_a_directory", "%s é uma pasta." % target)
     if target.stat().st_size > MAX_EDIT_BYTES:
         raise ApiError(
             413,
             "too_large",
-            "%s is larger than %d MB; download it instead."
+            "%s é maior que %d MB; baixe o arquivo em vez de abrir."
             % (target.name, MAX_EDIT_BYTES // (1024 * 1024)),
         )
     try:
         return target.read_text("utf-8")
     except UnicodeDecodeError:
-        raise ApiError(415, "not_text", "%s is not a text file." % target.name)
+        raise ApiError(415, "not_text", "%s não é um arquivo de texto." % target.name)
     except PermissionError:
-        raise ApiError(403, "permission_denied", "Cannot read %s." % target)
+        raise ApiError(403, "permission_denied", "Não dá para ler %s." % target)
 
 
 @router.get("/download")
@@ -238,7 +238,7 @@ async def download(
 ) -> FileResponse:
     target = _resolve(config, path)
     if target.is_dir():
-        raise ApiError(400, "is_a_directory", "Cannot download a directory.")
+        raise ApiError(400, "is_a_directory", "Não dá para baixar uma pasta.")
     return FileResponse(str(target), filename=target.name)
 
 
@@ -258,17 +258,17 @@ async def write_file(
     _require_write(config)
     target = _resolve(config, path, must_exist=False)
     if target.is_dir():
-        raise ApiError(400, "is_a_directory", "%s is a directory." % target)
+        raise ApiError(400, "is_a_directory", "%s é uma pasta." % target)
     if not target.parent.is_dir():
-        raise ApiError(404, "no_parent", "%s does not exist." % target.parent)
+        raise ApiError(404, "no_parent", "%s não existe." % target.parent)
     temporary = target.with_name(target.name + ".project_os-tmp")
     try:
         temporary.write_text(body.content, "utf-8")
         os.replace(str(temporary), str(target))
     except PermissionError:
-        raise ApiError(403, "permission_denied", "Cannot write %s." % target)
+        raise ApiError(403, "permission_denied", "Não dá para escrever em %s." % target)
     except OSError as exc:
-        raise ApiError(500, "write_failed", "Could not write %s: %s" % (target, exc))
+        raise ApiError(500, "write_failed", "Não consegui escrever %s: %s" % (target, exc))
     finally:
         if temporary.exists():
             try:
@@ -287,11 +287,11 @@ async def make_directory(
     _require_write(config)
     target = _resolve(config, body.path, must_exist=False)
     if target.exists():
-        raise ApiError(409, "already_exists", "%s already exists." % target)
+        raise ApiError(409, "already_exists", "%s já existe." % target)
     try:
         target.mkdir(parents=True)
     except PermissionError:
-        raise ApiError(403, "permission_denied", "Cannot create %s." % target)
+        raise ApiError(403, "permission_denied", "Não dá para criar %s." % target)
     except OSError as exc:
         raise ApiError(500, "mkdir_failed", str(exc))
     return {"ok": True, "path": str(target)}
@@ -308,11 +308,11 @@ async def move(
     source = _resolve(config, body.source)
     destination = _resolve(config, body.destination, must_exist=False)
     if destination.exists():
-        raise ApiError(409, "already_exists", "%s already exists." % destination)
+        raise ApiError(409, "already_exists", "%s já existe." % destination)
     try:
         shutil.move(str(source), str(destination))
     except PermissionError:
-        raise ApiError(403, "permission_denied", "Cannot move %s." % source)
+        raise ApiError(403, "permission_denied", "Não dá para mover %s." % source)
     except OSError as exc:
         raise ApiError(500, "move_failed", str(exc))
     return {"ok": True, "source": str(source), "destination": str(destination)}
@@ -329,7 +329,7 @@ async def upload(
     _require_write(config)
     directory = _resolve(config, path)
     if not directory.is_dir():
-        raise ApiError(400, "not_a_directory", "%s is not a directory." % directory)
+        raise ApiError(400, "not_a_directory", "%s não é uma pasta." % directory)
     # Take only the basename: a browser is free to send "../../etc/cron.d/x" as
     # the filename, and some do it by accident with folder uploads.
     name = os.path.basename(file.filename or "upload.bin") or "upload.bin"
@@ -344,7 +344,7 @@ async def upload(
                 handle.write(chunk)
                 written += len(chunk)
     except PermissionError:
-        raise ApiError(403, "permission_denied", "Cannot write into %s." % directory)
+        raise ApiError(403, "permission_denied", "Não dá para escrever dentro de %s." % directory)
     except OSError as exc:
         raise ApiError(500, "upload_failed", str(exc))
     finally:
@@ -368,7 +368,7 @@ async def delete(
     _require_write(config)
     target = _resolve(config, path)
     if any(target == root for root in _roots(config)):
-        raise ApiError(403, "is_a_root", "%s is a root directory." % target)
+        raise ApiError(403, "is_a_root", "%s é uma pasta raiz." % target)
     try:
         if target.is_dir():
             if recursive:
@@ -379,8 +379,8 @@ async def delete(
             target.unlink()
     except OSError as exc:
         if isinstance(exc, PermissionError):
-            raise ApiError(403, "permission_denied", "Cannot delete %s." % target)
-        raise ApiError(409, "not_empty", "%s is not empty; pass recursive=true." % target)
+            raise ApiError(403, "permission_denied", "Não dá para apagar %s." % target)
+        raise ApiError(409, "not_empty", "%s não está vazia; mande recursive=true." % target)
     return {"ok": True, "path": str(target)}
 
 

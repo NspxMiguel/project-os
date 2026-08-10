@@ -148,11 +148,11 @@ def _privilege_prefix(command: str = "apt-get") -> List[str]:
     if _sudo_without_password(command):
         return ["sudo", "-n"]
     raise PackageError(
-        "Installing system packages needs root, and this service has neither.",
+        "Instalar pacote do sistema precisa de root, e este serviço não tem.",
         code="needs_root",
         hint=(
-            "Run project-os as a systemd service (the installer does), or give its "
-            "user passwordless sudo for apt."
+            "Rode o project-os como serviço do systemd (o instalador já faz isso), ou dê ao "
+            "usuário dele sudo sem senha para o apt."
         ),
     )
 
@@ -213,7 +213,7 @@ def check_name(source: str, name: str) -> str:
     pattern = APT_NAME if source == "apt" else FLATPAK_NAME
     if not text or not pattern.match(text):
         raise PackageError(
-            "%r is not a valid %s package name." % (name, source),
+            "%r não é um nome de pacote %s válido." % (name, source),
             code="bad_package_name",
         )
     return text
@@ -303,7 +303,7 @@ def search(query: str, sources: Optional[List[str]] = None, limit: int = MAX_RES
     """Search every usable backend. A backend that is missing says so."""
     text = str(query or "").strip()
     if len(text) < 2:
-        raise PackageError("Search for at least two characters.", code="query_too_short")
+        raise PackageError("Busque com pelo menos dois caracteres.", code="query_too_short")
 
     wanted = sources or ["apt", "flatpak"]
     items = []  # type: List[Dict[str, Any]]
@@ -433,10 +433,10 @@ class JobRunner(object):
             if self._current is not None:
                 current = self._jobs.get(self._current)
                 raise PackageError(
-                    "Another package job is still running (%s %s)."
+                    "Ainda tem outra tarefa de pacote rodando (%s %s)."
                     % (current.action if current else "?", current.package if current else "?"),
                     code="busy",
-                    hint="Wait for it to finish; package managers take one lock at a time.",
+                    hint="Espere terminar; gerenciador de pacotes trava um de cada vez.",
                 )
             job = Job(action, source, name, argv)
             self._jobs[job.id] = job

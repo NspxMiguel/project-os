@@ -72,7 +72,7 @@ def _parse_iso(value: Optional[str]) -> Optional[datetime]:
 # ---------------------------------------------------------------------------
 def hash_password(password: str, salt: Optional[bytes] = None, iterations: int = ITERATIONS) -> str:
     if not isinstance(password, str) or password == "":
-        raise ApiError(400, "invalid_password", "The password cannot be empty.")
+        raise ApiError(400, "invalid_password", "A senha não pode ficar vazia.")
     if salt is None:
         salt = secrets.token_bytes(SALT_BYTES)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
@@ -160,12 +160,12 @@ def create_user(db: Any, username: str, password: str) -> Dict[str, Any]:
         raise ApiError(
             400,
             "invalid_username",
-            "Use 1-64 characters: letters, digits and . _ @ + - only.",
+            "Use de 1 a 64 caracteres: letras, números e . _ @ + - só.",
         )
     if not password:
-        raise ApiError(400, "invalid_password", "The password cannot be empty.")
+        raise ApiError(400, "invalid_password", "A senha não pode ficar vazia.")
     if db.one("SELECT id FROM users WHERE username = ? COLLATE NOCASE", (username,)):
-        raise ApiError(409, "user_exists", "That username is already taken.")
+        raise ApiError(409, "user_exists", "Esse nome de usuário já está em uso.")
     now = _iso(_utcnow())
     cursor = db.execute(
         "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
@@ -176,7 +176,7 @@ def create_user(db: Any, username: str, password: str) -> Dict[str, Any]:
 
 def set_password(db: Any, user_id: int, password: str) -> None:
     if not password:
-        raise ApiError(400, "invalid_password", "The password cannot be empty.")
+        raise ApiError(400, "invalid_password", "A senha não pode ficar vazia.")
     db.execute(
         "UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(password), user_id)
     )
@@ -308,7 +308,7 @@ def _state(request: Request, name: str) -> Any:
 def _require_db(request: Request) -> Any:
     db = _state(request, "db")
     if db is None:
-        raise ApiError(503, "not_ready", "The database is not open yet.")
+        raise ApiError(503, "not_ready", "O banco de dados ainda não está aberto.")
     return db
 
 
@@ -368,11 +368,11 @@ async def require_auth(request: Request) -> Dict[str, Any]:
     db = _require_db(request)
     if setup_required(db):
         raise ApiError(
-            428, "setup_required", "project-os has no user yet. Finish setup first."
+            428, "setup_required", "O project-os ainda não tem usuário. Termine a configuração primeiro."
         )
     user = current_user(request)
     if user is None:
-        raise ApiError(401, "unauthenticated", "Sign in to continue.")
+        raise ApiError(401, "unauthenticated", "Entre na sua conta para continuar.")
     return user
 
 

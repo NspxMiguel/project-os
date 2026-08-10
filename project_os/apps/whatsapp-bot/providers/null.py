@@ -19,7 +19,7 @@ class NullProvider(Provider):
     def status(self) -> Dict[str, Any]:
         return {
             "connected": False,
-            "reason": "no provider configured -- set provider to cloud_api or bridge",
+            "reason": "nenhum provedor configurado — ponha provider como cloud_api ou bridge",
         }
 
     async def send_text(self, to: str, text: str) -> Dict[str, Any]:

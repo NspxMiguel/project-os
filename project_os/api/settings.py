@@ -62,7 +62,7 @@ def _clean(values: Dict[str, Any]) -> Dict[str, Any]:
             raise ApiError(
                 403,
                 "read_only_setting",
-                "%s can only be changed in the config file on the machine itself." % path,
+                "%s só pode ser mudado no arquivo de configuração, na própria máquina." % path,
             )
         if config_module.is_redacted(value):
             # The client is echoing back what we redacted: leave the real one be.

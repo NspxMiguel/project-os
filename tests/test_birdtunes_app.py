@@ -255,7 +255,7 @@ def test_next_change_reports_the_disabled_message():
     cfg = _schedule(enabled=False)
     result = scheduler.next_change(dt.datetime(2026, 8, 10, 10, 0), cfg)
     assert result["event"] == "none"
-    assert "disabled" in result["message"]
+    assert "desligada" in result["message"]
 
 
 def test_next_change_predicts_starts_and_stops():

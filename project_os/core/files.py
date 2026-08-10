@@ -143,14 +143,14 @@ def _outside(message: str = "", detail: Any = None) -> ApiError:
 
 
 def _no_such(path: Any) -> ApiError:
-    return ApiError(404, "not_found", "No such file or directory: %s" % (path,))
+    return ApiError(404, "not_found", "Não existe esse arquivo ou pasta: %s" % (path,))
 
 
 def _read_only() -> ApiError:
     return ApiError(
         403,
         "read_only",
-        "File writing is turned off. Set security.allow_file_write: true to enable it.",
+        "A escrita de arquivos está desligada. Ligue com security.allow_file_write: true.",
         {"config_key": "security.allow_file_write"},
     )
 
@@ -161,23 +161,23 @@ def _oserror(exc: OSError, path: Any) -> ApiError:
     if number in (errno.ENOENT, errno.ENOTDIR):
         return _no_such(path)
     if number in (errno.EACCES, errno.EPERM):
-        return ApiError(403, "permission_denied", "The system refused: %s" % (path,))
+        return ApiError(403, "permission_denied", "O sistema recusou: %s" % (path,))
     if number == errno.EISDIR:
-        return ApiError(400, "is_a_directory", "%s is a directory." % (path,))
+        return ApiError(400, "is_a_directory", "%s é uma pasta." % (path,))
     if number == errno.ENOTEMPTY:
-        return ApiError(409, "not_empty", "%s is not empty." % (path,))
+        return ApiError(409, "not_empty", "%s não está vazia." % (path,))
     if number == errno.EEXIST:
-        return ApiError(409, "already_exists", "%s already exists." % (path,))
+        return ApiError(409, "already_exists", "%s já existe." % (path,))
     if number == errno.ENOSPC:
-        return ApiError(507, "no_space", "The disk is full.")
+        return ApiError(507, "no_space", "O disco está cheio.")
     if number == errno.EXDEV:  # pragma: no cover - handled by shutil.move
-        return ApiError(400, "cross_device", "Source and destination are on different disks.")
+        return ApiError(400, "cross_device", "A origem e o destino estão em discos diferentes.")
     if number == errno.ENAMETOOLONG:
         return _invalid("That name is too long.")
     if number == errno.ELOOP:
         return _invalid("Too many symbolic links in %s." % (path,))
     log.warning("filesystem error on %s: %s", path, exc)
-    return ApiError(500, "io_error", "The filesystem returned an error: %s" % (exc,))
+    return ApiError(500, "io_error", "O sistema de arquivos deu erro: %s" % (exc,))
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ def root_paths(config: Any = None) -> List[Path]:
     try:
         first = paths.home()
     except OSError as exc:  # pragma: no cover - unwritable home
-        raise ApiError(500, "no_home", "PROJECT_OS_HOME is not usable: %s" % exc)
+        raise ApiError(500, "no_home", "O PROJECT_OS_HOME não serve: %s" % exc)
     out = [first]
     seen = {str(first)}
     for candidate in _configured_extra_roots(cfg):
@@ -531,7 +531,7 @@ def _require_dir(path: Path) -> os.stat_result:
     except OSError as exc:
         raise _oserror(exc, path)
     if not _stat.S_ISDIR(st.st_mode):
-        raise ApiError(400, "not_a_directory", "%s is not a directory." % path)
+        raise ApiError(400, "not_a_directory", "%s não é uma pasta." % path)
     return st
 
 
@@ -541,10 +541,10 @@ def _require_regular_file(path: Path) -> os.stat_result:
     except OSError as exc:
         raise _oserror(exc, path)
     if _stat.S_ISDIR(st.st_mode):
-        raise ApiError(400, "is_a_directory", "%s is a directory." % path)
+        raise ApiError(400, "is_a_directory", "%s é uma pasta." % path)
     if not _stat.S_ISREG(st.st_mode):
         # A FIFO or device node would block the executor thread forever.
-        raise ApiError(400, "not_a_file", "%s is not a regular file." % path)
+        raise ApiError(400, "not_a_file", "%s não é um arquivo comum." % path)
     return st
 
 
@@ -617,7 +617,7 @@ def _read_text_sync(path: Any, max_bytes: Optional[int], config: Any) -> Dict[st
         raise ApiError(
             413,
             "too_large",
-            "%s is %d bytes; the editor only opens files up to %d." % (target.name, size, limit),
+            "%s tem %d bytes; o editor só abre arquivos até %d." % (target.name, size, limit),
             {"size": size, "limit": limit},
         )
     try:
@@ -629,7 +629,7 @@ def _read_text_sync(path: Any, max_bytes: Optional[int], config: Any) -> Dict[st
         raise ApiError(
             413,
             "too_large",
-            "%s grew past the %d byte limit while it was being read." % (target.name, limit),
+            "%s passou do limite de %d bytes enquanto estava sendo lido." % (target.name, limit),
             {"limit": limit},
         )
     if b"\x00" in data[:SNIFF_BYTES]:
@@ -682,7 +682,7 @@ def _read_bytes_sync(path: Any, max_bytes: Optional[int], config: Any) -> bytes:
         raise ApiError(
             413,
             "too_large",
-            "%s is larger than %d bytes." % (target.name, limit),
+            "%s é maior que %d bytes." % (target.name, limit),
             {"size": int(st.st_size), "limit": limit},
         )
     try:
@@ -765,14 +765,14 @@ def _write_text_sync(
     require_write(config)
     target = resolve(path, config)
     if is_root(target, config):
-        raise ApiError(400, "is_a_directory", "That is a root folder, not a file.")
+        raise ApiError(400, "is_a_directory", "Isso é uma pasta raiz, não um arquivo.")
     text = "" if content is None else str(content)
     data = text.encode("utf-8")
     if len(data) > MAX_WRITE_BYTES:
         raise ApiError(
             413,
             "too_large",
-            "That file is %d bytes; the limit is %d." % (len(data), MAX_WRITE_BYTES),
+            "Esse arquivo tem %d bytes; o limite é %d." % (len(data), MAX_WRITE_BYTES),
             {"limit": MAX_WRITE_BYTES},
         )
     existing_mode = None  # type: Optional[int]
@@ -783,9 +783,9 @@ def _write_text_sync(
             raise _oserror(exc, target)
     else:
         if _stat.S_ISDIR(current.st_mode):
-            raise ApiError(400, "is_a_directory", "%s is a directory." % target)
+            raise ApiError(400, "is_a_directory", "%s é uma pasta." % target)
         if not _stat.S_ISREG(current.st_mode):
-            raise ApiError(400, "not_a_file", "%s is not a regular file." % target)
+            raise ApiError(400, "not_a_file", "%s não é um arquivo comum." % target)
         existing_mode = _stat.S_IMODE(current.st_mode)
 
     parent = target.parent
@@ -827,7 +827,7 @@ def _mkdir_sync(path: Any, parents: bool, exist_ok: bool, config: Any) -> Dict[s
     if is_root(target, config):
         if exist_ok:
             return _stat_sync(str(target), config)
-        raise ApiError(409, "already_exists", "%s already exists." % target)
+        raise ApiError(409, "already_exists", "%s já existe." % target)
     try:
         if parents:
             os.makedirs(str(target), mode=NEW_DIR_MODE, exist_ok=exist_ok)
@@ -836,7 +836,7 @@ def _mkdir_sync(path: Any, parents: bool, exist_ok: bool, config: Any) -> Dict[s
     except FileExistsError:
         if exist_ok:
             return _stat_sync(str(target), config)
-        raise ApiError(409, "already_exists", "%s already exists." % target)
+        raise ApiError(409, "already_exists", "%s já existe." % target)
     except OSError as exc:
         raise _oserror(exc, target)
     return _stat_sync(str(target), config)
@@ -855,7 +855,7 @@ def _delete_sync(path: Any, recursive: bool, config: Any) -> Dict[str, Any]:
     target = resolve(path, config, False)
     if is_root(target, config):
         raise ApiError(
-            400, "protected_path", "%s is a root folder and cannot be deleted." % target
+            400, "protected_path", "%s é uma pasta raiz e não pode ser apagada." % target
         )
     try:
         link_stat = os.lstat(str(target))
@@ -875,7 +875,7 @@ def _delete_sync(path: Any, recursive: bool, config: Any) -> Dict[str, Any]:
             raise ApiError(
                 400,
                 "is_a_directory",
-                "%s is a folder. Delete it with recursive: true if you mean it." % target.name,
+                "%s é uma pasta. Apague com recursive: true se for isso mesmo." % target.name,
                 {"path": str(target)},
             )
         errors = []  # type: List[str]
@@ -888,7 +888,7 @@ def _delete_sync(path: Any, recursive: bool, config: Any) -> Dict[str, Any]:
             raise ApiError(
                 500,
                 "delete_failed",
-                "%d item(s) under %s could not be removed." % (len(errors), target.name),
+                "%d item(ns) dentro de %s não puderam ser apagados." % (len(errors), target.name),
                 {"failed": errors[:20]},
             )
     else:
@@ -922,11 +922,11 @@ def _destination(source: Path, raw_dest: Any, config: Any) -> Path:
 
 def _prepare_move_target(source: Path, dest: Path, overwrite: bool, config: Any) -> None:
     if is_root(source, config):
-        raise ApiError(400, "protected_path", "%s is a root folder." % source)
+        raise ApiError(400, "protected_path", "%s é uma pasta raiz." % source)
     if is_root(dest, config):
-        raise ApiError(409, "already_exists", "%s is a root folder." % dest)
+        raise ApiError(409, "already_exists", "%s é uma pasta raiz." % dest)
     if source == dest:
-        raise ApiError(400, "same_path", "The source and the destination are the same file.")
+        raise ApiError(400, "same_path", "A origem e o destino são o mesmo arquivo.")
     if not os.path.lexists(str(source)):
         raise _no_such(source)
     if not dest.parent.is_dir():
@@ -936,7 +936,7 @@ def _prepare_move_target(source: Path, dest: Path, overwrite: bool, config: Any)
             raise ApiError(
                 409,
                 "already_exists",
-                "%s already exists. Pass overwrite: true to replace it." % dest.name,
+                "%s já existe. Mande overwrite: true para substituir." % dest.name,
                 {"path": str(dest)},
             )
         try:
@@ -947,7 +947,7 @@ def _prepare_move_target(source: Path, dest: Path, overwrite: bool, config: Any)
             raise ApiError(
                 409,
                 "already_exists",
-                "%s is an existing folder; remove it first." % dest.name,
+                "%s é uma pasta que já existe; apague ela antes." % dest.name,
             )
         try:
             os.unlink(str(dest))
@@ -960,7 +960,7 @@ def _rename_sync(src: Any, dst: Any, overwrite: bool, config: Any) -> Dict[str, 
     source = resolve(src, config, False)
     dest = _destination(source, dst, config)
     if str(dest).startswith(str(source) + os.sep):
-        raise ApiError(400, "invalid_move", "A folder cannot be moved inside itself.")
+        raise ApiError(400, "invalid_move", "Uma pasta não pode ser movida para dentro dela mesma.")
     _prepare_move_target(source, dest, overwrite, config)
     try:
         # shutil.move, not os.replace: a media root can live on another disk.
@@ -994,7 +994,7 @@ def _copy_sync(src: Any, dst: Any, overwrite: bool, config: Any) -> Dict[str, An
     source = resolve(src, config)
     dest = _destination(source, dst, config)
     if str(dest).startswith(str(source) + os.sep):
-        raise ApiError(400, "invalid_copy", "A folder cannot be copied inside itself.")
+        raise ApiError(400, "invalid_copy", "Uma pasta não pode ser copiada para dentro dela mesma.")
     _prepare_move_target(source, dest, overwrite, config)
     try:
         source_stat = os.stat(str(source))
@@ -1006,7 +1006,7 @@ def _copy_sync(src: Any, dst: Any, overwrite: bool, config: Any) -> Dict[str, An
         elif _stat.S_ISREG(source_stat.st_mode):
             shutil.copy2(str(source), str(dest))
         else:
-            raise ApiError(400, "not_a_file", "%s is not a regular file." % source)
+            raise ApiError(400, "not_a_file", "%s não é um arquivo comum." % source)
     except OSError as exc:
         raise _oserror(exc, dest)
     except shutil.Error as exc:
@@ -1099,7 +1099,7 @@ async def _iter_chunks(stream: Any) -> AsyncIterator[bytes]:
             if chunk:
                 yield bytes(chunk)
         return
-    raise ApiError(400, "bad_upload", "The upload body could not be read.")
+    raise ApiError(400, "bad_upload", "Não deu para ler o envio.")
 
 
 async def save_upload(
@@ -1126,7 +1126,7 @@ async def save_upload(
         raise ApiError(
             409,
             "already_exists",
-            "%s already exists here. Pass overwrite=true to replace it." % name,
+            "%s já existe aqui. Mande overwrite=true para substituir." % name,
             {"path": str(target), "name": name},
         )
 
@@ -1141,7 +1141,7 @@ async def save_upload(
                 raise ApiError(
                     413,
                     "too_large",
-                    "That upload is over the %d byte limit." % limit,
+                    "Esse envio passa do limite de %d bytes." % limit,
                     {"limit": limit},
                 )
             buffer.extend(chunk)

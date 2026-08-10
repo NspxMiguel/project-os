@@ -71,7 +71,7 @@ class NullPlayer(Player):
         if not self._connected:
             raise PlayerError(
                 "Not connected.", code="not_connected",
-                hint="Select an output in BirdTunes settings (the null output connects to nothing).",
+                hint="Escolha uma saída de som nas configurações do BirdTunes (a saída vazia não liga em nada).",
             )
         item = Track.coerce(track)
         await self._cancel_timer()
