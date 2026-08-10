@@ -538,6 +538,9 @@ def scan_neighbours() -> List[Observation]:
                 capabilities=[],
                 strong_keys=[token] if token else [],
                 weak_keys=["addr:" + address],
+                # The MAC is for staying the same row between scans, not for
+                # claiming to know what this is. See Observation.anonymous.
+                anonymous=True,
             )
         )
     return found

@@ -399,6 +399,10 @@ _HEX_RE = re.compile(r"^[0-9a-f]+$")
 _MDNS_ESCAPE_RE = re.compile(r"\\(\d{3}|.)")
 _SERVICE_SUFFIX_RE = re.compile(r"\._[a-z0-9-]+\._(tcp|udp)\.?(local\.?)?$", re.IGNORECASE)
 _ID_LOOKING_RE = re.compile(r"[0-9a-f]{16,}")
+
+#: An IPv4 or IPv6 address used where a name should be: the fallback label for a
+#: device nobody named. Two of those on one host are not "the same name".
+_ADDRESS_LIKE_RE = re.compile(r"^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]+:[0-9a-fA-F:]*)$")
 _SLUG_RE = re.compile(r"[^a-z0-9._-]+")
 
 _UNSET = object()
@@ -745,6 +749,14 @@ class Observation(object):
     strong_keys: List[str] = field(default_factory=list)
     weak_keys: List[str] = field(default_factory=list)
 
+    #: "Something answered at this address" -- an ARP neighbour, no service, no
+    #: name. It carries a MAC so it stays the same row between scans, but that
+    #: MAC must not make it *count* as an identified device: the merge rule folds
+    #: anonymous observations into an identified one, and a neighbour that looked
+    #: identified never folded. The result on a real house was every Apple TV,
+    #: speaker and television listed twice, once by name and once as a bare IP.
+    anonymous: bool = False
+
     def label(self) -> str:
         """The best human name this one observation can offer."""
         friendly = _lower_get(self.properties, "fn", "friendlyname", "name", "n")
@@ -767,6 +779,21 @@ def instance_label(instance: str) -> str:
 
 def _looks_like_id(text: str) -> bool:
     return bool(_ID_LOOKING_RE.search((text or "").lower()))
+
+
+def _name_key(text: str) -> str:
+    """A name reduced to what "the same name" means, or "" when it means nothing.
+
+    Case and spacing are noise: ``TV Cozinha`` and ``tv  cozinha`` are one
+    television. An id-looking string is not a name at all, and an address is a
+    placeholder -- neither may be the reason two devices merge.
+    """
+    name = " ".join((text or "").split()).strip()
+    if not name or _looks_like_id(name):
+        return ""
+    if _ADDRESS_LIKE_RE.match(name):
+        return ""
+    return name.casefold()
 
 
 def observe_service(
@@ -892,23 +919,76 @@ def merge_observations(observations: Sequence[Observation]) -> List[Device]:
                 tokens.update(observation.strong_keys)
         return tokens
 
+    def members_of(root: int) -> List[Observation]:
+        return [o for index, o in enumerate(items) if groups.find(index) == root]
+
+    def is_identified(root: int) -> bool:
+        """A cluster somebody actually named, as opposed to an address that replied."""
+        members = members_of(root)
+        return bool(strong_of(root)) and not all(o.anonymous for o in members)
+
+    def cluster_name(root: int) -> str:
+        members = members_of(root)
+        return _name_key(_pick_name(members, members[0]))
+
     by_weak = {}  # type: Dict[str, List[int]]
     for index, observation in enumerate(items):
         for token in observation.weak_keys:
             by_weak.setdefault(token, []).append(index)
 
-    for members in by_weak.values():
+    def roots_for(members: Sequence[int]) -> List[int]:
         roots = []  # type: List[int]
         for index in members:
             root = groups.find(index)
             if root not in roots:
                 roots.append(root)
+        return roots
+
+    # Pass 2a: one box, two protocols. A television answers Google Cast *and*
+    # the Android TV remote service with different strong ids; a HomePod answers
+    # AirPlay and RAOP. Same host and the same name is not a guess -- it is the
+    # device saying its own name twice -- and without this every TV in the house
+    # appeared three times: as a Chromecast, as a TV, and as a bare address.
+    for members in by_weak.values():
+        identified = [r for r in roots_for(members) if is_identified(r)]
+        if len(identified) < 2:
+            continue
+        by_name = {}  # type: Dict[str, List[int]]
+        for root in identified:
+            name = cluster_name(root)
+            if name:
+                by_name.setdefault(name, []).append(root)
+        for same_name in by_name.values():
+            for root in same_name[1:]:
+                groups.union(root, same_name[0])
+
+    for members in by_weak.values():
+        roots = roots_for(members)
         if len(roots) < 2:
             continue
-        identified = [r for r in roots if strong_of(r)]
-        anonymous = [r for r in roots if not strong_of(r)]
+        identified = [r for r in roots if is_identified(r)]
+        anonymous = [r for r in roots if not is_identified(r)]
         if not anonymous:
             continue
+        # An anonymous service that calls itself exactly what one of the
+        # identified devices calls itself belongs to that device. A HomePod
+        # answers _companion-link with no id at all, and it was becoming a
+        # second "HomePod Direito" sitting next to the real one.
+        if len(identified) > 1:
+            for root in list(anonymous):
+                name = cluster_name(root)
+                if not name:
+                    continue
+                matches = [r for r in identified if cluster_name(r) == name]
+                if len(matches) == 1:
+                    groups.union(root, matches[0])
+                    anonymous.remove(root)
+            if not anonymous:
+                continue
+            identified = [r for r in roots_for(members) if is_identified(r)]
+            anonymous = [r for r in roots_for(members) if not is_identified(r)]
+            if not anonymous:
+                continue
         if len(identified) == 1:
             for root in anonymous:
                 groups.union(root, identified[0])
@@ -923,7 +1003,26 @@ def merge_observations(observations: Sequence[Observation]) -> List[Device]:
     for index, observation in enumerate(items):
         clustered.setdefault(groups.find(index), []).append(observation)
 
-    devices = [_build_device(members) for members in clustered.values()]
+    # An ARP hit at an address where a named device already lives says nothing
+    # that is not already on the screen. Where exactly one device owns the
+    # address it was merged in above; where several do, merging would pin one
+    # device's MAC onto another, so it is dropped instead. Keeping it produced a
+    # row called "10.0.0.68" directly under "HomePod Direito", at 10.0.0.68.
+    identified_addresses = set()  # type: Set[str]
+    for root, members in clustered.items():
+        if any(not o.anonymous for o in members) and strong_of(root):
+            identified_addresses.update(o.address for o in members if o.address)
+
+    surviving = {
+        root: members
+        for root, members in clustered.items()
+        if not (
+            all(o.anonymous for o in members)
+            and any(o.address in identified_addresses for o in members if o.address)
+        )
+    }
+
+    devices = [_build_device(members) for members in surviving.values()]
     devices.sort(key=lambda d: (_kind_rank(d.kind), (d.name or "").lower(), d.id))
     return devices
 

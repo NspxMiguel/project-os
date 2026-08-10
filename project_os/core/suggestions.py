@@ -412,7 +412,11 @@ def rule_no_zeroconf(ctx: Context) -> List[Dict[str, Any]]:
     if ctx.registry is None:
         return []
     try:
-        if ctx.registry.summary().get("zeroconf"):
+        # The key is "available". There has never been a "zeroconf" key -- the
+        # backend's *name* is under "backend" -- so this asked for something that
+        # is always None and the card sat on the dashboard of a box that had
+        # found twenty-five devices by mDNS.
+        if ctx.registry.summary().get("available"):
             return []
     except Exception:  # pragma: no cover
         return []
