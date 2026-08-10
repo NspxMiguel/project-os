@@ -29,7 +29,12 @@ router = APIRouter(prefix="/system", tags=["system"])
 
 #: Units project-os is willing to talk about. An arbitrary unit name from the
 #: browser is not accepted -- that would be a remote root shell with extra steps.
-MANAGED_UNIT_PREFIXES = ("project_os", "home-assistant", "mosquitto", "zigbee2mqtt",
+#
+# "project-os" with a hyphen: the units are ``project-os.service`` and
+# ``project-os-firstboot.service``. The pre-rename spelling survived here and
+# matched nothing, so the Services screen on a real box listed zero units --
+# including project-os's own.
+MANAGED_UNIT_PREFIXES = ("project-os", "home-assistant", "mosquitto", "zigbee2mqtt",
                          "esphome", "nodered", "zwave-js-ui", "argos", "pihole-FTL",
                          "syncthing", "uptime-kuma", "scrypted")
 

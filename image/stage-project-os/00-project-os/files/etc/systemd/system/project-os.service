@@ -16,8 +16,24 @@ ExecStart=/opt/project-os/bin/project-os --host 0.0.0.0 --port 80
 # kind of thing that makes a box feel like a script instead of a system. The
 # capability is granted to the process, not root to the user.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-NoNewPrivileges=yes
+
+# Deliberately NOT NoNewPrivileges=yes, and deliberately no CapabilityBoundingSet.
+#
+# Both were here as reflex hardening and both broke the product. NoNewPrivileges
+# stops setuid binaries from working at all, so `sudo` answered
+#
+#   sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+#
+# and Advanced mode reported "apt is here, but this service cannot become root"
+# on the one machine where it is supposed to work -- "o botao advanced eu falei
+# q é um linux normal". A restricted bounding set would break it a second time
+# even with sudo working, because apt running as root still needs CAP_CHOWN and
+# CAP_DAC_OVERRIDE to unpack a package.
+#
+# What actually limits this process is /etc/sudoers.d/010_project-os: apt-get,
+# apt-mark, flatpak, systemctl and the password helper, and nothing else. That
+# is the barrier -- a narrow list of commands, not a flag that also disables the
+# feature the box exists for.
 
 Restart=always
 RestartSec=3

@@ -85,10 +85,22 @@ def _is_root() -> bool:
 #: different questions with different answers.
 _sudo_cache = {}  # type: Dict[str, bool]
 
+#: What sudo *said* when it refused, kept so the screen can repeat it. "This
+#: service cannot become root" is true and useless; the machine that refused had
+#: a perfectly good sudoers and was blocked by NoNewPrivileges in the unit file,
+#: which took a shell on the box to discover. sudo knew the answer all along.
+_sudo_error = {}  # type: Dict[str, str]
+
 
 def reset_privilege_cache() -> None:
     """Forget what sudo said. Used by tests and after a sudoers change."""
     _sudo_cache.clear()
+    _sudo_error.clear()
+
+
+def sudo_refusal(command: str = "apt-get") -> str:
+    """sudo's own words for why it said no, or "" if it never did."""
+    return _sudo_error.get(command, "")
 
 
 def _sudo_without_password(command: str = "apt-get") -> bool:
@@ -111,10 +123,18 @@ def _sudo_without_password(command: str = "apt-get") -> bool:
         try:
             result = subprocess.run(
                 ["sudo", "-n", "-l", command],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                 timeout=5.0, check=False,
             )
             allowed = result.returncode == 0
+            if not allowed:
+                raw = getattr(result, "stderr", None) or b""
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8", "replace")
+                text = raw.strip()
+                # sudo talks in paragraphs when it is unhappy; the first line is
+                # the reason and the rest is advice for a container admin.
+                _sudo_error[command] = text.splitlines()[0] if text else ""
         except (OSError, subprocess.SubprocessError):
             allowed = False
     _sudo_cache[command] = allowed
@@ -147,6 +167,9 @@ def backends() -> List[Dict[str, Any]]:
         apt_reason = "O apt não existe nesta máquina (ela não é baseada em Debian)."
     elif not (_is_root() or _sudo_without_password("apt-get")):
         apt_reason = "O apt está aqui, mas este serviço não consegue virar root para usá-lo."
+        said = sudo_refusal("apt-get")
+        if said:
+            apt_reason += " O sudo respondeu: %s" % said
     result.append({
         "id": "apt",
         "name": "Pacotes do sistema (apt)",

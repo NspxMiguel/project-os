@@ -61,6 +61,11 @@ GIT_TIMEOUT = 120.0
 METHOD_GIT = "git"
 METHOD_TARBALL = "tarball"
 
+#: The systemd unit the image installs. Spelled once, here, because the last
+#: time it was spelled inline it kept the pre-rename underscore and every
+#: update silently failed to restart anything.
+UNIT_NAME = "project-os.service"
+
 #: Never inside the code tree, and never removed by an update.
 KEEP_IN_PLACE = (".venv", "PEDIDOS.md")
 
@@ -422,8 +427,12 @@ def restart(on_line: Optional[Any] = None) -> str:
     """
     say = on_line or (lambda line: None)
     if under_systemd() and shutil.which("systemctl"):
-        say("restarting the project_os service")
-        subprocess.Popen(["systemctl", "restart", "project_os"])
+        # The unit is ``project-os.service``. It was ``project_os`` before the
+        # rename, and restarting a unit that does not exist fails quietly: the
+        # update reported success and the box went on serving the old code until
+        # somebody happened to reboot it.
+        say("reiniciando o serviço project-os")
+        subprocess.Popen(["systemctl", "restart", UNIT_NAME])
         return "systemd"
     argv = restart_argv()
     # The swap renamed the directory this process is sitting in, and a working
