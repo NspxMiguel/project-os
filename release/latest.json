@@ -1,6 +1,6 @@
 {
-  "version": "0.3.0",
-  "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.3.0/project-os-0.3.0.tar.gz",
-  "sha256": "c33e0c74ac8e1556fd9321f1dda206cfe1360380c20d748795754685e42900fb",
-  "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.3.0"
+  "version": "0.3.1",
+  "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.3.1/project-os-0.3.1.tar.gz",
+  "sha256": "ef93fdb110a3d27cee28c74a3015d642087f49a8618484d0e79527afbf17f11a",
+  "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.3.1"
 }
