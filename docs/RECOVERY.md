@@ -65,6 +65,40 @@ Essa é a parte que faz a promessa valer: quem decide é código que roda **ante
 sistema, num lugar que a atualização nunca toca. Um slot novo completamente quebrado
 custa dois minutos de boot em falso, não uma viagem até o PC.
 
+### Três detalhes que fazem a diferença entre funcionar e parecer que funciona
+
+Cada um destes já estava errado uma vez, e nenhum dá erro quando está errado.
+
+**A escolha do slot sai pelo `/conf/param.conf`, não por `export ROOT`.** Os scripts
+de `local-top` não rodam dentro do shell do init: o arquivo `ORDER`, que o
+initramfs-tools gera, chama cada um como processo filho e só então faz `source` de
+`/conf/param.conf`. Um `export` morre com o filho — o init seguiria montando a
+partição que o `cmdline.txt` manda, a p2, sempre. O sintoma seria o pior possível:
+o Pi liga normal, tudo funciona, e a troca de sistema nunca acontece. Toda
+atualização gravaria o slot B e todo boot subiria o slot A.
+Preso por `tests/test_slot_boot.py`, que roda o script como processo filho.
+
+**O identificador do disco é preservado no reparticionamento.** O `cmdline.txt` pede
+`root=PARTUUID=<id>-02` e o `fstab` monta `/boot/firmware` por `PARTUUID=<id>-01` —
+os dois derivam do `label-id` do MBR, e o `sfdisk` sorteia um novo quando a tabela
+que a gente escreve não diz qual é. Trocá-lo apaga as duas referências de uma vez:
+a partição de boot deixa de montar. Preso por `tests/test_layout.py`.
+
+**O `fstab` de um slot aponta para o próprio slot.** Um sistema chega ao slot B
+copiado ou desempacotado, e nos dois casos o `/etc/fstab` que vem junto diz que a
+raiz é a p2, porque era verdade na origem. Apagar a linha não resolve: o
+`cmdline.txt` não tem `rw`, então o kernel monta a raiz **somente leitura** e quem a
+remonta para escrita é o `systemd-remount-fs`, lendo exatamente essa linha. Sem ela
+o slot sobe, responde, e não grava nada. Quem conserta é o `fstab-slot.sh`, chamado
+pelos dois caminhos. Preso por `tests/test_sysupdate_fstab.py`.
+
+E um quarto, do lado do firmware: o `config.txt` usa `auto_initramfs=1` e **não** tem
+linha `initramfs <arquivo>`. O cartão traz quatro kernels e o Pi 3B sobe o `kernel7`;
+um initramfs carrega dentro os módulos do kernel para o qual foi gerado. Forçar um
+arquivo só — que na v0.4.1 era o de 64 bits — deixa o Pi esperando para sempre um
+cartão SD cujo driver não está lá dentro. Preso pela build e por
+`scripts/verify-image-docker.sh`, que confere os quatro, um a um.
+
 ## 4. Como uma atualização de sistema acontece
 
 Nada disso é escrito à mão: é o botão "Atualizar" da tela, com o passo a passo

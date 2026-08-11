@@ -95,5 +95,25 @@ sync
 umount "$MONTAGEM" 2>/dev/null
 
 ROOT="${DISCO}${SEP}${NUMERO}"
+
+# É AQUI que a escolha vira realidade, e o jeito óbvio não funciona.
+#
+# Estes scripts não rodam dentro do shell do init. O arquivo ORDER, que o
+# initramfs-tools gera, chama cada um como **processo filho** e, logo depois de
+# cada um, faz source de /conf/param.conf:
+#
+#     /scripts/local-top/project-os-slot "$@"
+#     [ -e /conf/param.conf ] && . /conf/param.conf
+#
+# Um "export ROOT" aqui morre junto com o filho. O init seguiria montando a
+# partição que o cmdline.txt mandou -- a p2, sempre -- e o esquema de dois
+# sistemas viraria enfeite: toda atualização gravaria o slot B, todo boot subiria
+# o slot A, e a volta atrás não voltaria para lugar nenhum. Tudo silencioso.
+#
+# O param.conf é o canal de verdade, o mesmo que o cryptroot usa para entregar a
+# raiz destravada. O local_mount_root() lê ${ROOT} **depois** de rodar estes
+# scripts, então o que for escrito aqui é o que ele monta.
+echo "ROOT=$ROOT" >> /conf/param.conf
 export ROOT
+
 aviso "subindo o slot $SLOT ($ROOT), tentativa $TRIES"

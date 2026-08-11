@@ -10,6 +10,11 @@ User=project-os
 Group=project-os
 Environment=PROJECT_OS_HOME=/var/lib/project-os
 WorkingDirectory=/opt/project-os
+# Uma partição ext4 recém-formatada pertence ao root, e este serviço não é root.
+# Sem isto, o primeiro boot depois do reparticionamento sobe com um diretório de
+# dados que o project-os não consegue escrever. O "+" faz este passo (e só ele)
+# rodar como root.
+ExecStartPre=+/usr/bin/install -d -m 755 -o project-os -g project-os /var/lib/project-os
 ExecStart=/opt/project-os/bin/project-os --host 0.0.0.0 --port 80
 
 # Port 80 so the address is just the IP -- typing a port number is exactly the

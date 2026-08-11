@@ -46,6 +46,7 @@ criar_cartao() {
     dd if=/dev/zero of="$imagem" bs=1M count=0 seek="$tamanho_mb" status=none
     sfdisk --quiet "$imagem" >/dev/null <<TAB
 label: dos
+label-id: 0x5671f673
 unit: sectors
 ${imagem}1 : start=8192, size=1048576, type=c
 ${imagem}2 : start=1056768, size=$((raiz_mb * 2048)), type=83
@@ -90,6 +91,27 @@ P1_TAM=$(sfdisk -d "$LOOP" | sed -n "s|^${LOOP}p1 .*size=[[:space:]]*\([0-9]*\).
 
 [ "$(blkid -o value -s TYPE "${LOOP}p1")" = "vfat" ] && ok "boot continua FAT" || falha "boot deixou de ser FAT"
 
+# O identificador do disco. O cmdline.txt manda o kernel montar
+# root=PARTUUID=<id>-02 e o fstab monta /boot/firmware por PARTUUID=<id>-01 --
+# os dois derivam deste número. O sfdisk sorteia um novo quando a tabela que a
+# gente escreve não diz qual é, e aí as duas referências apontam para o nada:
+# a partição de boot não monta e a raiz só é achada porque o nosso initramfs a
+# escolhe à mão. Foi medido acontecendo antes de layout.sh passar a preservá-lo.
+ID_DEPOIS=$(sfdisk --disk-id "$LOOP" 2>/dev/null)
+[ "$ID_DEPOIS" = "0x5671f673" ] \
+    && ok "o identificador do disco foi preservado" \
+    || falha "o identificador do disco mudou para $ID_DEPOIS (quebra os PARTUUID)"
+
+PU2=$(blkid -o value -s PARTUUID "${LOOP}p2")
+[ "$PU2" = "5671f673-02" ] \
+    && ok "PARTUUID da raiz continua valendo ($PU2)" \
+    || falha "PARTUUID da raiz virou $PU2"
+
+PU1=$(blkid -o value -s PARTUUID "${LOOP}p1")
+[ "$PU1" = "5671f673-01" ] \
+    && ok "PARTUUID do boot continua valendo ($PU1)" \
+    || falha "PARTUUID do boot virou $PU1"
+
 mkdir -p "$TRABALHO/mnt"
 mount "${LOOP}p1" "$TRABALHO/mnt"
 grep -q "root=/dev/mmcblk0p2" "$TRABALHO/mnt/cmdline.txt" \
@@ -113,8 +135,8 @@ TAMANHO_RAIZ=$(df -m --output=size "$TRABALHO/mnt" | tail -1 | tr -d ' ')
     || falha "a raiz não cresceu (${TAMANHO_RAIZ} MB)"
 umount "$TRABALHO/mnt"
 
-[ "$(blkid -o value -s LABEL "${LOOP}p3")" = "rootB" ] && ok "slot B formatado" || falha "slot B não formatado"
-[ "$(blkid -o value -s LABEL "${LOOP}p4")" = "data" ] && ok "dados formatados" || falha "dados não formatados"
+[ "$(blkid -o value -s LABEL "${LOOP}p3")" = "pos-rootB" ] && ok "slot B formatado" || falha "slot B não formatado"
+[ "$(blkid -o value -s LABEL "${LOOP}p4")" = "pos-data" ] && ok "dados formatados" || falha "dados não formatados"
 
 P3_INICIO=$(sfdisk -d "$LOOP" | sed -n "s|^${LOOP}p3 .*start=[[:space:]]*\([0-9]*\).*|\1|p")
 [ $((P3_INICIO % 8192)) -eq 0 ] && ok "partições alinhadas em 4 MiB" || falha "p3 desalinhada ($P3_INICIO)"

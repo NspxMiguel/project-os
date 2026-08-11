@@ -56,33 +56,92 @@ PARTES=$(sfdisk -d "$LOOP" | grep -c "^${LOOP}p[0-9]")
 mkdir -p /mnt/boot /mnt/raiz
 mount "${LOOP}p1" /mnt/boot
 
-grep -q "^initramfs initramfs-project-os followkernel" /mnt/boot/config.txt \
-    && ok "config.txt manda o firmware carregar o nosso initramfs" \
-    || falha "config.txt não tem a linha do initramfs"
+# O firmware do Pi escolhe o kernel (o 3B sobe o kernel7.img) e, com
+# auto_initramfs=1, carrega o initramfs que combina com ele. Uma linha
+# "initramfs <arquivo>" no config.txt atropela isso e força um arquivo só para
+# todos os kernels -- foi assim que a v0.4.1 travou: o arquivo forçado tinha os
+# módulos do kernel de 64 bits e o Pi 3B ficou esperando para sempre um cartão
+# SD cujo driver não estava lá dentro.
+grep -qE "^[[:space:]]*initramfs[[:space:]]+[^=]" /mnt/boot/config.txt \
+    && falha "config.txt força um initramfs só (atropela o auto_initramfs)" \
+    || ok "config.txt não força initramfs nenhum"
 
-if [ -f /mnt/boot/initramfs-project-os ]; then
-    ok "initramfs presente ($(du -h /mnt/boot/initramfs-project-os | cut -f1))"
-    # O que importa não é o arquivo existir, é o que tem dentro dele.
-    # Um initramfs do Debian é um ou mais cpio concatenados, cada um com sua
-    # compressão. Abrir isso "na mão" com zcat|cpio funciona por acaso e falha
-    # em silêncio -- foi o que aconteceu na primeira versão deste teste, e o
-    # resultado foi um alarme falso dizendo que a imagem estava quebrada.
-    # lsinitramfs é a ferramenta que entende o formato.
-    LISTA=$(mktemp)
-    lsinitramfs /mnt/boot/initramfs-project-os > "$LISTA" 2>/dev/null || true
-    if [ ! -s "$LISTA" ]; then
-        rm -rf /tmp/desmonta && mkdir -p /tmp/desmonta
-        unmkinitramfs /mnt/boot/initramfs-project-os /tmp/desmonta >/dev/null 2>&1 || true
-        find /tmp/desmonta -type f 2>/dev/null > "$LISTA" || true
+grep -q "^auto_initramfs=1" /mnt/boot/config.txt \
+    && ok "auto_initramfs=1 ligado" \
+    || falha "auto_initramfs=1 não está no config.txt"
+
+# O primeiro boot do Raspberry Pi OS sorteia um identificador de disco novo e
+# reescreve o MBR. Junto com o nosso reparticionamento, no mesmo boot, é como se
+# perde um cartão.
+grep -q "raspberrypi-sys-mods/firstboot" /mnt/boot/cmdline.txt \
+    && falha "o cmdline.txt ainda chama o firstboot do Raspberry Pi OS" \
+    || ok "o firstboot do Raspberry Pi OS foi removido do cmdline.txt"
+
+# Um initramfs por kernel, e cada um tem que levar os nossos scripts E os
+# módulos do seu próprio kernel.
+for PAR in "initramfs:v6" "initramfs7:v7" "initramfs7l:v7l" "initramfs8:v8"; do
+    ARQ="${PAR%%:*}"; SUF="${PAR##*:}"
+    if [ ! -f "/mnt/boot/$ARQ" ]; then
+        falha "não tem $ARQ na partição de boot"
+        continue
     fi
-    [ -s "$LISTA" ] || falha "não consegui abrir o initramfs para conferir o conteúdo"
-    for peca in slot-decide.sh project-os-slot project-os-layout layout.sh; do
-        grep -q "$peca" "$LISTA" && ok "o initramfs leva $peca" \
-                                 || falha "o initramfs NÃO tem $peca"
+    LISTA=$(mktemp)
+    lsinitramfs "/mnt/boot/$ARQ" > "$LISTA" 2>/dev/null || true
+    if [ ! -s "$LISTA" ]; then
+        falha "não consegui abrir $ARQ para conferir o conteúdo"
+        rm -f "$LISTA"
+        continue
+    fi
+    FALTOU=""
+    for peca in slot-decide.sh layout.sh project-os-slot project-os-layout \
+                sfdisk mkfs.ext4 e2fsck resize2fs e2label blkid; do
+        grep -q "$peca" "$LISTA" || FALTOU="$FALTOU $peca"
     done
+    grep -q "lib/modules/[^/]*-rpi-${SUF}/" "$LISTA" || FALTOU="$FALTOU módulos-$SUF"
+    [ -z "$FALTOU" ] && ok "$ARQ completo ($(du -h "/mnt/boot/$ARQ" | cut -f1))" \
+                     || falha "$ARQ saiu sem:$FALTOU"
+    rm -f "$LISTA"
+done
+
+# O kernel7 é o que o Pi 3B dele carrega. Se só um puder estar certo, é este.
+[ -f /mnt/boot/kernel7.img ] && ok "kernel7.img presente (é o que o Pi 3B sobe)" \
+                            || falha "não tem kernel7.img na imagem"
+
+# O initramfs do kernel7, aberto por dentro: é o que vai rodar no Pi dele.
+#
+# O ORDER chama cada script de local-top como processo filho e depois faz source
+# de /conf/param.conf. Um "export ROOT" morreria com o filho e o Pi subiria
+# sempre a p2 -- toda atualização gravaria o slot B e todo boot subiria o slot A,
+# em silêncio. Então se confere o canal, no arquivo que vai no cartão.
+rm -rf /tmp/dentro && mkdir -p /tmp/dentro
+if unmkinitramfs /mnt/boot/initramfs7 /tmp/dentro >/dev/null 2>&1; then
+    DENTRO=$(dirname "$(find /tmp/dentro -maxdepth 3 -type f -name init | head -1)")
+    ESCOLHA="$DENTRO/scripts/local-top/project-os-slot"
+    if [ -f "$ESCOLHA" ]; then
+        grep -q 'ROOT=$ROOT" >> /conf/param.conf' "$ESCOLHA" \
+            && ok "a escolha do slot chega no init pelo /conf/param.conf" \
+            || falha "o script de slot não escreve ROOT em /conf/param.conf (a troca de sistema não aconteceria)"
+    else
+        falha "não achei o script de slot dentro do initramfs7"
+    fi
+
+    ORDEM="$DENTRO/scripts/local-top/ORDER"
+    if [ -f "$ORDEM" ]; then
+        grep -q "project-os-layout" "$ORDEM" && grep -q "project-os-slot" "$ORDEM" \
+            && ok "os dois scripts estão na ordem de execução do initramfs" \
+            || falha "o ORDER do initramfs não chama os nossos scripts"
+        # O reparticionamento tem que vir antes da escolha: no primeiro boot não
+        # existe slot B para escolher até ele ser criado.
+        awk '/project-os-layout/ { l = NR } /project-os-slot/ { s = NR } END { exit !(l && s && l < s) }' "$ORDEM" \
+            && ok "o reparticionamento roda antes da escolha do slot" \
+            || falha "a ordem dos scripts no initramfs está trocada"
+    else
+        falha "não achei o ORDER dentro do initramfs7"
+    fi
 else
-    falha "não tem initramfs na partição de boot"
+    falha "não consegui abrir o initramfs7 para conferir os scripts por dentro"
 fi
+
 umount /mnt/boot
 
 echo "== o sistema dentro da imagem =="
@@ -90,6 +149,7 @@ mount "${LOOP}p2" /mnt/raiz
 for arquivo in \
     /usr/share/project-os/layout.sh \
     /usr/share/project-os/slot-decide.sh \
+    /usr/share/project-os/fstab-slot.sh \
     /usr/local/sbin/project-os-system-update \
     /usr/local/sbin/project-os-clone-slot \
     /etc/systemd/system/project-os-clone-slot.service \
@@ -98,6 +158,23 @@ for arquivo in \
 do
     [ -e "/mnt/raiz$arquivo" ] && ok "$arquivo" || falha "faltou $arquivo"
 done
+
+# A partição de dados tem que estar no fstab, senão ela é criada, formatada e
+# nunca montada -- e uma troca de slot cairia numa tela de primeira configuração
+# com os dados dele órfãos na p4.
+grep -q "pos-data" /mnt/raiz/etc/fstab \
+    && ok "o fstab monta a partição de dados" \
+    || falha "o fstab não monta a partição de dados (pos-data)"
+
+# A raiz precisa continuar no fstab: o cmdline.txt não tem "rw", então quem
+# remonta a raiz para escrita é o systemd-remount-fs lendo esta linha.
+awk '$1 !~ /^#/ && $2 == "/" { achou = 1 } END { exit !achou }' /mnt/raiz/etc/fstab \
+    && ok "o fstab tem a linha da raiz (sem ela o sistema sobe somente leitura)" \
+    || falha "o fstab não tem linha para a raiz"
+
+# rsync é quem clona o sistema para o slot reserva.
+[ -x /mnt/raiz/usr/bin/rsync ] && ok "rsync instalado (clona o slot B)" \
+                              || falha "rsync não está na imagem; o slot B ficaria vazio"
 
 grep -q "project-os-system-update" /mnt/raiz/etc/sudoers.d/010_project-os \
     && ok "o sudoers libera o ajudante de sistema" \
@@ -128,6 +205,7 @@ mount "${LOOP}p2" /mnt/raiz
 cp /mnt/raiz/usr/share/project-os/layout.sh /tmp/layout.sh
 umount /mnt/raiz
 
+ID_ANTES=$(sfdisk --disk-id "$LOOP")
 bash /tmp/layout.sh "$LOOP" || falha "o reparticionamento falhou"
 partprobe "$LOOP" >/dev/null 2>&1 || true
 nodes "$LOOP"
@@ -137,10 +215,24 @@ PARTES=$(sfdisk -d "$LOOP" | grep -c "^${LOOP}p[0-9]")
                     || falha "esperava 4 partições, achei $PARTES"
 
 mount "${LOOP}p1" /mnt/boot
-grep -q "^initramfs initramfs-project-os" /mnt/boot/config.txt \
+[ -f /mnt/boot/kernel7.img ] && [ -f /mnt/boot/initramfs7 ] && [ -f /mnt/boot/cmdline.txt ] \
     && ok "o boot continua intacto depois de reparticionar" \
     || falha "o boot se perdeu no reparticionamento"
 umount /mnt/boot
+
+# Os PARTUUID do cmdline.txt e do fstab derivam do identificador do disco. Se o
+# reparticionamento o trocar, as duas referências apontam para o nada.
+[ "$(sfdisk --disk-id "$LOOP")" = "$ID_ANTES" ] \
+    && ok "o identificador do disco sobreviveu ($ID_ANTES)" \
+    || falha "o identificador do disco mudou: era $ID_ANTES, virou $(sfdisk --disk-id "$LOOP")"
+
+ESPERADO="${ID_ANTES#0x}"
+[ "$(blkid -o value -s PARTUUID "${LOOP}p2")" = "${ESPERADO}-02" ] \
+    && ok "o PARTUUID da raiz continua o mesmo do cmdline.txt" \
+    || falha "o PARTUUID da raiz mudou (o cmdline.txt aponta para o nada)"
+[ "$(blkid -o value -s PARTUUID "${LOOP}p1")" = "${ESPERADO}-01" ] \
+    && ok "o PARTUUID do boot continua o mesmo do fstab" \
+    || falha "o PARTUUID do boot mudou (o /boot/firmware não montaria)"
 
 mount "${LOOP}p2" /mnt/raiz
 [ -f /mnt/raiz/opt/project-os/project_os/core/slots.py ] \
@@ -150,9 +242,9 @@ TAM=$(df -m --output=size /mnt/raiz | tail -1 | tr -d ' ')
 [ "$TAM" -gt 6000 ] && ok "o sistema A ficou com ${TAM} MB" || falha "sistema A ficou com ${TAM} MB"
 umount /mnt/raiz
 
-[ "$(blkid -o value -s LABEL "${LOOP}p3")" = "rootB" ] && ok "sistema B pronto para receber" \
+[ "$(blkid -o value -s LABEL "${LOOP}p3")" = "pos-rootB" ] && ok "sistema B pronto para receber" \
     || falha "sistema B não foi formatado"
-[ "$(blkid -o value -s LABEL "${LOOP}p4")" = "data" ] && ok "partição de dados pronta" \
+[ "$(blkid -o value -s LABEL "${LOOP}p4")" = "pos-data" ] && ok "partição de dados pronta" \
     || falha "partição de dados não foi formatada"
 
 losetup -d "$LOOP"
