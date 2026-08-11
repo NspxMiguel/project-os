@@ -91,6 +91,14 @@ export default {
     async function load() {
       try {
         state.info = await api.get('/updates');
+        // Os dois sistemas do cartão. Falhar aqui não pode esconder a tela
+        // inteira: num cartão antigo esta rota responde "não dá", e isso é uma
+        // informação, não um erro.
+        try {
+          state.system = await api.get('/updates/system');
+        } catch (err) {
+          state.system = null;
+        }
         if (disposed) return;
         state.job = state.info.job && state.info.job.state !== 'idle' ? state.info.job : null;
         state.check = state.info.last_check || null;
@@ -277,6 +285,85 @@ export default {
       });
     }
 
+    function systemCard() {
+      const data = state.system;
+      if (!data) return null;
+      const slots = data.slots || {};
+      const pode = (data.capability || {}).ok;
+      const sistema = data.system || {};
+
+      if (!pode) {
+        return card({
+          title: t('sys.title'), iconName: 'system',
+          body: h('div', {class: 'notice notice--info'},
+            h('div', {class: 'notice__body'},
+              h('span', null, (data.capability || {}).reason || t('sys.unavailable')))),
+        });
+      }
+
+      const linhas = h('div', {class: 'stack stack--sm'},
+        h('div', {class: 'field-row'},
+          h('span', {class: 'field-row__label'}, t('sys.running')),
+          h('span', {class: 'field-row__value'}, t('sys.slot', {slot: slots.current || '?'}))),
+        h('div', {class: 'field-row'},
+          h('span', {class: 'field-row__label'}, t('sys.target')),
+          h('span', {class: 'field-row__value muted'}, t('sys.slot', {slot: slots.target || '?'}))),
+        h('div', {class: 'field-row'},
+          h('span', {class: 'field-row__label'}, t('sys.good')),
+          h('span', {class: 'field-row__value muted'}, t('sys.slot', {slot: slots.good || '?'}))),
+        h('p', {class: 'muted small'}, t('sys.explain')),
+      );
+
+      const acoes = [];
+      if (sistema.update_available) {
+        acoes.push(h('button', {
+          class: 'btn btn--primary', type: 'button',
+          disabled: state.waiting || (state.job && state.job.state === 'running'),
+          onClick: () => installSystem(sistema.latest),
+        }, t('sys.install', {version: sistema.latest})));
+      }
+      acoes.push(h('button', {
+        class: 'btn btn--sm', type: 'button',
+        onClick: () => rollbackSystem(slots.target),
+      }, t('sys.rollback', {slot: slots.target || '?'})));
+
+      return card({
+        title: sistema.update_available
+          ? t('sys.available', {version: sistema.latest})
+          : t('sys.title'),
+        sub: t('sys.sub'),
+        iconName: 'system',
+        body: linhas,
+        footer: h('div', {class: 'row'}, ...acoes),
+      });
+    }
+
+    async function installSystem(version) {
+      // Trocar o sistema inteiro reinicia a caixa. Vale perguntar.
+      const ok = await confirm(t('sys.confirm', {version}));
+      if (!ok) return;
+      try {
+        const data = await api.post('/updates/system/install', {version});
+        state.job = data.job;
+        render();
+        follow();
+      } catch (err) {
+        toast(err instanceof ApiError ? err.message : String(err), {type: 'error'});
+      }
+    }
+
+    async function rollbackSystem(slot) {
+      const ok = await confirm(t('sys.rollback.confirm', {slot: slot || '?'}));
+      if (!ok) return;
+      try {
+        await api.post('/updates/system/rollback', {});
+        toast(t('sys.rollback.started'), {type: 'success'});
+        waitForRestart();
+      } catch (err) {
+        toast(err instanceof ApiError ? err.message : String(err), {type: 'error'});
+      }
+    }
+
     function render() {
       if (disposed) return;
       clear(slot);
@@ -291,7 +378,7 @@ export default {
           h('div', {class: 'notice__body'}, h('span', null, state.error))));
         return;
       }
-      mount(slot, [statusCard(), jobCard(), availableCard()]);
+      mount(slot, [statusCard(), jobCard(), availableCard(), systemCard()]);
     }
 
     render();

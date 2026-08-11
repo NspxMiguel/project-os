@@ -709,6 +709,22 @@ export const PT_BR = {
   'updates.source': 'De onde vem a atualização',
   'updates.error.check': 'Não deu para procurar atualização.',
   'updates.rollback': 'Voltar para a versão anterior',
+
+  // Os dois sistemas do cartão -- docs/RECOVERY.md.
+  'sys.title': 'Sistema do cartão',
+  'sys.sub': 'Dois sistemas: um rodando, outro de reserva',
+  'sys.running': 'Rodando agora',
+  'sys.target': 'A atualização vai para',
+  'sys.good': 'Último que se provou bom',
+  'sys.slot': 'Sistema {slot}',
+  'sys.explain': 'A atualização é gravada no sistema que não está rodando. Se ele não subir, a caixa volta sozinha para este aqui — sem tirar o cartão.',
+  'sys.available': 'Sistema {version} disponível',
+  'sys.install': 'Instalar o sistema {version}',
+  'sys.confirm': 'Gravar o sistema {version} no cartão e reiniciar? O sistema que está rodando agora fica intacto como reserva.',
+  'sys.rollback': 'Reiniciar no sistema {slot}',
+  'sys.rollback.confirm': 'Reiniciar no sistema {slot}? Use isto se o sistema atual subiu mas está pior.',
+  'sys.rollback.started': 'Reiniciando no outro sistema.',
+  'sys.unavailable': 'Este cartão tem um sistema só.',
   'updates.disabled': 'As atualizações estão desligadas nas configurações.',
   'updates.log': 'Registro',
 
