@@ -203,14 +203,67 @@ def read_state(path: str = "") -> Dict[str, Any]:
         return dict(DEFAULT_STATE)
 
 
+#: O ajudante que grava o estado quando este processo não consegue. Ver
+#: ``_write_via_helper``.
+STATE_HELPER = "/usr/local/sbin/project-os-slot-state"
+
+
+def _helper_argv() -> List[str]:
+    """``sudo -n`` só quando não somos root -- em teste e no CI somos."""
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        return [STATE_HELPER]
+    return ["sudo", "-n", STATE_HELPER]
+
+
+def _write_via_helper(state: Dict[str, Any]) -> None:
+    """Grava pelo ajudante de root.
+
+    A partição FAT é montada com uid=0 e umask 0022 (o padrão do vfat), e este
+    serviço roda como usuário comum: ele não consegue criar arquivo nenhum em
+    /boot/firmware. Descoberto montando a imagem de verdade e tentando escrever
+    como o usuário project-os.
+
+    Isso não seria um detalhe de permissão, seria o fim do esquema: sem escrever
+    este arquivo, uma atualização grava o slot B inteiro e nunca consegue
+    apontar o boot para ele -- a atualização "dá certo" e nada acontece.
+    """
+    argv = _helper_argv() + [
+        "slot=%s" % state.get("slot", SLOT_A),
+        "good=%s" % state.get("good", SLOT_A),
+        "tries=%d" % int(state.get("tries", 0)),
+        "recovery=%d" % (1 if int(state.get("recovery", 0)) else 0),
+    ]
+    result = subprocess.run(
+        argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20.0, check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or b"").decode("utf-8", "replace").strip()
+        raise OSError("o ajudante de estado falhou: %s" % (detail or result.returncode))
+
+
 def write_state(state: Dict[str, Any], path: str = "") -> None:
     """Escreve e força para o cartão antes de voltar.
 
     Sem o fsync, "escrevi e mandei reiniciar" é uma corrida contra o cache do
     kernel que o cartão perde de vez em quando -- e perder essa corrida é
     justamente o Pi subir apontando para um slot que ainda não foi gravado.
+
+    Na máquina de verdade a escrita direta não passa (a FAT é do root), e aí
+    quem grava é o ajudante. Um caminho explícito -- teste, ou alguém apontando
+    para outro cartão -- nunca vai para o ajudante: ele grava no boot desta
+    máquina, que não é o que foi pedido.
     """
     where = path or state_path()
+    try:
+        _write_direct(state, where)
+    except OSError:
+        if path:
+            raise
+        log.debug("escrita direta em %s falhou; tentando o ajudante", where)
+        _write_via_helper(state)
+
+
+def _write_direct(state: Dict[str, Any], where: str) -> None:
     temporary = where + ".novo"
     payload = format_state(state)
     with open(temporary, "w", encoding="utf-8") as handle:

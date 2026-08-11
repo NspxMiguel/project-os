@@ -8,6 +8,7 @@
 install -m 755 files/usr/local/sbin/project-os-firstboot "${ROOTFS_DIR}/usr/local/sbin/project-os-firstboot"
 install -m 755 files/usr/local/sbin/project-os-set-password "${ROOTFS_DIR}/usr/local/sbin/project-os-set-password"
 install -m 755 files/usr/local/sbin/project-os-system-update "${ROOTFS_DIR}/usr/local/sbin/project-os-system-update"
+install -m 755 files/usr/local/sbin/project-os-slot-state "${ROOTFS_DIR}/usr/local/sbin/project-os-slot-state"
 
 # O esquema de dois sistemas (docs/RECOVERY.md): o decisor de slot, o
 # reparticionamento do primeiro boot, e os dois ganchos que põem tudo isso
@@ -86,6 +87,11 @@ cat > /etc/sudoers.d/010_project-os <<'SUDO'
 project-os ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt-mark, /usr/bin/flatpak, /usr/bin/systemctl
 project-os ALL=(root) NOPASSWD: /usr/local/sbin/project-os-set-password
 project-os ALL=(root) NOPASSWD: /usr/local/sbin/project-os-system-update
+# A FAT é montada como root (uid=0, umask 0022 -- o padrão do vfat) e este
+# serviço não é root: sem esta linha ele não consegue gravar qual slot deve
+# subir, e uma atualização escreveria o slot B inteiro sem conseguir apontar o
+# boot para ele.
+project-os ALL=(root) NOPASSWD: /usr/local/sbin/project-os-slot-state
 SUDO
 chmod 440 /etc/sudoers.d/010_project-os
 

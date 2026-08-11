@@ -1,0 +1,90 @@
+#!/bin/sh
+# Grava o estado dos slots na partição FAT.
+#
+# Existe por um motivo bobo e fatal: a FAT é montada como root (uid=0, umask
+# 0022, que é o padrão do vfat) e o project-os roda como usuário comum. Ele
+# simplesmente não consegue criar arquivo nenhum em /boot/firmware.
+#
+# Sem este ajudante:
+#   - mark_current_good() falha em silêncio, "tries" nunca zera, e na terceira
+#     ligada o initramfs conclui que o sistema que está rodando não presta;
+#   - boot_into() falha, e uma atualização grava o slot B inteiro sem conseguir
+#     apontar o boot para ele. A atualização "dá certo" e não acontece nada.
+#
+# Uso:  project-os-slot-state slot=B good=A tries=0 recovery=0
+#
+# Todos os campos são opcionais e se juntam ao que já está lá. Nada aqui é
+# avaliado como comando: cada valor é conferido contra o que ele pode ser, e o
+# que não for reconhecido é ignorado. O caminho do arquivo NÃO vem de quem
+# chama -- assim não existe argumento capaz de fazer isto escrever em outro
+# lugar.
+
+set -eu
+
+erro() { echo "project-os-slot-state: $*" >&2; exit 1; }
+
+BOOT=""
+for candidato in /boot/firmware /boot; do
+    if [ -d "$candidato" ] && [ -f "$candidato/config.txt" ]; then
+        BOOT="$candidato"
+        break
+    fi
+done
+[ -n "$BOOT" ] || erro "não achei a partição de boot"
+
+CONF="$BOOT/project-os-slot.conf"
+
+ler() {
+    [ -f "$CONF" ] || return 0
+    sed -n "s/^[[:space:]]*$1=[[:space:]]*\([A-Za-z0-9]*\).*/\1/p" "$CONF" | head -n 1
+}
+
+SLOT=$(ler slot); [ -n "$SLOT" ] || SLOT=A
+GOOD=$(ler good); [ -n "$GOOD" ] || GOOD=A
+TRIES=$(ler tries); [ -n "$TRIES" ] || TRIES=0
+RECOVERY=$(ler recovery); [ -n "$RECOVERY" ] || RECOVERY=0
+
+for par in "$@"; do
+    chave=${par%%=*}
+    valor=${par#*=}
+    case "$chave" in
+        slot|good)
+            case "$valor" in
+                A|B|a|b) ;;
+                *) erro "$chave inválido: $valor" ;;
+            esac
+            valor=$(echo "$valor" | tr 'ab' 'AB')
+            [ "$chave" = "slot" ] && SLOT="$valor" || GOOD="$valor"
+            ;;
+        tries)
+            case "$valor" in
+                ''|*[!0-9]*) erro "tries inválido: $valor" ;;
+            esac
+            TRIES="$valor"
+            ;;
+        recovery)
+            case "$valor" in
+                0|1) RECOVERY="$valor" ;;
+                *) erro "recovery inválido: $valor" ;;
+            esac
+            ;;
+        *) erro "campo desconhecido: $chave" ;;
+    esac
+done
+
+# Escrita atômica, e forçada para o cartão antes de voltar: este arquivo é
+# escrito na hora de reiniciar, que é exatamente quando a energia costuma
+# faltar. FAT não tem journal -- o sync é o que garante que chegou.
+NOVO="$CONF.novo"
+{
+    echo "# project-os -- qual sistema sobe. Escrito pelo sistema, lido pelo initramfs."
+    echo "# docs/RECOVERY.md explica. Editar à mão só se algo deu muito errado."
+    echo "slot=$SLOT"
+    echo "good=$GOOD"
+    echo "tries=$TRIES"
+    echo "recovery=$RECOVERY"
+} > "$NOVO"
+mv -f "$NOVO" "$CONF"
+sync
+
+echo "slot=$SLOT good=$GOOD tries=$TRIES recovery=$RECOVERY"

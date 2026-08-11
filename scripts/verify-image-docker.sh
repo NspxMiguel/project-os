@@ -151,6 +151,7 @@ for arquivo in \
     /usr/share/project-os/slot-decide.sh \
     /usr/share/project-os/fstab-slot.sh \
     /usr/local/sbin/project-os-system-update \
+    /usr/local/sbin/project-os-slot-state \
     /usr/local/sbin/project-os-clone-slot \
     /etc/systemd/system/project-os-clone-slot.service \
     /opt/project-os/project_os/core/slots.py \
@@ -179,6 +180,11 @@ awk '$1 !~ /^#/ && $2 == "/" { achou = 1 } END { exit !achou }' /mnt/raiz/etc/fs
 grep -q "project-os-system-update" /mnt/raiz/etc/sudoers.d/010_project-os \
     && ok "o sudoers libera o ajudante de sistema" \
     || falha "o sudoers não libera o ajudante de sistema"
+
+# Sem esta, o project-os não consegue gravar qual slot sobe: a FAT é do root.
+grep -q "project-os-slot-state" /mnt/raiz/etc/sudoers.d/010_project-os \
+    && ok "o sudoers libera o ajudante de estado dos slots" \
+    || falha "o sudoers não libera o ajudante de estado (a troca de slot não seria gravada)"
 
 # Diretiva ativa, não a palavra: o arquivo tem um comentário longo explicando
 # justamente por que ela não está lá, e a primeira versão deste teste acusou o
