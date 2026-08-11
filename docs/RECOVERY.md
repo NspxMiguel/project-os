@@ -92,6 +92,13 @@ remonta para escrita é o `systemd-remount-fs`, lendo exatamente essa linha. Sem
 o slot sobe, responde, e não grava nada. Quem conserta é o `fstab-slot.sh`, chamado
 pelos dois caminhos. Preso por `tests/test_sysupdate_fstab.py`.
 
+**Quem grava o estado é um ajudante de root.** A FAT é montada com `uid=0` e umask
+0022 (o padrão do vfat) e o project-os roda como usuário comum: ele não consegue
+criar arquivo nenhum em `/boot/firmware`. Sem o `project-os-slot-state`, o
+`boot_into()` falharia e uma atualização gravaria o slot B inteiro sem conseguir
+apontar o boot para ele — a tela diria que deu certo e o Pi reiniciaria no mesmo
+lugar. Preso por `tests/test_slot_state_helper.py`.
+
 E um quarto, do lado do firmware: o `config.txt` usa `auto_initramfs=1` e **não** tem
 linha `initramfs <arquivo>`. O cartão traz quatro kernels e o Pi 3B sobe o `kernel7`;
 um initramfs carrega dentro os módulos do kernel para o qual foi gerado. Forçar um
