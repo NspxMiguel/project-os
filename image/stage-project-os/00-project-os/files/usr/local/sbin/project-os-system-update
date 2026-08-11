@@ -1,0 +1,87 @@
+#!/bin/sh
+# Escreve um sistema inteiro no slot que NÃO está rodando.
+#
+# É a única coisa no projeto que formata uma partição. O erro que ele precisa
+# tornar impossível é um só, e é fatal: formatar o slot que está no ar. Por isso
+# a checagem não é "confio em quem me chamou" -- o project-os já confere tudo
+# isso antes de chamar, e mesmo assim conferimos de novo aqui, porque este é o
+# lado que tem poder de root e o outro não.
+#
+# Uso:  project-os-system-update <tarball> <slot A|B>
+#
+# O tarball já chegou conferido pelo sha256 do manifesto (core/updates.py se
+# recusa a instalar sem isso). Aqui a preocupação é outra: em qual pedaço de
+# disco isto vai parar.
+
+set -eu
+
+TARBALL="${1:-}"
+SLOT="${2:-}"
+MONTAGEM=/run/project-os-alvo
+
+erro() { echo "project-os-system-update: $*" >&2; exit 1; }
+
+[ -n "$TARBALL" ] && [ -n "$SLOT" ] || erro "uso: project-os-system-update <tarball> <A|B>"
+[ -f "$TARBALL" ] || erro "$TARBALL não existe"
+
+case "$SLOT" in
+    A) NUMERO=2 ;;
+    B) NUMERO=3 ;;
+    *) erro "slot inválido: $SLOT" ;;
+esac
+
+# De qual disco estamos falando: o mesmo de onde a raiz está montada. Não se
+# aceita um caminho de dispositivo de quem chamou -- assim não existe argumento
+# capaz de apontar isto para outro disco.
+RAIZ=$(findmnt -no SOURCE / 2>/dev/null) || erro "não sei qual é a raiz"
+[ -n "$RAIZ" ] || erro "não sei qual é a raiz"
+DISCO=$(echo "$RAIZ" | sed -E 's/p?[0-9]+$//')
+case "$DISCO" in
+    *[0-9]) SEP=p ;;
+    *)      SEP=  ;;
+esac
+ALVO="${DISCO}${SEP}${NUMERO}"
+
+[ -b "$ALVO" ] || erro "$ALVO não existe (este cartão tem dois sistemas?)"
+
+# A trava que importa.
+[ "$ALVO" != "$RAIZ" ] || erro "recusando formatar o sistema que está rodando ($ALVO)"
+if findmnt -no TARGET "$ALVO" >/dev/null 2>&1; then
+    erro "$ALVO está montado; recusando"
+fi
+
+echo "formatando $ALVO (slot $SLOT)"
+mkfs.ext4 -q -F -L "root$SLOT" "$ALVO"
+
+mkdir -p "$MONTAGEM"
+mount "$ALVO" "$MONTAGEM"
+
+limpar() {
+    umount "$MONTAGEM" 2>/dev/null || true
+    rmdir "$MONTAGEM" 2>/dev/null || true
+}
+trap limpar EXIT INT TERM
+
+echo "desempacotando o sistema"
+# --numeric-owner: os números de uid/gid do tarball valem mais que os nomes
+# deste sistema aqui. -p preserva permissão, que é o que faz o sudo continuar
+# sendo sudo do outro lado.
+tar --numeric-owner -xpf "$TARBALL" -C "$MONTAGEM"
+
+# Um sistema sem estes diretórios não sobe, e tar de rootfs às vezes vem sem
+# eles quando foram gerados a partir de um contêiner.
+for diretorio in proc sys dev run tmp boot/firmware; do
+    mkdir -p "$MONTAGEM/$diretorio"
+done
+chmod 1777 "$MONTAGEM/tmp"
+
+# Quem escolhe a raiz é o initramfs, pelo estado na FAT. Deixar um root= fixo
+# aqui dentro seria um segundo dono da mesma decisão, e os dois discordariam na
+# primeira troca de slot.
+if [ -f "$MONTAGEM/etc/fstab" ]; then
+    sed -i 's|^[^#].*[[:space:]]/[[:space:]].*|# a raiz é escolhida pelo initramfs (docs/RECOVERY.md)|' \
+        "$MONTAGEM/etc/fstab"
+fi
+
+sync
+echo "slot $SLOT gravado"

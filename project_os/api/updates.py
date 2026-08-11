@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from project_os import __version__, auth
-from project_os.core import updates
+from project_os.core import slots, sysupdate, updates
 from project_os.errors import ApiError
 from project_os.main import get_config
 
@@ -216,6 +216,116 @@ async def install(
     thread = threading.Thread(target=_run_install, args=(info, body.restart), daemon=True)
     thread.start()
     return {"job": _job.as_dict(), "target": info.get("latest")}
+
+
+# ---------------------------------------------------------------------------
+# o sistema inteiro, e não só o app
+# ---------------------------------------------------------------------------
+@router.get("/system")
+async def system_status(
+    config: Any = Depends(get_config), user: Dict[str, Any] = Depends(auth.require_auth)
+) -> Dict[str, Any]:
+    """Os dois sistemas do cartão e o que há para instalar neles.
+
+    A tela precisa saber três coisas antes de oferecer um botão: se este cartão
+    tem dois sistemas, se o ajudante root está instalado, e qual slot está no ar.
+    Num cartão antigo isso responde "não dá, e por quê" em vez de oferecer uma
+    atualização que não teria para onde escrever.
+    """
+    settings = _settings(config)
+    return await anyio.to_thread.run_sync(
+        lambda: sysupdate.status(settings["manifest_url"])
+    )
+
+
+def _run_system_install(manifest_url: str, restart: bool) -> None:
+    """A instalação de sistema, na mesma forma de job que a do app.
+
+    Baixar 600 MB e desempacotar num Pi 3 leva minutos; a tela acompanha pelo
+    log do job, e a última linha antes de a conexão cair é "reiniciando".
+    """
+    try:
+        resultado = sysupdate.install(
+            manifest_url=manifest_url, on_line=_job.say, reboot=restart,
+        )
+        _job.target = resultado.get("installed", "")
+        if restart:
+            _job.state = STATE_RESTARTING
+            _job.message = "reiniciando no slot %s" % resultado.get("slot", "")
+        else:
+            _job.state = STATE_DONE
+            _job.message = "slot %s gravado" % resultado.get("slot", "")
+    except sysupdate.SystemUpdateError as exc:
+        _job.state = STATE_ERROR
+        _job.message = exc.message
+        _job.say("erro: %s" % exc.message)
+        if exc.hint:
+            _job.say(exc.hint)
+    except Exception as exc:  # pragma: no cover - rede e disco surpreendem
+        _job.state = STATE_ERROR
+        _job.message = str(exc)
+        _job.say("erro: %s" % exc)
+        log.exception("atualização de sistema falhou")
+
+
+@router.post("/system/install")
+async def system_install(
+    body: InstallRequest,
+    config: Any = Depends(get_config),
+    user: Dict[str, Any] = Depends(auth.require_auth),
+) -> Dict[str, Any]:
+    """Grava o sistema novo no slot que não está rodando e reinicia nele."""
+    settings = _settings(config)
+    if not settings["enabled"]:
+        raise ApiError(
+            403, "updates_disabled",
+            "Ligue updates.enabled em Configurações para atualizar por aqui.",
+        )
+    if _job.state in (STATE_RUNNING, STATE_RESTARTING):
+        raise ApiError(409, "busy", "Já tem uma atualização rodando.")
+
+    pronto = await anyio.to_thread.run_sync(sysupdate.available)
+    if not pronto["ok"]:
+        raise ApiError(409, pronto["code"], pronto["reason"])
+
+    try:
+        info = await anyio.to_thread.run_sync(
+            lambda: sysupdate.check(settings["manifest_url"])
+        )
+    except sysupdate.SystemUpdateError as exc:
+        raise ApiError(502, exc.code, exc.message, exc.hint)
+
+    if not info.get("update_available"):
+        raise ApiError(409, "already_current", "Esta caixa já está no sistema %s." % __version__)
+
+    _job.reset(str(info.get("latest", "")))
+    _job.say("sistema %s -> %s (slot %s)" % (__version__, info.get("latest"), slots.other_slot()))
+    thread = threading.Thread(
+        target=_run_system_install, args=(settings["manifest_url"], body.restart), daemon=True,
+    )
+    thread.start()
+    return {"job": _job.as_dict(), "target": info.get("latest"), "slot": slots.other_slot()}
+
+
+@router.post("/system/rollback")
+async def system_rollback(user: Dict[str, Any] = Depends(auth.require_auth)) -> Dict[str, Any]:
+    """Volta na mão para o outro sistema.
+
+    O initramfs já faz isso sozinho quando o slot novo não sobe. Este botão é
+    para o outro caso: o slot novo *sobe*, mas está pior -- aí quem percebe é
+    uma pessoa, não um contador de tentativas.
+    """
+    if not slots.available():
+        raise ApiError(409, "no_slots", "Este cartão tem um sistema só.")
+    alvo = slots.other_slot()
+    if alvo is None:
+        raise ApiError(409, "no_slots", "Não sei qual é o outro slot.")
+    slots.boot_into(alvo)
+    log.warning("voltando para o slot %s por pedido de %s", alvo, user.get("username"))
+    import subprocess
+
+    subprocess.Popen(updates._systemctl_argv() + ["reboot"])
+    return {"ok": True, "slot": alvo}
 
 
 @router.post("/rollback")

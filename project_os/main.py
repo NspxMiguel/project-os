@@ -445,6 +445,23 @@ async def lifespan(app: FastAPI):
     )
     log.info("project-os ready on port %s", config.get("server.port", 8099))
 
+    # "Este sistema presta." É aqui, e não antes: o kernel ter subido e o systemd
+    # ter terminado não provam nada -- um sistema com a rede quebrada faz as duas
+    # coisas. O que prova é o project-os estar pronto para atender, que é a única
+    # razão desta caixa existir.
+    #
+    # Enquanto isto não acontece, o initramfs conta as tentativas; na terceira
+    # ele volta para o último sistema que chegou até esta linha. Ver
+    # docs/RECOVERY.md.
+    try:
+        from project_os.core import slots
+
+        confirmado = slots.mark_current_good()
+        if confirmado:
+            log.info("slot %s confirmado", confirmado.get("good"))
+    except Exception:  # pragma: no cover - nunca impedir o boot por causa disto
+        log.exception("não consegui confirmar o slot")
+
     try:
         yield
     finally:

@@ -1,0 +1,53 @@
+#!/bin/sh
+# Primeiro boot: transforma o cartão de duas partições no de dois sistemas.
+#
+# Roda antes do decisor de slot e antes de a raiz ser montada -- o único momento
+# em que dá para reparticionar com segurança. Depois da primeira vez, o layout.sh
+# reconhece que já está pronto e sai sem tocar em nada.
+#
+# Ver docs/RECOVERY.md.
+
+PREREQ="udev"
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+    prereqs) prereqs; exit 0 ;;
+esac
+
+LAYOUT=/usr/share/project-os/layout.sh
+MONTAGEM=/run/project-os-boot
+
+aviso() { echo "project-os: $*" >/dev/kmsg 2>/dev/null || echo "project-os: $*"; }
+
+[ -x "$LAYOUT" ] || exit 0
+
+BOOTDEV=$(blkid -L bootfs 2>/dev/null)
+[ -n "$BOOTDEV" ] || BOOTDEV=$(blkid -o device -t LABEL=bootfs 2>/dev/null | head -n 1)
+[ -n "$BOOTDEV" ] || exit 0
+
+DISCO=$(echo "$BOOTDEV" | sed -E 's/p?[0-9]+$//')
+[ -n "$DISCO" ] || exit 0
+
+# Nada disto pode derrubar o boot: se o reparticionamento falhar, o cartão
+# continua com um sistema só e o Pi sobe do mesmo jeito. Um cartão que não sobe
+# é o único problema que este projeto não consegue consertar pela rede.
+"$LAYOUT" "$DISCO" || aviso "o cartão segue com um sistema só"
+
+# O estado inicial: estamos no slot A e ele é o bom. A partir daqui quem escreve
+# este arquivo é o decisor (a cada boot) e o project-os (a cada atualização).
+mkdir -p "$MONTAGEM"
+if mount -t vfat -o rw "$BOOTDEV" "$MONTAGEM" 2>/dev/null; then
+    if [ ! -f "$MONTAGEM/project-os-slot.conf" ]; then
+        {
+            echo "# project-os -- qual sistema sobe. docs/RECOVERY.md explica."
+            echo "slot=A"
+            echo "good=A"
+            echo "tries=0"
+            echo "recovery=0"
+        } > "$MONTAGEM/project-os-slot.conf"
+        sync
+        aviso "estado inicial dos slots gravado"
+    fi
+    umount "$MONTAGEM" 2>/dev/null
+fi
+
+exit 0

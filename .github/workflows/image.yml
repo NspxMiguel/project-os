@@ -79,6 +79,43 @@ jobs:
           (cd pi-gen/deploy && sha256sum "${name}" > "${name}.sha256")
           echo "path=pi-gen/deploy/${name}" >> "$GITHUB_OUTPUT"
           echo "sha=pi-gen/deploy/${name}.sha256" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          ls -lh pi-gen/deploy
+
+      - name: Pack the rootfs as a system update
+        # A imagem é como o Pi recebe o sistema a primeira vez. Isto é como ele
+        # recebe todas as outras, sem o cartão sair do lugar: o mesmo sistema,
+        # empacotado, para ser gravado no slot que não está rodando.
+        #
+        #   "n quero nunca mais ter q pegar esse sdcard e plugar no meu pc dnv"
+        #
+        # Sai da própria imagem recém-construída, e não de um segundo build:
+        # assim é impossível a imagem e a atualização divergirem.
+        id: rootfs
+        run: |
+          set -e
+          version="${{ steps.image.outputs.version }}"
+          img=$(ls pi-gen/work/*/export-image/*.img 2>/dev/null | head -n1 || true)
+          if [ -z "$img" ]; then
+            echo "não achei a imagem descomprimida para extrair o rootfs" >&2
+            exit 1
+          fi
+          loop=$(sudo losetup --show -fP "$img")
+          sudo mkdir -p /mnt/rootfs
+          sudo mount "${loop}p2" /mnt/rootfs
+          name="project-os-rootfs-${version}.tar.gz"
+          # --numeric-owner: os números de uid/gid do sistema construído valem
+          # mais do que os nomes da máquina que desempacota.
+          sudo tar --numeric-owner -czf "pi-gen/deploy/${name}" \
+            -C /mnt/rootfs --exclude=./boot/firmware/* .
+          sudo umount /mnt/rootfs
+          sudo losetup -d "$loop"
+          sudo chown "$(id -u):$(id -g)" "pi-gen/deploy/${name}"
+          (cd pi-gen/deploy && sha256sum "${name}" > "${name}.sha256")
+          echo "path=pi-gen/deploy/${name}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(cut -d' ' -f1 < "pi-gen/deploy/${name}.sha256")" >> "$GITHUB_OUTPUT"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c %s "pi-gen/deploy/${name}")" >> "$GITHUB_OUTPUT"
           ls -lh pi-gen/deploy
 
       - uses: actions/upload-artifact@v4
@@ -87,6 +124,7 @@ jobs:
           path: |
             ${{ steps.image.outputs.path }}
             ${{ steps.image.outputs.sha }}
+            ${{ steps.rootfs.outputs.path }}
           compression-level: 0
 
       - name: Attach to the release
@@ -100,4 +138,44 @@ jobs:
             gh release create "$tag" --title "project-os $tag" --generate-notes
           gh release upload "$tag" \
             "${GITHUB_WORKSPACE}/${{ steps.image.outputs.path }}" \
-            "${GITHUB_WORKSPACE}/${{ steps.image.outputs.sha }}" --clobber
+            "${GITHUB_WORKSPACE}/${{ steps.image.outputs.sha }}" \
+            "${GITHUB_WORKSPACE}/${{ steps.rootfs.outputs.path }}" --clobber
+
+      - name: Announce the system update in the manifest
+        # Sem esta parte o tarball existe e ninguém fica sabendo: o Pi lê o
+        # manifesto, não a lista de arquivos do release.
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release
+        working-directory: project-os
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          mkdir -p release
+          python3 - <<'PY'
+          import json, os
+          caminho = "release/latest.json"
+          dados = {}
+          if os.path.exists(caminho):
+              with open(caminho) as f:
+                  dados = json.load(f)
+          dados["system"] = {
+              "version": "${{ steps.image.outputs.version }}",
+              "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.rootfs.outputs.name }}",
+              "sha256": "${{ steps.rootfs.outputs.sha }}",
+              "size": int("${{ steps.rootfs.outputs.size }}" or 0),
+              "notes": "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}",
+          }
+          with open(caminho, "w") as f:
+              json.dump(dados, f, indent=2)
+              f.write("\n")
+          PY
+          git add release/latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "release ${{ steps.image.outputs.version }}: sistema no manifesto"
+          for tentativa in 1 2 3; do
+            git push origin main && exit 0
+            git pull --rebase origin main
+          done
+          exit 1

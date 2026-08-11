@@ -1,0 +1,75 @@
+#!/bin/sh
+# Deixa o segundo sistema pronto, copiando o primeiro.
+#
+# Depois do primeiro boot o cartão tem dois slots, mas só um tem sistema dentro.
+# Isso significa que a primeira atualização teria para onde ir e **não teria de
+# onde voltar** -- exatamente a situação que o esquema existe para nunca
+# acontecer. Então, uma vez, logo depois do primeiro boot, o slot vazio recebe
+# uma cópia do que está rodando.
+#
+# Roda uma vez e some: se o slot de destino já tem um sistema, sai na hora.
+# Leva alguns minutos num Pi 3 e é de baixa prioridade de propósito -- ninguém
+# está esperando por isto, e o cartão tem coisa melhor para fazer no primeiro
+# boot do que copiar 2 GB.
+
+set -eu
+
+MONTAGEM=/run/project-os-clone
+MARCA=/var/lib/project-os/.slot-clonado
+
+registrar() { logger -t project-os-clone-slot "$*" 2>/dev/null || true; echo "$*"; }
+
+[ -f "$MARCA" ] && exit 0
+
+RAIZ=$(findmnt -no SOURCE / 2>/dev/null || echo "")
+[ -n "$RAIZ" ] || { registrar "não sei qual é a raiz; desistindo"; exit 0; }
+
+case "$RAIZ" in
+    *p2|*[!0-9]2) ALVO=$(echo "$RAIZ" | sed 's/2$/3/') ;;
+    *p3|*[!0-9]3) ALVO=$(echo "$RAIZ" | sed 's/3$/2/') ;;
+    *) registrar "a raiz ($RAIZ) não é um slot; este cartão não tem dois sistemas"; exit 0 ;;
+esac
+
+[ -b "$ALVO" ] || { registrar "$ALVO não existe; nada a clonar"; exit 0; }
+
+# Já tem sistema lá? Então não é a primeira vez, e copiar por cima apagaria a
+# versão anterior -- que é justamente o caminho de volta.
+mkdir -p "$MONTAGEM"
+if mount "$ALVO" "$MONTAGEM" 2>/dev/null; then
+    if [ -d "$MONTAGEM/usr" ] && [ -d "$MONTAGEM/etc" ]; then
+        registrar "o slot $ALVO já tem um sistema; nada a fazer"
+        umount "$MONTAGEM" 2>/dev/null || true
+        mkdir -p "$(dirname "$MARCA")" && touch "$MARCA"
+        exit 0
+    fi
+else
+    registrar "não consegui montar $ALVO"
+    exit 0
+fi
+
+registrar "clonando o sistema para $ALVO (leva alguns minutos)"
+# --one-file-system: /proc, /sys, /dev e a partição de dados não são o sistema.
+# --numeric-ids: os números importam, não os nomes deste sistema aqui.
+if command -v rsync >/dev/null 2>&1; then
+    rsync -aHAX --numeric-ids --one-file-system --delete \
+        --exclude=/boot/firmware/ --exclude=/var/lib/project-os/ \
+        / "$MONTAGEM/" >/dev/null 2>&1 || {
+            registrar "a cópia falhou; o slot $ALVO segue vazio"
+            umount "$MONTAGEM" 2>/dev/null || true
+            exit 0
+        }
+else
+    registrar "sem rsync; desistindo"
+    umount "$MONTAGEM" 2>/dev/null || true
+    exit 0
+fi
+
+for diretorio in proc sys dev run tmp boot/firmware var/lib/project-os; do
+    mkdir -p "$MONTAGEM/$diretorio"
+done
+chmod 1777 "$MONTAGEM/tmp"
+
+sync
+umount "$MONTAGEM" 2>/dev/null || true
+mkdir -p "$(dirname "$MARCA")" && touch "$MARCA"
+registrar "os dois sistemas do cartão estão prontos"

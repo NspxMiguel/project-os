@@ -1,0 +1,22 @@
+[Unit]
+Description=project-os: deixa o segundo sistema do cartão pronto
+Documentation=https://github.com/NspxMiguel/project-os/blob/main/docs/RECOVERY.md
+# Depois de tudo que a pessoa está esperando. Ninguém abriu o navegador para ver
+# uma cópia de 2 GB acontecer; ela só precisa terminar antes da primeira
+# atualização de sistema, o que dá dias de folga.
+After=multi-user.target project-os.service
+Wants=project-os.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/project-os-clone-slot
+RemainAfterExit=yes
+TimeoutStartSec=3600
+
+# Prioridade baixa nos dois sentidos: o primeiro boot do Pi já é lento, e esta
+# cópia não pode ser o motivo de a tela demorar a abrir.
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

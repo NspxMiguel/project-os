@@ -7,6 +7,26 @@
 
 install -m 755 files/usr/local/sbin/project-os-firstboot "${ROOTFS_DIR}/usr/local/sbin/project-os-firstboot"
 install -m 755 files/usr/local/sbin/project-os-set-password "${ROOTFS_DIR}/usr/local/sbin/project-os-set-password"
+install -m 755 files/usr/local/sbin/project-os-system-update "${ROOTFS_DIR}/usr/local/sbin/project-os-system-update"
+
+# O esquema de dois sistemas (docs/RECOVERY.md): o decisor de slot, o
+# reparticionamento do primeiro boot, e os dois ganchos que põem tudo isso
+# dentro do initramfs.
+install -d -m 755 "${ROOTFS_DIR}/usr/share/project-os"
+install -m 755 files/usr/share/project-os/slot-decide.sh "${ROOTFS_DIR}/usr/share/project-os/slot-decide.sh"
+install -m 755 files/usr/share/project-os/layout.sh "${ROOTFS_DIR}/usr/share/project-os/layout.sh"
+install -d -m 755 "${ROOTFS_DIR}/etc/initramfs-tools/scripts/local-top"
+install -d -m 755 "${ROOTFS_DIR}/etc/initramfs-tools/hooks"
+install -m 755 files/etc/initramfs-tools/scripts/local-top/project-os-layout \
+    "${ROOTFS_DIR}/etc/initramfs-tools/scripts/local-top/project-os-layout"
+install -m 755 files/etc/initramfs-tools/scripts/local-top/project-os-slot \
+    "${ROOTFS_DIR}/etc/initramfs-tools/scripts/local-top/project-os-slot"
+install -m 755 files/etc/initramfs-tools/hooks/project-os-slot \
+    "${ROOTFS_DIR}/etc/initramfs-tools/hooks/project-os-slot"
+install -m 644 files/etc/systemd/system/project-os-clone-slot.service \
+    "${ROOTFS_DIR}/etc/systemd/system/project-os-clone-slot.service"
+install -m 755 files/usr/local/sbin/project-os-clone-slot \
+    "${ROOTFS_DIR}/usr/local/sbin/project-os-clone-slot"
 install -m 644 files/etc/systemd/system/project-os.service "${ROOTFS_DIR}/etc/systemd/system/project-os.service"
 install -m 644 files/etc/systemd/system/project-os-firstboot.service "${ROOTFS_DIR}/etc/systemd/system/project-os-firstboot.service"
 
@@ -64,6 +84,7 @@ chown -R project-os:project-os /opt/project-os
 cat > /etc/sudoers.d/010_project-os <<'SUDO'
 project-os ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt-mark, /usr/bin/flatpak, /usr/bin/systemctl
 project-os ALL=(root) NOPASSWD: /usr/local/sbin/project-os-set-password
+project-os ALL=(root) NOPASSWD: /usr/local/sbin/project-os-system-update
 SUDO
 chmod 440 /etc/sudoers.d/010_project-os
 
@@ -78,8 +99,44 @@ passwd --lock project-os >/dev/null 2>&1 || true
 # not booby-trapped either.
 chage -d "$(date -u +%Y-%m-%d)" -m 0 -M -1 -I -1 -E -1 project-os >/dev/null 2>&1 || true
 
+# initramfs-tools: é ele quem carrega o decisor de slot antes de existir
+# sistema nenhum. Sem isto instalado, o cartão sobe pelo caminho normal e o
+# esquema de dois sistemas simplesmente não acontece.
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    initramfs-tools busybox parted >/dev/null
+
+# Gera o initramfs e manda o firmware carregá-lo. "followkernel" põe na posição
+# que o bootloader do Pi espera.
+KERNEL=$(ls -1 /lib/modules | sort -V | tail -n 1)
+update-initramfs -c -k "$KERNEL" >/dev/null 2>&1 || update-initramfs -u >/dev/null 2>&1 || true
+INITRD=$(ls -1 /boot/initrd.img-* 2>/dev/null | sort -V | tail -n 1)
+
+# Sem initramfs não existe esquema de dois sistemas: o cartão sobe pelo caminho
+# de sempre e a promessa de nunca mais gravar à mão morre em silêncio, numa
+# imagem que parece boa. Falhar a build é muito melhor do que descobrir isso com
+# o cartão já no Pi.
+if [ -z "$INITRD" ]; then
+    echo "project-os: update-initramfs não gerou nada; abortando a imagem" >&2
+    exit 1
+fi
+
+BOOT=/boot/firmware
+[ -d "$BOOT" ] || BOOT=/boot
+cp "$INITRD" "$BOOT/initramfs-project-os"
+grep -q "^initramfs " "$BOOT/config.txt" 2>/dev/null || \
+    printf '\n# project-os: o initramfs escolhe qual dos dois sistemas sobe.\n# docs/RECOVERY.md\ninitramfs initramfs-project-os followkernel\n' >> "$BOOT/config.txt"
+
+# E conferir que os nossos scripts foram mesmo parar dentro dele -- um hook que
+# falha em silêncio produz um initramfs perfeitamente válido que não faz nada do
+# que a gente quer.
+if ! lsinitramfs "$BOOT/initramfs-project-os" 2>/dev/null | grep -q "slot-decide.sh"; then
+    echo "project-os: o initramfs saiu sem o decisor de slot; abortando a imagem" >&2
+    exit 1
+fi
+
 systemctl enable project-os.service
 systemctl enable project-os-firstboot.service
+systemctl enable project-os-clone-slot.service
 systemctl enable avahi-daemon.service
 systemctl enable ssh.service
 EOF

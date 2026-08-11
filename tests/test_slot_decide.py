@@ -138,7 +138,11 @@ def test_o_script_do_initramfs_responde_prereqs():
     result = subprocess.run(["/bin/sh", INITRAMFS_SCRIPT, "prereqs"],
                             stdout=subprocess.PIPE, check=False)
     assert result.returncode == 0
-    assert result.stdout.decode().strip() == "udev"
+    saida = result.stdout.decode().split()
+    assert "udev" in saida
+    # O reparticionamento tem que rodar antes: no primeiro boot o slot B ainda
+    # não existe para ser escolhido.
+    assert "project-os-layout" in saida
 
 
 def test_o_script_do_initramfs_e_o_hook_sao_sh_valido():
@@ -146,6 +150,28 @@ def test_o_script_do_initramfs_e_o_hook_sao_sh_valido():
         result = subprocess.run(["/bin/sh", "-n", script],
                                 stderr=subprocess.PIPE, check=False)
         assert result.returncode == 0, "%s: %s" % (script, result.stderr.decode())
+
+
+LAYOUT_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "image", "stage-project-os", "00-project-os", "files",
+    "etc", "initramfs-tools", "scripts", "local-top", "project-os-layout",
+)
+
+
+def test_o_script_de_reparticionamento_responde_prereqs():
+    result = subprocess.run(["/bin/sh", LAYOUT_SCRIPT, "prereqs"],
+                            stdout=subprocess.PIPE, check=False)
+    assert result.returncode == 0
+    assert result.stdout.decode().strip() == "udev"
+
+
+def test_o_reparticionamento_nunca_derruba_o_boot():
+    """Um cartão com um sistema só ainda sobe; um cartão que não sobe é o único
+    problema que este projeto não conserta pela rede."""
+    texto = open(LAYOUT_SCRIPT, encoding="utf-8").read()
+    assert '"$LAYOUT" "$DISCO" ||' in texto
+    assert texto.rstrip().endswith("exit 0")
 
 
 def test_o_hook_leva_o_decisor_para_dentro_do_initramfs():

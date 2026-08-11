@@ -16,7 +16,9 @@
 #
 # Ver docs/RECOVERY.md.
 
-PREREQ="udev"
+# O reparticionamento vem antes: no primeiro boot não existe slot B para
+# escolher até ele ter sido criado.
+PREREQ="udev project-os-layout"
 prereqs() { echo "$PREREQ"; }
 case "$1" in
     prereqs) prereqs; exit 0 ;;
