@@ -174,12 +174,31 @@ def test_o_reparticionamento_nunca_derruba_o_boot():
     assert texto.rstrip().endswith("exit 0")
 
 
-def test_o_hook_leva_o_decisor_para_dentro_do_initramfs():
-    """Um initramfs só tem o que o hook copiar; sem isso o Pi não sobe."""
+def test_o_hook_leva_tudo_que_o_primeiro_boot_precisa():
+    """O que falta aqui não falta com erro: falta em silêncio.
+
+    A primeira imagem da v0.4.0 saiu com o script que reparticiona dentro do
+    initramfs e sem o layout.sh que ele chama. O initramfs era válido, a build
+    passou, e o cartão simplesmente nunca teria virado um cartão de dois
+    sistemas.
+    """
     texto = open(HOOK, encoding="utf-8").read()
-    assert "slot-decide.sh" in texto
-    assert "copy_exec /sbin/blkid" in texto
-    assert "vfat" in texto
+    for peca in ("slot-decide.sh", "layout.sh", "blkid", "blockdev",
+                 "sfdisk", "mkfs.ext4", "e2fsck", "resize2fs",
+                 "mke2fs.conf", "vfat", "ext4"):
+        assert peca in texto, "o hook não leva %s para o initramfs" % peca
+
+
+def test_a_build_confere_o_initramfs_peca_por_peca():
+    """O guarda que deixou a v0.4.0 passar conferia só o decisor."""
+    stage = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "image", "stage-project-os", "00-project-os", "01-run.sh",
+    )
+    texto = open(stage, encoding="utf-8").read()
+    for peca in ("slot-decide.sh", "layout.sh", "project-os-slot",
+                 "project-os-layout", "sfdisk", "mkfs.ext4"):
+        assert peca in texto
 
 
 def test_o_script_grava_a_tentativa_antes_de_entregar_o_boot():

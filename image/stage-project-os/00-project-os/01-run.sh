@@ -129,10 +129,18 @@ grep -q "^initramfs " "$BOOT/config.txt" 2>/dev/null || \
 # E conferir que os nossos scripts foram mesmo parar dentro dele -- um hook que
 # falha em silêncio produz um initramfs perfeitamente válido que não faz nada do
 # que a gente quer.
-if ! lsinitramfs "$BOOT/initramfs-project-os" 2>/dev/null | grep -q "slot-decide.sh"; then
-    echo "project-os: o initramfs saiu sem o decisor de slot; abortando a imagem" >&2
-    exit 1
-fi
+# A lista é a lista inteira, e não só o decisor. A primeira imagem da v0.4.0
+# passou por esta checagem e mesmo assim saiu sem o layout.sh dentro do
+# initramfs -- ou seja, sem reparticionar no primeiro boot, que é a coisa que
+# faz o esquema de dois sistemas existir.
+LISTA=$(lsinitramfs "$BOOT/initramfs-project-os" 2>/dev/null || true)
+for PECA in slot-decide.sh layout.sh project-os-slot project-os-layout \
+            sfdisk mkfs.ext4 resize2fs e2fsck blkid; do
+    if ! echo "$LISTA" | grep -q "$PECA"; then
+        echo "project-os: o initramfs saiu sem $PECA; abortando a imagem" >&2
+        exit 1
+    fi
+done
 
 systemctl enable project-os.service
 systemctl enable project-os-firstboot.service
