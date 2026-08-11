@@ -65,8 +65,18 @@ jobs:
           gh release upload "$tag" "${{ steps.pack.outputs.name }}" --clobber
 
       - name: Update the manifest on main
+        # O manifesto é escrito DEPOIS de trocar para o main, e nunca antes.
+        # Escrever primeiro e trocar depois foi o que quebrou a publicação da
+        # v0.3.7: o checkout aborta em vez de sobrescrever uma alteração local,
+        # e o release saiu sem manifesto -- ou seja, a atualização pela rede,
+        # que é a razão de existir deste workflow, ficou anunciando a versão
+        # anterior.
         run: |
           set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
           mkdir -p release
           cat > release/latest.json <<JSON
           {
@@ -76,12 +86,12 @@ jobs:
             "notes": "https://github.com/${{ github.repository }}/releases/tag/${{ steps.v.outputs.tag }}"
           }
           JSON
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout -B main origin/main
-          cp release/latest.json /tmp/latest.json
-          mkdir -p release && cp /tmp/latest.json release/latest.json
           git add release/latest.json
-          git commit -m "release ${{ steps.v.outputs.version }}: manifesto de atualização" || exit 0
-          git push origin main
+          git diff --cached --quiet && exit 0
+          git commit -m "release ${{ steps.v.outputs.version }}: manifesto de atualização"
+          # Alguém pode ter empurrado para o main enquanto o tarball subia.
+          for tentativa in 1 2 3; do
+            git push origin main && exit 0
+            git pull --rebase origin main
+          done
+          exit 1
