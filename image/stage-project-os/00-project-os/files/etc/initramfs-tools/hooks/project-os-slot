@@ -1,9 +1,16 @@
 #!/bin/sh
-# Põe dentro do initramfs o que o decisor de slot precisa.
+# Põe dentro do initramfs tudo que o primeiro boot precisa.
 #
-# Um initramfs só tem o que este hook copiar para dentro dele. Faltar qualquer
-# uma destas coisas significa um Pi que não sobe, então a lista é curta de
-# propósito: o decisor, o blkid que acha a partição FAT, e o módulo do vfat.
+# Um initramfs só tem o que este hook copiar para dentro dele. O que falta aqui
+# não falta com um erro: falta em silêncio, e o boot segue pelo caminho normal
+# como se nada existisse.
+#
+# Foi assim que a primeira imagem da v0.4.0 saiu quebrada: o script que
+# reparticiona estava no initramfs, o layout.sh que ele chama não estava, e a
+# única forma de descobrir isso era abrindo o arquivo e olhando -- que é o que
+# scripts/verify-image-docker.sh passou a fazer.
+#
+# Então: quem entra aqui é conferido lá, e a build falha se faltar.
 
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
@@ -14,10 +21,28 @@ esac
 . /usr/share/initramfs-tools/hook-functions
 
 mkdir -p "${DESTDIR}/usr/share/project-os"
-cp -a /usr/share/project-os/slot-decide.sh "${DESTDIR}/usr/share/project-os/slot-decide.sh"
-if [ -x /usr/share/project-os/recovery.sh ]; then
-    cp -a /usr/share/project-os/recovery.sh "${DESTDIR}/usr/share/project-os/recovery.sh"
-fi
+for script in slot-decide.sh layout.sh recovery.sh; do
+    [ -f "/usr/share/project-os/$script" ] || continue
+    cp -a "/usr/share/project-os/$script" "${DESTDIR}/usr/share/project-os/$script"
+done
 
+# Achar a partição de boot pelo rótulo, e saber o tamanho do disco.
 copy_exec /sbin/blkid /sbin
-manual_add_modules vfat nls_cp437 nls_iso8859_1
+copy_exec /sbin/blockdev /sbin
+
+# Reparticionar e formatar no primeiro boot. Sem estes, o layout.sh sai dizendo
+# "falta ferramenta" e o cartão continua com um sistema só -- o que é seguro,
+# mas não é o produto.
+copy_exec /sbin/sfdisk /sbin
+copy_exec /sbin/mkfs.ext4 /sbin
+copy_exec /sbin/e2fsck /sbin
+copy_exec /sbin/resize2fs /sbin
+for extra in /sbin/partprobe /usr/sbin/partprobe /sbin/partx /usr/sbin/partx; do
+    [ -x "$extra" ] && copy_exec "$extra" /sbin
+done
+
+# mkfs.ext4 lê este arquivo para saber que tipo de sistema de arquivos criar.
+# Sem ele o mkfs falha, e falha depois de a tabela de partições já ter mudado.
+[ -f /etc/mke2fs.conf ] && cp -a /etc/mke2fs.conf "${DESTDIR}/etc/mke2fs.conf"
+
+manual_add_modules vfat nls_cp437 nls_iso8859_1 ext4
