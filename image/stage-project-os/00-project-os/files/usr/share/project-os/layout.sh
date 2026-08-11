@@ -55,10 +55,98 @@ parte() { echo "${DISCO}${SEP}${1}"; }
 
 SETOR=512
 
+# "Já está pronto" é sobre o estado de verdade, não sobre contar partições.
+#
+# A tabela é escrita muito antes das formatações. Entre um ponto e outro cabem:
+# os nós de /dev não aparecerem, o mkfs falhar, e principalmente a energia
+# faltar -- formatar 45 GB num Pi 3B, dentro do initramfs, sem nada na tela,
+# demora. Qualquer uma dessas deixa o cartão com quatro partições e sem sistema
+# de arquivos em p3/p4, e uma porta que só conta partições diz "nada a fazer"
+# para sempre.
+#
+# O estrago disso é lento e invisível: sem o rótulo pos-data a partição de dados
+# não monta (o fstab tem nofail), /var/lib/project-os continua morando na raiz,
+# ele usa a caixa por semanas -- e na primeira atualização o Pi sobe no slot B e
+# encontra tudo vazio, com banco, conta e músicas presos no slot A.
+ja_pronto() {
+    [ -b "$(parte 3)" ] && [ -b "$(parte 4)" ] || return 1
+    [ "$(blkid -o value -s LABEL "$(parte 3)" 2>/dev/null)" = "pos-rootB" ] || return 1
+    [ "$(blkid -o value -s LABEL "$(parte 4)" 2>/dev/null)" = "pos-data" ]  || return 1
+    return 0
+}
+
+# Cria os nós que faltam em /dev a partir do que o kernel diz em /sys. Dentro do
+# initramfs o udev pode não estar ouvindo, e aí o mkfs falha com "não existe esse
+# arquivo" logo depois de a partição ter sido criada com sucesso.
+garantir_nodes() {
+    _base=$(basename "$DISCO")
+    for _entrada in /sys/block/"$_base"/"$_base"*/dev; do
+        [ -r "$_entrada" ] || continue
+        _nome=$(basename "$(dirname "$_entrada")")
+        _maj=$(cut -d: -f1 "$_entrada")
+        _min=$(cut -d: -f2 "$_entrada")
+        if [ -b "/dev/$_nome" ]; then
+            # Um nó que sobrou da tabela antiga aponta para um lugar que não
+            # existe mais, e o erro que ele dá ("não é um dispositivo válido")
+            # não parece o que é. Confere o número; se não bate, refaz.
+            _atual=$(stat -c '%t:%T' "/dev/$_nome" 2>/dev/null || echo "")
+            _esperado=$(printf '%x:%x' "$_maj" "$_min" 2>/dev/null || echo "")
+            [ "$_atual" = "$_esperado" ] && continue
+            rm -f "/dev/$_nome"
+        fi
+        mknod "/dev/$_nome" b "$_maj" "$_min" 2>/dev/null || true
+    done
+}
+
+esperar_nodes() {
+    _espera=0
+    while [ "$_espera" -lt 10 ]; do
+        garantir_nodes
+        [ -b "$(parte 3)" ] && [ -b "$(parte 4)" ] && return 0
+        _espera=$((_espera + 1))
+        sleep 1
+    done
+    [ -b "$(parte 3)" ] && [ -b "$(parte 4)" ]
+}
+
+# A raiz cresce e os dois sistemas de arquivos novos nascem. Cada passo confere
+# antes de fazer, então chamar isto duas vezes não refaz nada -- é o que permite
+# terminar um serviço interrompido no boot seguinte.
+terminar() {
+    e2fsck -fp "$(parte 2)" >/dev/null 2>&1 || true
+    resize2fs "$(parte 2)" >/dev/null 2>&1 || \
+        aviso "resize2fs não cresceu a raiz (segue funcionando no tamanho antigo)"
+
+    if [ "$(blkid -o value -s LABEL "$(parte 3)" 2>/dev/null)" != "pos-rootB" ]; then
+        mkfs.ext4 -q -F -L pos-rootB "$(parte 3)" >/dev/null 2>&1 || {
+            aviso "não consegui formatar o slot B"
+            return 5
+        }
+    fi
+    if [ "$(blkid -o value -s LABEL "$(parte 4)" 2>/dev/null)" != "pos-data" ]; then
+        mkfs.ext4 -q -F -L pos-data "$(parte 4)" >/dev/null 2>&1 || {
+            aviso "não consegui formatar os dados"
+            return 5
+        }
+    fi
+    sync
+
+    # A raiz de hoje passa a se chamar pos-rootA: o fstab e o ajudante de
+    # atualização procuram por rótulo, e "rootfs" é o nome que o pi-gen deixou.
+    e2label "$(parte 2)" pos-rootA >/dev/null 2>&1 || true
+    return 0
+}
+
 partes_existentes=$(sfdisk -d "$DISCO" 2>/dev/null | grep -c "^${DISCO}${SEP}[0-9]")
 if [ "$partes_existentes" -ge 4 ]; then
-    aviso "o cartão já tem $partes_existentes partições; nada a fazer"
-    exit 0
+    if ja_pronto; then
+        aviso "o cartão já tem $partes_existentes partições e já está pronto; nada a fazer"
+        exit 0
+    fi
+    aviso "a tabela já tem $partes_existentes partições, mas falta formatar; terminando o serviço"
+    esperar_nodes || { aviso "as partições não apareceram em /dev"; exit 4; }
+    terminar
+    exit $?
 fi
 if [ "$partes_existentes" -ne 2 ]; then
     aviso "esperava 2 partições, achei $partes_existentes; deixando como está"
@@ -167,55 +255,13 @@ echo "$TABELA" | sfdisk --no-reread --force "$DISCO" >/dev/null 2>&1 || {
 sync
 partprobe "$DISCO" >/dev/null 2>&1 || partx -u "$DISCO" >/dev/null 2>&1 || true
 
-# O kernel já sabe das partições novas; /dev pode não saber ainda. Quem costuma
-# criar esses arquivos é o udev, e aqui dentro do initramfs ele pode não estar
-# ouvindo -- então criamos nós mesmos, a partir do que o kernel diz em /sys.
-# Sem isso o mkfs do slot B falha com "não existe esse arquivo" logo depois de a
-# partição ter sido criada com sucesso, que é o tipo de erro que faz perder uma
-# tarde.
-garantir_nodes() {
-    _base=$(basename "$DISCO")
-    for _entrada in /sys/block/"$_base"/"$_base"*/dev; do
-        [ -r "$_entrada" ] || continue
-        _nome=$(basename "$(dirname "$_entrada")")
-        _maj=$(cut -d: -f1 "$_entrada")
-        _min=$(cut -d: -f2 "$_entrada")
-        if [ -b "/dev/$_nome" ]; then
-            # Um nó que sobrou da tabela antiga aponta para um lugar que não
-            # existe mais, e o erro que ele dá ("não é um dispositivo válido")
-            # não parece o que é. Confere o número; se não bate, refaz.
-            _atual=$(stat -c '%t:%T' "/dev/$_nome" 2>/dev/null || echo "")
-            _esperado=$(printf '%x:%x' "$_maj" "$_min" 2>/dev/null || echo "")
-            [ "$_atual" = "$_esperado" ] && continue
-            rm -f "/dev/$_nome"
-        fi
-        mknod "/dev/$_nome" b "$_maj" "$_min" 2>/dev/null || true
-    done
-}
-
-_espera=0
-while [ "$_espera" -lt 10 ]; do
-    garantir_nodes
-    [ -b "$(parte 3)" ] && [ -b "$(parte 4)" ] && break
-    _espera=$((_espera + 1))
-    sleep 1
-done
-if [ ! -b "$(parte 3)" ] || [ ! -b "$(parte 4)" ]; then
+# O kernel já sabe das partições novas; /dev pode não saber ainda.
+if ! esperar_nodes; then
     aviso "as partições novas não apareceram em /dev; o cartão segue bootável, sem slot B"
     exit 4
 fi
 
-# Agora o sistema de arquivos da raiz pode ocupar a partição maior.
-e2fsck -fp "$(parte 2)" >/dev/null 2>&1 || true
-resize2fs "$(parte 2)" >/dev/null 2>&1 || aviso "resize2fs não cresceu a raiz (segue funcionando no tamanho antigo)"
-
-mkfs.ext4 -q -F -L pos-rootB "$(parte 3)" >/dev/null 2>&1 || { aviso "não consegui formatar o slot B"; exit 5; }
-mkfs.ext4 -q -F -L pos-data "$(parte 4)" >/dev/null 2>&1 || { aviso "não consegui formatar os dados"; exit 5; }
-sync
-
-# A raiz de hoje passa a se chamar pos-rootA: o fstab e o ajudante de
-# atualização procuram por rótulo, e "rootfs" é o nome que o pi-gen deixou.
-e2label "$(parte 2)" pos-rootA >/dev/null 2>&1 || true
+terminar || exit $?
 
 aviso "pronto: p2=pos-rootA p3=pos-rootB p4=pos-data"
 exit 0

@@ -142,10 +142,24 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 # carrega o initramfs que combina com o kernel que ele decidiu subir. Então não
 # se acrescenta linha nenhuma ao config.txt -- só se regeneram TODOS os
 # initramfs, agora que os nossos hooks estão instalados.
-# -u antes de -c: os arquivos já existem (o pacote do kernel os gerou no build),
-# e "-c" se recusa a sobrescrever. Na ordem errada o comando sai com sucesso sem
-# ter regenerado nada, e os nossos hooks nunca entram no initramfs.
-update-initramfs -u -k all >/dev/null 2>&1 || update-initramfs -c -k all >/dev/null 2>&1 || true
+# E tem que ser "-c", não "-u". O pi-gen DESLIGA o update-initramfs no começo da
+# build -- stage0/02-firmware/02-run.sh põe update_initramfs=no -- e só religa no
+# export-image, que roda depois deste stage. Com a chave desligada, a função
+# update() do update-initramfs sai logo no começo, dizendo "Not updating
+# initramfs", e sai com **sucesso**: um "-u" aqui não regenera nada e ainda
+# engana quem confia no código de saída (um `|| ...` depois dele nunca roda).
+#
+# O modo "create" não passa por essa chave. E, ao contrário do que parece, ele
+# não se recusa a sobrescrever: generate_initramfs() faz
+# `mkinitramfs -o "$arquivo.new" && mv -f "$arquivo.new" "$arquivo"`.
+#
+# A chave é religada aqui também, para o caso de uma versão futura do pi-gen
+# passar a bloquear o create -- e porque um sistema instalado que não regenera o
+# initramfs ao atualizar o kernel é um tijolo esperando a hora.
+if [ -f /etc/initramfs-tools/update-initramfs.conf ]; then
+    sed -i 's/^update_initramfs=.*/update_initramfs=yes/' /etc/initramfs-tools/update-initramfs.conf
+fi
+update-initramfs -c -k all
 
 BOOT=/boot/firmware
 [ -d "$BOOT" ] || BOOT=/boot

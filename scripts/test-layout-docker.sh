@@ -146,6 +146,40 @@ SAIDA=$(bash "$LAYOUT" "$LOOP" 2>&1 || true)
 echo "$SAIDA" | grep -q "já tem" && ok "reconhece que já está pronto" || falha "não é idempotente: $SAIDA"
 PARTES=$(sfdisk -d "$LOOP" | grep -c "^${LOOP}p[0-9]")
 [ "$PARTES" = "4" ] && ok "continua com quatro partições" || falha "mexeu de novo na tabela"
+echo "== formatação interrompida no meio: o boot seguinte termina o serviço =="
+# A tabela é escrita muito antes das formatações, e entre um ponto e outro cabe
+# uma queda de energia -- formatar 45 GB num Pi 3B, dentro do initramfs, demora.
+# Uma porta de idempotência que só conta partições diria "nada a fazer" para
+# sempre, e o cartão ficaria com quatro partições e sem sistema de arquivos:
+# pos-data nunca montaria, os dados do dono moraria na raiz sem ninguém saber, e
+# a primeira atualização os deixaria para trás no slot velho.
+wipefs -a "${LOOP}p3" >/dev/null 2>&1 || true
+wipefs -a "${LOOP}p4" >/dev/null 2>&1 || true
+# O blkid guarda cache em /run/blkid; sem limpar, ele continua jurando que o
+# rótulo está lá. Dentro do initramfs esse cache não existe ainda.
+rm -f /run/blkid/blkid.tab /etc/blkid.tab 2>/dev/null || true
+[ -z "$(blkid -o value -s LABEL "${LOOP}p4" 2>/dev/null)" ] \
+    && ok "simulei a queda: p3 e p4 sem sistema de arquivos" \
+    || falha "não consegui simular a interrupção"
+
+SAIDA_T=$(bash "$LAYOUT" "$LOOP" 2>&1) || falha "não terminou o serviço interrompido: $SAIDA_T"
+partprobe "$LOOP" >/dev/null 2>&1 || true
+nodes "$LOOP"
+[ "$(blkid -o value -s LABEL "${LOOP}p3")" = "pos-rootB" ] \
+    && ok "o slot B foi formatado no boot seguinte" \
+    || falha "o slot B continuou sem sistema de arquivos"
+[ "$(blkid -o value -s LABEL "${LOOP}p4")" = "pos-data" ] \
+    && ok "a partição de dados foi formatada no boot seguinte" \
+    || falha "a partição de dados continuou sem sistema de arquivos"
+
+# E o que já estava pronto não é refeito: a raiz não pode ser tocada.
+mount "${LOOP}p2" "$TRABALHO/mnt" 2>/dev/null
+DEPOIS=$(sha256sum "$TRABALHO/mnt/opt/project-os/grande.bin" 2>/dev/null | cut -d' ' -f1 || echo vazio)
+umount "$TRABALHO/mnt" 2>/dev/null || true
+[ "$DEPOIS" = "$(cat "$TRABALHO/sha-antes")" ] \
+    && ok "a raiz continuou intacta enquanto o resto era terminado" \
+    || falha "terminar o serviço mexeu na raiz"
+
 losetup -d "$LOOP"
 
 echo "== cartão pequeno demais: não mexe em nada =="

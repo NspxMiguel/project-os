@@ -173,6 +173,17 @@ awk '$1 !~ /^#/ && $2 == "/" { achou = 1 } END { exit !achou }' /mnt/raiz/etc/fs
     && ok "o fstab tem a linha da raiz (sem ela o sistema sobe somente leitura)" \
     || falha "o fstab não tem linha para a raiz"
 
+# A identidade da caixa tem que atravessar a atualização: sem o Wi-Fi, o slot
+# novo sobe sem rede, nunca confirma, e três boots depois volta atrás -- toda
+# atualização por Wi-Fi terminaria em rollback.
+FALTOU_ID=""
+for peca in "NetworkManager/system-connections" "ssh_host_ed25519_key" "^project-os:"; do
+    grep -q "$peca" /mnt/raiz/usr/local/sbin/project-os-system-update || FALTOU_ID="$FALTOU_ID $peca"
+done
+[ -z "$FALTOU_ID" ] \
+    && ok "a atualização leva Wi-Fi, senha e chaves de SSH para o slot novo" \
+    || falha "o ajudante de atualização não leva:$FALTOU_ID"
+
 # rsync é quem clona o sistema para o slot reserva.
 [ -x /mnt/raiz/usr/bin/rsync ] && ok "rsync instalado (clona o slot B)" \
                               || falha "rsync não está na imagem; o slot B ficaria vazio"

@@ -59,9 +59,12 @@ SLOT=${DECISAO%% *}
 TRIES=${DECISAO##* }
 
 if [ "$SLOT" = "RECOVERY" ]; then
-    # Os dois slots falharam, ou alguém pediu recovery. O socorro mora aqui
-    # dentro do initramfs de propósito: ele precisa continuar funcionando
-    # justamente quando nenhum dos dois sistemas funciona.
+    # Alguém pediu recovery (recovery=1). Só isso -- um slot que para de subir
+    # não cai mais aqui: o decisor alterna entre os dois, porque insistir no
+    # mesmo é garantir que uma caixa sem tela não volte nunca.
+    #
+    # O socorro mora aqui dentro do initramfs de propósito: ele precisa
+    # continuar funcionando justamente quando nenhum dos dois sistemas funciona.
     aviso "entrando em modo recovery"
     if [ -x /usr/share/project-os/recovery.sh ]; then
         /usr/share/project-os/recovery.sh "$MONTAGEM"

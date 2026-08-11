@@ -84,5 +84,49 @@ if [ -f "$MONTAGEM/etc/fstab" ] && [ -x /usr/share/project-os/fstab-slot.sh ]; t
         echo "aviso: não consegui ajustar o fstab do slot $SLOT" >&2
 fi
 
+# O tarball traz um /etc de fábrica, e algumas coisas em /etc são DESTA CAIXA,
+# não desta versão. Sem levá-las junto, o slot novo sobe como um aparelho recém-
+# desembalado -- e é aí que a promessa toda se desfaz:
+#
+#   - a senha do Wi-Fi mora em /etc/NetworkManager/system-connections, e só ali:
+#     o project-os-firstboot apaga o project-os-wifi.txt da FAT assim que
+#     conecta, de propósito, porque é senha em texto puro. Num Pi ligado por
+#     Wi-Fi, o slot novo subiria sem rede, o /api/system/health nunca seria
+#     chamado, o slot nunca seria confirmado, e três boots depois o initramfs
+#     voltaria sozinho. Ou seja: toda atualização por Wi-Fi terminaria em volta
+#     atrás, sempre, e a única saída seria o cartão no PC de novo;
+#   - a senha que ele criou na tela de primeiro uso mora em /etc/shadow. O
+#     tarball traz a conta trancada, como sai de fábrica;
+#   - as chaves de host do SSH. Trocadas, o cliente dele recusa a conexão com
+#     "REMOTE HOST IDENTIFICATION HAS CHANGED", que numa caixa sem tela parece
+#     invasão, e não atualização.
+#
+# A raiz que está rodando é a origem: quem chama este script está dentro dela.
+echo "levando a identidade desta caixa para o slot novo"
+
+preservar() {
+    [ -e "/$1" ] || return 0
+    mkdir -p "$MONTAGEM/$(dirname "$1")"
+    cp -a "/$1" "$MONTAGEM/$(dirname "$1")/" 2>/dev/null || \
+        echo "aviso: não consegui levar /$1" >&2
+}
+
+for item in etc/NetworkManager/system-connections \
+            etc/wpa_supplicant/wpa_supplicant.conf \
+            etc/ssh/ssh_host_rsa_key etc/ssh/ssh_host_rsa_key.pub \
+            etc/ssh/ssh_host_ecdsa_key etc/ssh/ssh_host_ecdsa_key.pub \
+            etc/ssh/ssh_host_ed25519_key etc/ssh/ssh_host_ed25519_key.pub \
+            etc/hostname etc/machine-id; do
+    preservar "$item"
+done
+
+# A senha: só a linha da conta dele. O /etc/shadow inteiro não serve -- o do
+# tarball tem as contas de sistema que a versão nova criou.
+if [ -f "$MONTAGEM/etc/shadow" ] && grep -q "^project-os:" /etc/shadow 2>/dev/null; then
+    LINHA=$(grep "^project-os:" /etc/shadow)
+    sed -i "/^project-os:/d" "$MONTAGEM/etc/shadow"
+    printf '%s\n' "$LINHA" >> "$MONTAGEM/etc/shadow"
+fi
+
 sync
 echo "slot $SLOT gravado"

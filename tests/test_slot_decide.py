@@ -57,9 +57,35 @@ def test_a_volta_passa_a_ser_o_pedido_e_nao_fica_repetindo_o_quebrado(tmp_path):
     assert decidir(tmp_path, "slot=A\ngood=A\ntries=1\nrecovery=0\n") == ("A", 2)
 
 
-def test_quando_ate_o_slot_bom_para_de_subir_sobra_o_recovery(tmp_path):
-    """Não existe terceiro slot para tentar; quem resolve isso é o recovery."""
-    assert decidir(tmp_path, "slot=A\ngood=A\ntries=3\nrecovery=0\n") == ("RECOVERY", 0)
+def test_quando_ate_o_slot_bom_para_de_subir_tenta_o_outro(tmp_path):
+    """O contrário disto era um laço infinito, e o pior tipo de laço infinito.
+
+    Antes, quando o slot bom parava de subir, o decisor pedia recovery -- que não
+    existe instalado -- e o initramfs voltava para o MESMO slot com o contador
+    zerado. Três tentativas, recovery, zera, três tentativas, para sempre, com um
+    sistema inteiro e bootável no slot ao lado que nunca era tentado uma única
+    vez. Numa caixa sem tela isso é o cartão de volta no PC: exatamente o
+    desfecho que este projeto existe para impedir.
+
+    Um apt-get infeliz no modo Advanced -- que é root, de propósito -- basta
+    para chegar aqui.
+    """
+    assert decidir(tmp_path, "slot=A\ngood=A\ntries=3\nrecovery=0\n") == ("B", 1)
+    assert decidir(tmp_path, "slot=B\ngood=B\ntries=3\nrecovery=0\n") == ("A", 1)
+
+
+def test_alternar_nao_fica_preso_em_nenhum_dos_dois(tmp_path):
+    """Cada rodada de três tentativas troca de lado, sempre."""
+    estado = ("A", "A", 3)
+    vistos = []
+    for _ in range(4):
+        slot, tries = decidir(
+            tmp_path, "slot=%s\ngood=%s\ntries=%d\nrecovery=0\n" % (estado[0], estado[1], estado[2])
+        )
+        vistos.append(slot)
+        # O slot que falhou continua sendo o "good" registrado até algum subir.
+        estado = (slot, estado[1], 3)
+    assert vistos == ["B", "A", "B", "A"]
 
 
 def test_recovery_pedido_de_proposito_ganha_de_tudo(tmp_path):

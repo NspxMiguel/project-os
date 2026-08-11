@@ -73,9 +73,21 @@ decidir_slot() {
             # sempre a cada reinício.
             echo "$_good 1"
         else
-            # O único slot que já funcionou também parou de funcionar. Não há
-            # terceiro para tentar; quem resolve isso é o recovery.
-            echo "RECOVERY 0"
+            # O único slot que já funcionou também parou de funcionar.
+            #
+            # Não existe terceiro sistema, mas existe o OUTRO slot, e ele tem um
+            # sistema inteiro dentro: a imagem sai com os dois iguais e o
+            # project-os-clone-slot copia um no outro no primeiro boot.
+            #
+            # Insistir no mesmo é garantir que a caixa não volte nunca -- ela não
+            # tem tela para pedir socorro. Alternar dá a ela a única chance de
+            # voltar sozinha: qualquer um dos dois que ainda suba, sobe. E se
+            # nenhum dos dois subir, alternar também não custa nada.
+            if [ "$_good" = "A" ]; then
+                echo "B 1"
+            else
+                echo "A 1"
+            fi
         fi
         return
     fi
