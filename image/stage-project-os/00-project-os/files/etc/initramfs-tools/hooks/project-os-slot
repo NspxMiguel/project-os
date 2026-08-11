@@ -1,0 +1,23 @@
+#!/bin/sh
+# Põe dentro do initramfs o que o decisor de slot precisa.
+#
+# Um initramfs só tem o que este hook copiar para dentro dele. Faltar qualquer
+# uma destas coisas significa um Pi que não sobe, então a lista é curta de
+# propósito: o decisor, o blkid que acha a partição FAT, e o módulo do vfat.
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+    prereqs) prereqs; exit 0 ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+mkdir -p "${DESTDIR}/usr/share/project-os"
+cp -a /usr/share/project-os/slot-decide.sh "${DESTDIR}/usr/share/project-os/slot-decide.sh"
+if [ -x /usr/share/project-os/recovery.sh ]; then
+    cp -a /usr/share/project-os/recovery.sh "${DESTDIR}/usr/share/project-os/recovery.sh"
+fi
+
+copy_exec /sbin/blkid /sbin
+manual_add_modules vfat nls_cp437 nls_iso8859_1

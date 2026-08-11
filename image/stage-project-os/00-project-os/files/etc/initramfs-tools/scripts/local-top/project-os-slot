@@ -1,0 +1,97 @@
+#!/bin/sh
+# Escolhe o slot antes de montar a raiz. É o TWRP desta história.
+#
+# Roda dentro do initramfs, que mora na partição FAT e é carregado pelo firmware
+# do Pi antes de qualquer sistema existir. Por isso ele consegue socorrer um
+# sistema que não sobe: ele não depende de nenhum dos dois.
+#
+# O que faz, nesta ordem, e a ordem importa:
+#
+#   1. monta a FAT (o único lugar que não depende de escolher slot);
+#   2. lê o estado e decide;
+#   3. **grava a decisão de volta antes de entregar o boot** -- um sistema que
+#      trava no meio do boot não volta aqui para contar que travou, então a
+#      tentativa tem que estar contada antes de ser feita;
+#   4. desmonta e aponta $ROOT para o slot escolhido.
+#
+# Ver docs/RECOVERY.md.
+
+PREREQ="udev"
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+    prereqs) prereqs; exit 0 ;;
+esac
+
+MONTAGEM=/run/project-os-boot
+CONF="$MONTAGEM/project-os-slot.conf"
+DECISOR=/usr/share/project-os/slot-decide.sh
+
+aviso() { echo "project-os: $*" >/dev/kmsg 2>/dev/null || echo "project-os: $*"; }
+
+[ -r "$DECISOR" ] || { aviso "sem o decisor de slot; deixando o boot como está"; exit 0; }
+. "$DECISOR"
+
+# A partição FAT do Raspberry Pi OS tem rótulo "bootfs". Procurar pelo rótulo, e
+# não pelo número, evita chutar errado num cartão que alguém reparticionou.
+BOOTDEV=$(blkid -L bootfs 2>/dev/null)
+[ -n "$BOOTDEV" ] || BOOTDEV=$(blkid -o device -t LABEL=bootfs 2>/dev/null | head -n 1)
+if [ -z "$BOOTDEV" ]; then
+    aviso "não achei a partição de boot; deixando o boot como está"
+    exit 0
+fi
+
+DISCO=$(echo "$BOOTDEV" | sed -E 's/p?[0-9]+$//')
+case "$DISCO" in
+    *[0-9]) SEP=p ;;
+    *)      SEP=  ;;
+esac
+
+mkdir -p "$MONTAGEM"
+if ! mount -t vfat -o rw "$BOOTDEV" "$MONTAGEM" 2>/dev/null; then
+    aviso "não consegui montar $BOOTDEV; deixando o boot como está"
+    exit 0
+fi
+
+DECISAO=$(decidir_slot "$CONF")
+SLOT=${DECISAO%% *}
+TRIES=${DECISAO##* }
+
+if [ "$SLOT" = "RECOVERY" ]; then
+    # Os dois slots falharam, ou alguém pediu recovery. O socorro mora aqui
+    # dentro do initramfs de propósito: ele precisa continuar funcionando
+    # justamente quando nenhum dos dois sistemas funciona.
+    aviso "entrando em modo recovery"
+    if [ -x /usr/share/project-os/recovery.sh ]; then
+        /usr/share/project-os/recovery.sh "$MONTAGEM"
+    else
+        # Enquanto o recovery não existe, subir o último que funcionou é melhor
+        # do que parar num prompt que ninguém vai ver: esta caixa não tem tela.
+        SLOT=$(ler_chave "$CONF" good A)
+        aviso "sem recovery instalado; tentando o slot $SLOT mais uma vez"
+    fi
+fi
+
+case "$SLOT" in
+    A) NUMERO=2 ;;
+    B) NUMERO=3 ;;
+    *) NUMERO=2 ;;
+esac
+
+# Gravar a tentativa ANTES de entregar o boot. Um kernel que trava não volta.
+GOOD=$(ler_chave "$CONF" good A)
+RECOVERY=$(ler_chave "$CONF" recovery 0)
+[ "$RECOVERY" = "1" ] && RECOVERY=0   # pedido atendido; não repetir para sempre
+{
+    echo "# project-os -- qual sistema sobe. Escrito no boot, lido no boot."
+    echo "slot=$SLOT"
+    echo "good=$GOOD"
+    echo "tries=$TRIES"
+    echo "recovery=$RECOVERY"
+} > "$CONF.novo" 2>/dev/null && mv -f "$CONF.novo" "$CONF" 2>/dev/null
+
+sync
+umount "$MONTAGEM" 2>/dev/null
+
+ROOT="${DISCO}${SEP}${NUMERO}"
+export ROOT
+aviso "subindo o slot $SLOT ($ROOT), tentativa $TRIES"
