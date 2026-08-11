@@ -69,6 +69,21 @@ for diretorio in proc sys dev run tmp boot/firmware var/lib/project-os; do
 done
 chmod 1777 "$MONTAGEM/tmp"
 
+# A cópia trouxe o /etc/fstab deste sistema aqui, que diz que a raiz é a
+# partição deste sistema aqui. No slot de destino isso é mentira, e é uma
+# mentira que só aparece no dia em que ele precisar voltar para este slot --
+# ou seja, no pior dia possível. O fstab-slot.sh conserta e explica o porquê.
+DISCO=$(echo "$RAIZ" | sed -E 's/p?[0-9]+$//')
+case "$DISCO" in
+    *[0-9]) SEP=p ;;
+    *)      SEP=  ;;
+esac
+if [ -x /usr/share/project-os/fstab-slot.sh ]; then
+    /usr/share/project-os/fstab-slot.sh \
+        "$MONTAGEM/etc/fstab" "$ALVO" "${DISCO}${SEP}1" || \
+        registrar "não consegui ajustar o fstab do slot $ALVO"
+fi
+
 sync
 umount "$MONTAGEM" 2>/dev/null || true
 mkdir -p "$(dirname "$MARCA")" && touch "$MARCA"

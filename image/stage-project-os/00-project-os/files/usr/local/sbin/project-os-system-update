@@ -51,7 +51,7 @@ if findmnt -no TARGET "$ALVO" >/dev/null 2>&1; then
 fi
 
 echo "formatando $ALVO (slot $SLOT)"
-mkfs.ext4 -q -F -L "root$SLOT" "$ALVO"
+mkfs.ext4 -q -F -L "pos-root$SLOT" "$ALVO"
 
 mkdir -p "$MONTAGEM"
 mount "$ALVO" "$MONTAGEM"
@@ -75,12 +75,13 @@ for diretorio in proc sys dev run tmp boot/firmware; do
 done
 chmod 1777 "$MONTAGEM/tmp"
 
-# Quem escolhe a raiz é o initramfs, pelo estado na FAT. Deixar um root= fixo
-# aqui dentro seria um segundo dono da mesma decisão, e os dois discordariam na
-# primeira troca de slot.
-if [ -f "$MONTAGEM/etc/fstab" ]; then
-    sed -i 's|^[^#].*[[:space:]]/[[:space:]].*|# a raiz é escolhida pelo initramfs (docs/RECOVERY.md)|' \
-        "$MONTAGEM/etc/fstab"
+# O fstab que veio dentro do tarball diz que a raiz é a p2, porque era verdade
+# na máquina de onde ele saiu. Aqui ele passa a dizer a verdade deste slot.
+# O porquê de não bastar apagar a linha está escrito no fstab-slot.sh.
+if [ -f "$MONTAGEM/etc/fstab" ] && [ -x /usr/share/project-os/fstab-slot.sh ]; then
+    /usr/share/project-os/fstab-slot.sh \
+        "$MONTAGEM/etc/fstab" "$ALVO" "${DISCO}${SEP}1" || \
+        echo "aviso: não consegui ajustar o fstab do slot $SLOT" >&2
 fi
 
 sync

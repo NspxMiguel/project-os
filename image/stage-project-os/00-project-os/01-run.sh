@@ -15,6 +15,7 @@ install -m 755 files/usr/local/sbin/project-os-system-update "${ROOTFS_DIR}/usr/
 install -d -m 755 "${ROOTFS_DIR}/usr/share/project-os"
 install -m 755 files/usr/share/project-os/slot-decide.sh "${ROOTFS_DIR}/usr/share/project-os/slot-decide.sh"
 install -m 755 files/usr/share/project-os/layout.sh "${ROOTFS_DIR}/usr/share/project-os/layout.sh"
+install -m 755 files/usr/share/project-os/fstab-slot.sh "${ROOTFS_DIR}/usr/share/project-os/fstab-slot.sh"
 install -d -m 755 "${ROOTFS_DIR}/etc/initramfs-tools/scripts/local-top"
 install -d -m 755 "${ROOTFS_DIR}/etc/initramfs-tools/hooks"
 install -m 755 files/etc/initramfs-tools/scripts/local-top/project-os-layout \
@@ -88,6 +89,22 @@ project-os ALL=(root) NOPASSWD: /usr/local/sbin/project-os-system-update
 SUDO
 chmod 440 /etc/sudoers.d/010_project-os
 
+# Os dados do usuário moram numa partição própria (p4), fora dos dois sistemas.
+#
+# Sem esta linha o esquema de dois sistemas apaga tudo do dono na primeira
+# atualização: o Pi reinicia no slot B, encontra um /var/lib/project-os vazio, e
+# mostra a tela de criar conta como se fosse um aparelho novo. Banco, conta,
+# playlists e as músicas baixadas ficariam no slot A, invisíveis.
+#
+# nofail: antes do primeiro reparticionamento a partição ainda não existe, e um
+# fstab que exige uma partição inexistente segura o boot num prompt de emergência
+# -- numa caixa sem tela isso é o mesmo que não subir.
+grep -q "pos-data" /etc/fstab || cat >> /etc/fstab <<'FSTAB'
+# Dados do project-os: banco, configuração, música. Fora dos dois sistemas de
+# propósito -- atualizar troca sistema, nunca os seus dados. docs/RECOVERY.md
+LABEL=pos-data  /var/lib/project-os  ext4  defaults,noatime,nofail,x-systemd.device-timeout=15  0  2
+FSTAB
+
 # Locked: no password, so no login, until the first-run screen sets one.
 passwd --lock project-os >/dev/null 2>&1 || true
 
@@ -102,44 +119,82 @@ chage -d "$(date -u +%Y-%m-%d)" -m 0 -M -1 -I -1 -E -1 project-os >/dev/null 2>&
 # initramfs-tools: é ele quem carrega o decisor de slot antes de existir
 # sistema nenhum. Sem isto instalado, o cartão sobe pelo caminho normal e o
 # esquema de dois sistemas simplesmente não acontece.
+# rsync é o que clona o sistema para o slot reserva; sem ele o slot B fica vazio
+# para sempre e a primeira atualização não teria de onde voltar.
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    initramfs-tools busybox parted >/dev/null
+    initramfs-tools busybox parted rsync >/dev/null
 
-# Gera o initramfs e manda o firmware carregá-lo. "followkernel" põe na posição
-# que o bootloader do Pi espera.
-KERNEL=$(ls -1 /lib/modules | sort -V | tail -n 1)
-update-initramfs -c -k "$KERNEL" >/dev/null 2>&1 || update-initramfs -u >/dev/null 2>&1 || true
-INITRD=$(ls -1 /boot/initrd.img-* 2>/dev/null | sort -V | tail -n 1)
-
-# Sem initramfs não existe esquema de dois sistemas: o cartão sobe pelo caminho
-# de sempre e a promessa de nunca mais gravar à mão morre em silêncio, numa
-# imagem que parece boa. Falhar a build é muito melhor do que descobrir isso com
-# o cartão já no Pi.
-if [ -z "$INITRD" ]; then
-    echo "project-os: update-initramfs não gerou nada; abortando a imagem" >&2
-    exit 1
-fi
+# O initramfs, um por kernel. Esta parte já quebrou uma imagem e o motivo vale
+# escrito: o cartão traz quatro kernels (kernel.img, kernel7.img, kernel7l.img,
+# kernel8.img) e o Pi 3B sobe o kernel7. Um initramfs carrega dentro os módulos
+# do kernel para o qual foi gerado, então gerar um só -- ainda por cima
+# escolhendo "o último da lista", que é o v8 de 64 bits -- e apontar o config.txt
+# para ele deixa o Pi 3B esperando para sempre um cartão SD cujos drivers não
+# existem naquele initramfs. Trava antes da rede, antes de tudo.
+#
+# A imagem já vem com auto_initramfs=1, que é o mecanismo certo: o firmware
+# carrega o initramfs que combina com o kernel que ele decidiu subir. Então não
+# se acrescenta linha nenhuma ao config.txt -- só se regeneram TODOS os
+# initramfs, agora que os nossos hooks estão instalados.
+# -u antes de -c: os arquivos já existem (o pacote do kernel os gerou no build),
+# e "-c" se recusa a sobrescrever. Na ordem errada o comando sai com sucesso sem
+# ter regenerado nada, e os nossos hooks nunca entram no initramfs.
+update-initramfs -u -k all >/dev/null 2>&1 || update-initramfs -c -k all >/dev/null 2>&1 || true
 
 BOOT=/boot/firmware
 [ -d "$BOOT" ] || BOOT=/boot
-cp "$INITRD" "$BOOT/initramfs-project-os"
-grep -q "^initramfs " "$BOOT/config.txt" 2>/dev/null || \
-    printf '\n# project-os: o initramfs escolhe qual dos dois sistemas sobe.\n# docs/RECOVERY.md\ninitramfs initramfs-project-os followkernel\n' >> "$BOOT/config.txt"
 
-# E conferir que os nossos scripts foram mesmo parar dentro dele -- um hook que
-# falha em silêncio produz um initramfs perfeitamente válido que não faz nada do
-# que a gente quer.
-# A lista é a lista inteira, e não só o decisor. A primeira imagem da v0.4.0
-# passou por esta checagem e mesmo assim saiu sem o layout.sh dentro do
-# initramfs -- ou seja, sem reparticionar no primeiro boot, que é a coisa que
-# faz o esquema de dois sistemas existir.
-LISTA=$(lsinitramfs "$BOOT/initramfs-project-os" 2>/dev/null || true)
-for PECA in slot-decide.sh layout.sh project-os-slot project-os-layout \
-            sfdisk mkfs.ext4 resize2fs e2fsck blkid; do
-    if ! echo "$LISTA" | grep -q "$PECA"; then
-        echo "project-os: o initramfs saiu sem $PECA; abortando a imagem" >&2
-        exit 1
-    fi
+# auto_initramfs=1 tem que estar ligado, e a linha "initramfs <arquivo>" não
+# pode existir: ela atropela o automático e força um arquivo só para todos os
+# kernels, que é exatamente o defeito descrito acima.
+sed -i '/^initramfs /d' "$BOOT/config.txt"
+grep -q "^auto_initramfs=1" "$BOOT/config.txt" || echo "auto_initramfs=1" >> "$BOOT/config.txt"
+
+# Fora o primeiro boot do Raspberry Pi OS.
+#
+# O cmdline.txt vem com init=/usr/lib/raspberrypi-sys-mods/firstboot, que troca
+# o init do sistema no primeiríssimo boot. Esse script sorteia um identificador
+# de disco novo, reescreve a tabela de partições com fdisk para gravá-lo,
+# conserta o fstab e o cmdline.txt para o novo número e reinicia.
+#
+# Nada disso é errado -- é errado *junto com o nosso*. No único boot que precisa
+# dar certo passariam a existir dois donos da tabela de partições: o nosso
+# initramfs, que corta o cartão em quatro, e o firstboot, que reescreve o MBR
+# logo depois. Duas coisas mexendo no mesmo setor no mesmo boot é como se perde
+# um cartão, e é justamente o boot em que ele não pode ter que gravar de novo.
+#
+# O que o firstboot faz e ainda queremos continua acontecendo:
+#   - chaves de host do SSH: regenerate_ssh_host_keys.service está habilitado
+#     por conta própria, roda Before=ssh.service, e a imagem não traz chave
+#     nenhuma pronta (conferido dentro da imagem);
+#   - custom.toml: não usamos;
+#   - identificador de disco sorteado: não queremos. Um número fixo, o mesmo que
+#     está no cmdline.txt e no fstab desde a build, é o que faz o PARTUUID
+#     continuar valendo depois do reparticionamento (ver layout.sh).
+sed -i 's| init=/usr/lib/raspberrypi-sys-mods/firstboot||' "$BOOT/cmdline.txt"
+if grep -q "raspberrypi-sys-mods/firstboot" "$BOOT/cmdline.txt"; then
+    echo "project-os: não consegui tirar o firstboot do cmdline.txt" >&2
+    exit 1
+fi
+
+# Cada kernel tem o seu, e cada um precisa ter os nossos scripts E os módulos do
+# kernel certo. Conferir os dois é o que teria evitado a imagem quebrada.
+falta() { echo "project-os: $*" >&2; exit 1; }
+for PAR in "initramfs:v6" "initramfs7:v7" "initramfs7l:v7l" "initramfs8:v8"; do
+    ARQUIVO="${PAR%%:*}"
+    SUFIXO="${PAR##*:}"
+    CAMINHO="$BOOT/$ARQUIVO"
+    [ -f "$CAMINHO" ] || falta "faltou $ARQUIVO na partição de boot"
+    LISTA=$(lsinitramfs "$CAMINHO" 2>/dev/null || true)
+    [ -n "$LISTA" ] || falta "não consegui ler $ARQUIVO"
+    for PECA in slot-decide.sh layout.sh project-os-slot project-os-layout \
+                sfdisk mkfs.ext4 resize2fs e2fsck blkid; do
+        echo "$LISTA" | grep -q "$PECA" || falta "$ARQUIVO saiu sem $PECA"
+    done
+    # E os módulos: um initramfs com os módulos do kernel errado é a falha que
+    # trancou o Pi dele, e ela não aparece em nenhuma outra checagem.
+    echo "$LISTA" | grep -q "lib/modules/[^/]*-rpi-${SUFIXO}/" || \
+        falta "$ARQUIVO não tem os módulos do kernel $SUFIXO"
 done
 
 systemctl enable project-os.service

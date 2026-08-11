@@ -127,8 +127,21 @@ if [ "$P4_TAM" -lt "$DATA_MINIMO_SETORES" ]; then
     exit 3
 fi
 
+# O identificador do disco (label-id) TEM que ser preservado.
+#
+# O sfdisk sorteia um novo quando a tabela não diz qual é -- e o PARTUUID de
+# cada partição é derivado dele. O cmdline.txt manda o kernel montar
+# root=PARTUUID=<id>-02 e o fstab monta /boot/firmware por PARTUUID=<id>-01;
+# trocar o id apaga as duas referências de uma vez. O Pi passaria a depender
+# exclusivamente do nosso initramfs para achar a raiz, e a partição de boot
+# simplesmente não montaria. Foi medido: sem esta linha o id mudava de
+# 5671f673 para outro a cada reparticionamento.
+LABEL_ID=$(sfdisk -d "$DISCO" 2>/dev/null | sed -n 's/^label-id:[[:space:]]*//p' | head -n 1)
+[ -n "$LABEL_ID" ] && LINHA_ID="label-id: $LABEL_ID" || LINHA_ID=""
+
 TABELA=$(cat <<TAB
 label: dos
+${LINHA_ID}
 unit: sectors
 $(parte 1) : start=$P1_INICIO, size=$P1_TAM, type=$P1_TIPO
 $(parte 2) : start=$P2_INICIO, size=$SLOT_SETORES, type=83
@@ -196,9 +209,13 @@ fi
 e2fsck -fp "$(parte 2)" >/dev/null 2>&1 || true
 resize2fs "$(parte 2)" >/dev/null 2>&1 || aviso "resize2fs não cresceu a raiz (segue funcionando no tamanho antigo)"
 
-mkfs.ext4 -q -F -L rootB "$(parte 3)" >/dev/null 2>&1 || { aviso "não consegui formatar o slot B"; exit 5; }
-mkfs.ext4 -q -F -L data  "$(parte 4)" >/dev/null 2>&1 || { aviso "não consegui formatar os dados"; exit 5; }
+mkfs.ext4 -q -F -L pos-rootB "$(parte 3)" >/dev/null 2>&1 || { aviso "não consegui formatar o slot B"; exit 5; }
+mkfs.ext4 -q -F -L pos-data "$(parte 4)" >/dev/null 2>&1 || { aviso "não consegui formatar os dados"; exit 5; }
 sync
 
-aviso "pronto: p2=rootA p3=rootB p4=data"
+# A raiz de hoje passa a se chamar pos-rootA: o fstab e o ajudante de
+# atualização procuram por rótulo, e "rootfs" é o nome que o pi-gen deixou.
+e2label "$(parte 2)" pos-rootA >/dev/null 2>&1 || true
+
+aviso "pronto: p2=pos-rootA p3=pos-rootB p4=pos-data"
 exit 0
