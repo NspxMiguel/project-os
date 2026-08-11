@@ -126,6 +126,21 @@ Se o passo 5 não acontecer — o slot novo não sobe, ou sobe e o project-os n�
 responde — o initramfs volta sozinho para o `good` na terceira tentativa. O cartão
 não sai do Pi.
 
+### O que uma atualização de sistema **não** troca
+
+A partição FAT — firmware, kernel, `config.txt`, `cmdline.txt` e o initramfs — fica
+como saiu da gravação. O tarball da atualização é empacotado com
+`--exclude=./boot/firmware/*` de propósito.
+
+Isso é escolha, não esquecimento: a camada que socorre as outras não pode ser
+trocada pela mesma coisa que ela existe para socorrer. Um initramfs novo com defeito
+seria o único jeito de voltar a precisar do cartão na mão, e não há terceiro slot
+para voltar dele.
+
+O preço é que uma mudança no decisor de slot só chega numa gravação nova. Enquanto o
+decisor fizer o que promete — e ele é pequeno e testado justamente por isso — esse
+preço não é cobrado.
+
 ## 5. O que conta como "esse sistema presta"
 
 Um slot só vira `good` quando o project-os **atende uma requisição**. Não quando o
