@@ -24,6 +24,7 @@ SUBMODULES = [
     "auth",
     "system",
     "devices",
+    "home",
     "recipes",
     "suggestions",
     "apps",

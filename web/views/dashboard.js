@@ -455,11 +455,23 @@ export default {
       const external = /^https?:/i.test(href);
       const busy = state.pendingSuggestions.has(suggestion.id);
 
+      // Um cartão de navegação ("Abrir") não é um cartão de ação. Os dois
+      // usavam o mesmo POST /suggestions/{id}/apply, que para uma ação `open`
+      // só grava applied_at -- e o evaluate() nem olha essa coluna. O resultado
+      // era um toast verde "Aplicado", nenhuma configuração mudada, e o mesmo
+      // cartão de volta no recarregar seguinte. Agora quem navega, navega; e
+      // quem aplica de verdade (enable_app) é que chama o endpoint.
+      const configureHref = action && action.type === 'configure' && action.app
+        ? '#/apps/' + encodeURIComponent(action.app)
+        : '';
+      const navHref = href && href.startsWith('#') ? href : configureHref;
+      const navigational = !external && Boolean(navHref);
+
       const applyLabel = !action
         ? t('dash.gotIt')
         : action.type === 'install_app'
           ? t('dash.action.install')
-          : action.type === 'open'
+          : (action.type === 'open' || navigational)
             ? t('dash.action.open')
             : t('dash.action.apply');
 
@@ -467,14 +479,15 @@ export default {
         ? h('a', {
             class: 'btn btn--primary btn--sm',
             href, target: '_blank', rel: 'noopener noreferrer',
-            onClick: () => applySuggestion(suggestion, {navigateTo: null}),
           }, applyLabel, icon('link', {size: 14}))
-        : h('button', {
-            class: 'btn btn--primary btn--sm' + (busy ? ' is-busy' : ''),
-            type: 'button',
-            disabled: busy,
-            onClick: () => applySuggestion(suggestion, {navigateTo: href && href.startsWith('#') ? href : null}),
-          }, busy ? h('span', {class: 'spinner spinner--sm'}) : null, applyLabel);
+        : navigational
+          ? h('a', {class: 'btn btn--primary btn--sm', href: navHref}, applyLabel)
+          : h('button', {
+              class: 'btn btn--primary btn--sm' + (busy ? ' is-busy' : ''),
+              type: 'button',
+              disabled: busy,
+              onClick: () => applySuggestion(suggestion, {navigateTo: null}),
+            }, busy ? h('span', {class: 'spinner spinner--sm'}) : null, applyLabel);
 
       return card({
         title: suggestion.title || 'Suggestion',

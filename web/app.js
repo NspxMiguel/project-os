@@ -891,6 +891,7 @@ function buildRouter() {
     '#/settings': shellRoute('settings', t('nav.settings')),
     '#/settings/:section': shellRoute('settings', t('nav.settings')),
     '#/store': shellRoute('store', t('nav.store')),
+    '#/store/:id': shellRoute('store', t('nav.store')),
     '#/system': shellRoute('system', t('nav.system')),
     '#/services': shellRoute('services', t('nav.services')),
     '#/files': shellRoute('files', t('nav.files')),

@@ -34,6 +34,7 @@ setStrings('en', {
   'settings.section.general': 'General',
   'settings.section.account': 'Account',
   'settings.section.network': 'Network',
+  'settings.section.integrations': 'Integrations',
   'settings.section.updates': 'Updates & about',
   'settings.section.developer': 'Developer',
   'settings.error.load': 'Could not load settings.',
@@ -74,6 +75,29 @@ setStrings('en', {
   'settings.network.port': 'Port',
   'settings.network.discovery': 'Network discovery',
   'settings.network.discovery.hint': 'Lets project-os look for smart-home devices and speakers on the local network (mDNS).',
+  // integrations
+  'settings.ha.title': 'Home Assistant',
+  'settings.ha.sub': 'The one you already have, not a second one',
+  'settings.ha.lead': 'project-os is not built on Home Assistant and works without it. If there is one on this network, connecting to it is the cheapest way to reach devices project-os would otherwise have to learn one protocol at a time.',
+  'settings.ha.url': 'Address',
+  'settings.ha.url.hint': 'Something like homeassistant.local:8123 or 192.168.1.20:8123. http:// is filled in if you leave it out.',
+  'settings.ha.token': 'Long-lived access token',
+  'settings.ha.token.hint': 'In Home Assistant: your profile, Security tab, at the bottom — "Long-lived access tokens", Create token. It is only shown once.',
+  'settings.ha.token.saved': 'A token is saved. Type a new one to replace it.',
+  'settings.ha.test': 'Test',
+  'settings.ha.connect': 'Connect',
+  'settings.ha.disconnect': 'Disconnect',
+  'settings.ha.disconnect.confirm.title': 'Forget this Home Assistant?',
+  'settings.ha.disconnect.confirm.body': 'project-os forgets the address and the token. Nothing changes on the Home Assistant side, and the token keeps working until you delete it there.',
+  'settings.ha.connected': 'Connected',
+  'settings.ha.notConnected': 'Not connected',
+  'settings.ha.entities': 'Entities',
+  'settings.ha.entities.load': 'Show what is there',
+  'settings.ha.entities.none': 'This Home Assistant reports no entities.',
+  'settings.ha.entities.more': 'and {count} more',
+  'settings.ha.on': 'On',
+  'settings.ha.off': 'Off',
+  'settings.ha.needsHttpx': 'This integration needs the httpx package, which is not installed on this box.',
   // updates
   'settings.updates.version': 'Version',
   'settings.updates.about': 'project-os ships empty and grows from the Store — this box has no apps until you add them there.',
@@ -114,7 +138,7 @@ const LS_THEME = 'project_os.theme';
 const LS_MODE = 'project_os.mode';
 const LS_DOCK_TERMINAL = 'project_os.dockTerminal';
 
-const SECTIONS = ['general', 'account', 'network', 'updates', 'developer'];
+const SECTIONS = ['general', 'account', 'network', 'integrations', 'updates', 'developer'];
 
 function writeLocal(key, value) {
   try {
@@ -213,6 +237,11 @@ export default {
       instanceName: '',
       language: 'en',
       dockTerminal: readLocal(LS_DOCK_TERMINAL, '0') === '1',
+      home: null,          // resposta de GET /api/home
+      homeBusy: false,
+      haUrl: '',
+      haToken: '',         // só sobe; nunca desce do servidor
+      haEntities: null,    // null = ainda não pedi
     };
 
     async function load() {
@@ -236,6 +265,10 @@ export default {
       // Best-effort extras: neither failure should block the settings page itself.
       if (section === 'account') loadSessions();
       if (section === 'network') loadHostname();
+      if (section === 'integrations') {
+        state.haUrl = dig(state.settings, 'integrations.home_assistant.url', '') || '';
+        loadHome();
+      }
       render();
     }
 
@@ -578,6 +611,186 @@ export default {
       }
     }
 
+    /* ------------------------------------------------------ integrações */
+    // O cliente REST do Home Assistant (project_os/core/ha.py) existia inteiro,
+    // com summary() comentado como "safe-to-serialise state for the settings
+    // screen" -- e a tela nunca tinha sido feita. O painel oferecia "já existe
+    // um Home Assistant em 192.168.x.x" e mandava para cá, onde não havia campo
+    // nenhum. Aqui está o campo.
+
+    async function loadHome() {
+      try {
+        state.home = await api.get('/home', {query: {probe: true}});
+      } catch (err) {
+        state.home = {error: (err instanceof ApiError && err.message) || t('state.error')};
+      }
+      if (!disposed) render();
+    }
+
+    async function testHome() {
+      state.homeBusy = true; render();
+      try {
+        const body = {url: state.haUrl || undefined};
+        if (state.haToken) body.token = state.haToken;
+        const answer = await api.post('/home/test', body);
+        toast(answer.message, {type: answer.ok ? 'success' : 'error'});
+      } catch (err) {
+        toast((err instanceof ApiError && err.message) || t('state.error'), {type: 'error'});
+      } finally {
+        state.homeBusy = false;
+        if (!disposed) render();
+      }
+    }
+
+    async function connectHome() {
+      state.homeBusy = true; render();
+      try {
+        state.home = await api.post('/home/connect', {url: state.haUrl, token: state.haToken});
+        state.haToken = '';
+        toast(state.home.message || t('settings.ha.connected'), {type: 'success'});
+      } catch (err) {
+        toast((err instanceof ApiError && err.message) || t('state.error'), {type: 'error'});
+      } finally {
+        state.homeBusy = false;
+        if (!disposed) render();
+      }
+    }
+
+    async function disconnectHome() {
+      const ok = await confirm(t('settings.ha.disconnect.confirm.body'), {
+        title: t('settings.ha.disconnect.confirm.title'), danger: true,
+      });
+      if (!ok || disposed) return;
+      try {
+        state.home = await api.del('/home');
+        state.haUrl = '';
+        state.haEntities = null;
+      } catch (err) {
+        toast((err instanceof ApiError && err.message) || t('state.error'), {type: 'error'});
+      }
+      if (!disposed) render();
+    }
+
+    async function loadEntities() {
+      state.homeBusy = true; render();
+      try {
+        const answer = await api.get('/home/entities');
+        state.haEntities = Array.isArray(answer.items) ? answer.items : [];
+      } catch (err) {
+        toast((err instanceof ApiError && err.message) || t('state.error'), {type: 'error'});
+      } finally {
+        state.homeBusy = false;
+        if (!disposed) render();
+      }
+    }
+
+    async function callEntity(entity, service) {
+      try {
+        await api.post('/home/entities/' + encodeURIComponent(entity.entity_id) + '/call', {service});
+        await loadEntities();
+      } catch (err) {
+        toast((err instanceof ApiError && err.message) || t('state.error'), {type: 'error'});
+      }
+    }
+
+    function entityRow(entity) {
+      const ligado = String(entity.state || '').toLowerCase() === 'on';
+      // Só o que dá para ligar e desligar ganha botão. Um sensor de temperatura
+      // com um botão de "ligar" seria mentira de novo.
+      const controlavel = ['light', 'switch', 'fan', 'input_boolean', 'siren'].indexOf(entity.domain) >= 0;
+      return h('div', {class: 'list__row'},
+        h('div', {class: 'list__main'},
+          h('span', {class: 'list__title'}, entity.name),
+          h('span', {class: 'list__sub mono tiny'}, entity.entity_id),
+        ),
+        h('span', {class: 'list__aside'},
+          h('span', {class: 'badge ' + (ligado ? 'badge--ok' : 'badge--plain')}, String(entity.state)),
+          controlavel
+            ? h('button', {
+                class: 'btn btn--sm btn--outline', type: 'button',
+                onClick: () => callEntity(entity, ligado ? 'turn_off' : 'turn_on'),
+              }, ligado ? t('settings.ha.off') : t('settings.ha.on'))
+            : null,
+        ),
+      );
+    }
+
+    function integrationsSection() {
+      const home = state.home || {};
+      if (home.error) return errorState(home.error, loadHome);
+      const conectado = home.connected === true;
+      const entidades = state.haEntities;
+      return h('div', {class: 'stack stack--lg'},
+        card({
+          title: t('settings.ha.title'), sub: t('settings.ha.sub'), iconName: 'home',
+          body: h('div', {class: 'stack stack--md'},
+            h('p', {class: 'muted small'}, t('settings.ha.lead')),
+            home.httpx === false
+              ? h('div', {class: 'notice notice--warn'},
+                  icon('warning', {size: 18}),
+                  h('div', {class: 'notice__body'},
+                    h('span', null, t('settings.ha.needsHttpx')),
+                    home.hint ? h('code', {class: 'mono tiny'}, home.hint) : null))
+              : null,
+            h('div', {class: 'row'},
+              h('span', {class: 'badge ' + (conectado ? 'badge--ok' : 'badge--plain')},
+                conectado ? t('settings.ha.connected') : t('settings.ha.notConnected')),
+              home.message ? h('span', {class: 'small muted'}, home.message) : null),
+            h('div', {class: 'fields'},
+              field(t('settings.ha.url'), t('settings.ha.url.hint'),
+                h('input', {
+                  class: 'input', type: 'text', placeholder: 'homeassistant.local:8123',
+                  value: state.haUrl,
+                  onInput: (e) => { state.haUrl = e.target.value.trim(); },
+                })),
+              field(t('settings.ha.token'),
+                home.has_token ? t('settings.ha.token.saved') : t('settings.ha.token.hint'),
+                h('input', {
+                  class: 'input', type: 'password', autocomplete: 'off',
+                  placeholder: home.has_token ? '••••••••' : '',
+                  value: state.haToken,
+                  onInput: (e) => { state.haToken = e.target.value.trim(); },
+                })),
+            ),
+            h('div', {class: 'row'},
+              h('button', {
+                class: 'btn btn--outline', type: 'button', disabled: state.homeBusy || !state.haUrl,
+                onClick: testHome,
+              }, t('settings.ha.test')),
+              h('button', {
+                class: 'btn', type: 'button',
+                disabled: state.homeBusy || !state.haUrl || !state.haToken,
+                onClick: connectHome,
+              }, t('settings.ha.connect')),
+              home.configured
+                ? h('button', {class: 'btn btn--danger', type: 'button', onClick: disconnectHome},
+                    t('settings.ha.disconnect'))
+                : null,
+            ),
+          ),
+        }),
+        home.configured
+          ? card({
+              title: t('settings.ha.entities'), iconName: 'devices',
+              body: h('div', {class: 'stack stack--sm'},
+                entidades === null
+                  ? h('button', {class: 'btn btn--outline btn--sm', type: 'button',
+                      disabled: state.homeBusy, onClick: loadEntities},
+                      t('settings.ha.entities.load'))
+                  : (entidades.length
+                      ? h('div', {class: 'stack stack--sm'},
+                          h('div', {class: 'list'}, entidades.slice(0, 40).map(entityRow)),
+                          entidades.length > 40
+                            ? h('p', {class: 'muted small'},
+                                t('settings.ha.entities.more', {count: entidades.length - 40}))
+                            : null)
+                      : h('p', {class: 'muted small'}, t('settings.ha.entities.none'))),
+              ),
+            })
+          : null,
+      );
+    }
+
     function developerSection() {
       const allowShell = !!dig(state.settings, 'security.allow_shell', false);
       const verbose = dig(state.settings, 'logging.level', 'INFO') === 'DEBUG';
@@ -661,6 +874,8 @@ export default {
         nodes.push(accountSection());
       } else if (section === 'network') {
         nodes.push(networkSection());
+      } else if (section === 'integrations') {
+        nodes.push(integrationsSection());
       } else if (section === 'updates') {
         nodes.push(updatesSection());
       } else if (section === 'developer') {

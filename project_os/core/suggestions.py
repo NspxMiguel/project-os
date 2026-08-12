@@ -96,6 +96,22 @@ class Context(object):
         enabled = self.setting("apps.enabled", []) or []
         return app_id in enabled
 
+    def app_available(self, app_id: str) -> bool:
+        """Se este app existe como código nesta máquina.
+
+        Um cartão que oferece ligar o app Kasa numa caixa onde ninguém escreveu
+        o app Kasa não é sugestão, é um botão que responde 404. O catálogo lista
+        alguns builtins que são plano, não código -- ``plugins.has`` é quem sabe
+        a diferença, e é a mesma pergunta que a loja já faz antes de mostrar o
+        botão de instalar.
+        """
+        if self.plugins is None:
+            return False
+        try:
+            return bool(self.plugins.has(app_id))
+        except Exception:  # pragma: no cover
+            return False
+
     def app_installed(self, app_id: str) -> bool:
         if self.plugins is None:
             return self.app_enabled(app_id)
@@ -184,12 +200,12 @@ def rule_tuya_local_keys(ctx: Context) -> List[Dict[str, Any]]:
             "tuya-local-keys",
             "%d dispositivo(s) Tuya sem chave local" % len(tuya),
             "Eles aparecem na rede, mas controlar sem passar pela nuvem exige a chave "
-            "local de cada um. É uma configuração de uma vez só (~10 min) e depois "
-            "funciona até com a internet caída.",
+            "local de cada um. O project-os ainda não fala Tuya sozinho; um Home "
+            "Assistant conectado fala, e a tela de Integrações liga os dois.",
             icon="key",
-            priority=PRIORITY_HIGH,
+            priority=PRIORITY_NORMAL,
             tags=["tuya", "casa"],
-            action={"type": "open", "href": "#/home/providers/tuya"},
+            action={"type": "open", "href": "#/settings/integrations"},
         )
     ]
 
@@ -198,6 +214,10 @@ def rule_kasa_ready(ctx: Context) -> List[Dict[str, Any]]:
     """Kasa devices need no credentials at all -- one click and they work."""
     kasa = [d for d in ctx.devices if (d.get("properties") or {}).get("vendor") == "TP-Link Kasa"]
     if not kasa or ctx.app_enabled("kasa"):
+        return []
+    # O app Kasa é plano, não código. Enquanto for, este cartão prometia um
+    # clique que responde "No app called 'kasa'".
+    if not ctx.app_available("kasa"):
         return []
     return [
         card(
@@ -209,24 +229,6 @@ def rule_kasa_ready(ctx: Context) -> List[Dict[str, Any]]:
             priority=PRIORITY_HIGH,
             tags=["kasa", "casa"],
             action={"type": "enable_app", "app": "kasa"},
-        )
-    ]
-
-
-def rule_energy_monitoring(ctx: Context) -> List[Dict[str, Any]]:
-    energy = ctx.with_capability("energy")
-    if not energy:
-        return []
-    return [
-        card(
-            "energy-history",
-            "Guardar o consumo dessas tomadas",
-            "%s mede energia. Dá pra acompanhar o gasto por dia sem instalar mais nada."
-            % ", ".join(sorted(d["display_name"] for d in energy)[:3]),
-            icon="pulse",
-            priority=PRIORITY_LOW,
-            tags=["energia", "casa"],
-            action={"type": "open", "href": "#/home/energy"},
         )
     ]
 
@@ -288,32 +290,13 @@ def rule_esp32_on_usb(ctx: Context) -> List[Dict[str, Any]]:
         card(
             "esp32-flash",
             "Achei um %s na USB" % first["display_name"],
-            "Dá pra gravar o Simpleproject-os nele: pinos, sensores e horários, "
-            "controlados daqui ou sozinho. Sem abrir terminal.",
+            "Dá pra usar ele como ajudante: com o firmware de agente (agents/esp32) "
+            "ele manda temperatura e cliques de botão pra cá, e aceita ligar um relé "
+            "daqui. O pareamento é na tela de Ajudantes.",
             icon="plug",
-            priority=PRIORITY_HIGH,
-            tags=["esp32", "simpleproject_os"],
-            action={"type": "open", "href": "#/devices/%s/flash" % first["id"]},
-        )
-    ]
-
-
-def rule_adopt_node(ctx: Context) -> List[Dict[str, Any]]:
-    """A Simpleproject-os node is announcing itself on the LAN."""
-    nodes = ctx.of_kind("project_os_node")
-    if not nodes:
-        return []
-    return [
-        card(
-            "adopt-nodes",
-            "%d nó Simpleproject-os na rede" % len(nodes),
-            "%s se anunciou por mDNS. Adotando, os pinos e sensores dele aparecem "
-            "aqui junto com o resto da casa — e ele continua funcionando sozinho se "
-            "esta placa cair." % ", ".join(sorted(d["display_name"] for d in nodes)[:3]),
-            icon="broadcast",
-            priority=PRIORITY_HIGH,
-            tags=["esp32", "simpleproject_os"],
-            action={"type": "open", "href": "#/home/nodes"},
+            priority=PRIORITY_NORMAL,
+            tags=["esp32", "ajudantes"],
+            action={"type": "open", "href": "#/helpers"},
         )
     ]
 
@@ -339,6 +322,8 @@ def rule_esphome_devices(ctx: Context) -> List[Dict[str, Any]]:
 def rule_mqtt_broker(ctx: Context) -> List[Dict[str, Any]]:
     brokers = ctx.of_kind("mqtt_broker")
     if not brokers or ctx.app_enabled("mqtt"):
+        return []
+    if not ctx.app_available("mqtt"):
         return []
     return [
         card(
@@ -462,11 +447,21 @@ def rule_auth_disabled(ctx: Context) -> List[Dict[str, Any]]:
             icon="lock",
             priority=PRIORITY_CRITICAL,
             tags=["segurança"],
-            action={"type": "open", "href": "#/settings/security"},
+            action={"type": "open", "href": "#/settings/developer"},
         )
     ]
 
 
+# Duas regras saíram daqui em vez de ganharem um destino novo:
+#
+# * "Guardar o consumo dessas tomadas" mandava para #/home/energy e prometia
+#   acompanhar gasto por dia "sem instalar mais nada". Não existe tela de
+#   energia nem nada que guarde histórico -- era um cartão inteiro em cima de
+#   uma função que ninguém escreveu.
+# * "Adotar nó Simpleproject-os" reagia a um tipo de aparelho (project_os_node)
+#   que a descoberta nunca produz, porque o firmware que se anunciaria assim não
+#   existe. A regra não podia disparar nem numa casa cheia de ESP32.
+#
 #: Evaluated in order; the order does not matter, priority decides the display.
 RULES = (
     rule_unsupported_board,
@@ -479,12 +474,10 @@ RULES = (
     rule_kasa_ready,
     rule_tuya_local_keys,
     rule_esp32_on_usb,
-    rule_adopt_node,
     rule_home_assistant_on_network,
     rule_home_assistant_fit,
     rule_esphome_devices,
     rule_mqtt_broker,
-    rule_energy_monitoring,
     rule_extra_speakers,
 )  # type: tuple
 

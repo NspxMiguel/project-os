@@ -204,7 +204,12 @@ export default {
       categories: [],
       board: null,
       category: 'all',
-      query: '',
+      // A busca começa com o que a URL pediu. Três telas já mandavam gente
+      // para cá com um termo -- o selo "Está na loja" da tela de Aplicativos
+      // (`#/store?q=jellyfin`) e os cartões de sugestão -- e a loja abria
+      // mostrando o catálogo inteiro, como se o link não tivesse dito nada.
+      // `#/store/jellyfin` cai aqui pelo mesmo caminho, via ctx.params.id.
+      query: (ctx.query && ctx.query.q) || (ctx.params && ctx.params.id) || '',
       busy: new Map(), // app id -> 'install' | 'remove'
       liveState: new Map(), // app id -> latest app.state payload seen mid-install
     };
