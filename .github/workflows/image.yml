@@ -118,6 +118,15 @@ jobs:
           echo "size=$(stat -c %s "pi-gen/deploy/${name}")" >> "$GITHUB_OUTPUT"
           ls -lh pi-gen/deploy
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: project-os-image
+          path: |
+            ${{ steps.image.outputs.path }}
+            ${{ steps.image.outputs.sha }}
+            ${{ steps.rootfs.outputs.path }}
+          compression-level: 0
+
       - name: Conferir a imagem antes de publicar
         # Quase cinquenta conferências no que vai para o cartão -- initramfs por
         # kernel com os módulos certos, o decisor de slot lá dentro, o fstab, o
@@ -125,9 +134,12 @@ jobs:
         # imagem para o tamanho de um cartão e roda o reparticionamento de
         # verdade, com o layout.sh de dentro da própria imagem.
         #
-        # Roda depois de empacotar o rootfs de propósito: a conferência escreve
-        # na imagem (é assim que ela simula o primeiro boot), então os dois
-        # arquivos que vão ser publicados já estão prontos e intactos.
+        # Roda depois de empacotar o rootfs e de guardar o artefato, de
+        # propósito: a conferência escreve na imagem (é assim que ela simula o
+        # primeiro boot), então os dois arquivos que seriam publicados já estão
+        # prontos e intactos -- e continuam baixáveis do CI mesmo quando a
+        # conferência reprova, que é justamente quando alguém quer abrir a
+        # imagem para entender o que deu errado.
         #
         # Uma imagem que não passa aqui não chega ao release. O preço de publicar
         # um cartão ruim é ele com o cartão na mão de novo, que é justamente o
@@ -142,15 +154,6 @@ jobs:
           img=$(ls pi-gen/work/*/export-image/*.img | head -n1)
           df -h /
           sudo bash project-os/scripts/verify-image-docker.sh "$img" 20000
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: project-os-image
-          path: |
-            ${{ steps.image.outputs.path }}
-            ${{ steps.image.outputs.sha }}
-            ${{ steps.rootfs.outputs.path }}
-          compression-level: 0
 
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/') || inputs.release
