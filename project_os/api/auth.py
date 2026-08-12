@@ -7,8 +7,10 @@ therefore states its own rule explicitly rather than inheriting one.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
+import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -27,6 +29,95 @@ router = APIRouter(tags=["auth"])
 #: answers at ``/api/setup``. Claiming the box is the one thing you do before
 #: there is any authentication to be under, and the setup screen is the first
 #: URL a fresh install ever hits -- so it gets a first-level path too.
+
+
+# ---------------------------------------------------------------------------
+# quantas senhas se conferem ao mesmo tempo, e quão devagar depois de errar
+# ---------------------------------------------------------------------------
+# Conferir uma senha aqui custa 200 mil iterações de pbkdf2-sha256. Isso é de
+# propósito -- é o que torna força bruta inviável -- mas custa caro: num Pi 3B
+# são centenas de milissegundos de CPU por tentativa.
+#
+# O laço de eventos não trava (authenticate_async roda num executor), só que o
+# executor tem vários trabalhadores. Oito tentativas simultâneas de senha errada
+# põem os quatro núcleos a 100% moendo pbkdf2, e a caixa inteira fica lenta --
+# num endpoint que não exige autenticação nenhuma. Quem estiver na rede não
+# precisa acertar a senha para atrapalhar; basta pedir.
+#
+# Então duas travas, as duas pequenas:
+#
+# 1. **Uma senha por vez.** Um semáforo de um lugar. Uma família não faz dois
+#    logins simultâneos, e um atacante deixa de conseguir multiplicar o custo.
+# 2. **Errar fica devagar.** Depois de cada tentativa errada daquele endereço, a
+#    próxima espera um pouco mais -- até um teto. Não existe bloqueio
+#    permanente: ele erra a senha três vezes, espera dois segundos e entra. Um
+#    bloqueio que tranca o dono da caixa fora dela é pior que o problema.
+#
+# O semáforo nasce na primeira vez que é usado, não no import. Criar no import
+# parece mais simples e não funciona: no Python 3.9 -- que é o que uma Pi com
+# Bullseye tem, e o que o CI testa -- asyncio.Semaphore() amarra-se ao laço de
+# eventos corrente no instante em que nasce, e durante o import não existe laço
+# nenhum. O módulo levantava RuntimeError, o router não subia, e **todas** as
+# rotas passavam a responder 405. Foi o que a suíte pegou.
+def _porta_de_senha() -> "asyncio.Semaphore":
+    """Uma senha conferida por vez, neste laço de eventos."""
+    try:
+        laco = asyncio.get_running_loop()
+    except RuntimeError:  # pragma: no cover - fora de corrotina
+        laco = asyncio.get_event_loop()
+    porta = getattr(laco, "_project_os_porta_de_senha", None)
+    if porta is None:
+        porta = asyncio.Semaphore(1)
+        setattr(laco, "_project_os_porta_de_senha", porta)
+    return porta
+
+#: Quanto cada erro seguido acrescenta de espera, e o teto.
+ESPERA_POR_ERRO = 0.5
+ESPERA_MAXIMA = 4.0
+
+#: Depois deste tempo sem errar, o contador daquele endereço é esquecido.
+JANELA_DE_ERROS = 300.0
+
+#: Teto de endereços lembrados. Um atacante que forje o endereço de origem não
+#: pode fazer este dicionário crescer sem fim.
+MAX_ENDERECOS = 256
+
+_erros = {}  # type: Dict[str, tuple]
+
+
+def _de_onde(request: Request) -> str:
+    cliente = getattr(request, "client", None)
+    return getattr(cliente, "host", None) or "desconhecido"
+
+
+def _limpar_erros(agora: float) -> None:
+    velhos = [onde for onde, (_, quando) in _erros.items() if agora - quando > JANELA_DE_ERROS]
+    for onde in velhos:
+        _erros.pop(onde, None)
+    if len(_erros) > MAX_ENDERECOS:
+        # Descarta os mais antigos primeiro; o que importa é não crescer.
+        for onde, _ in sorted(_erros.items(), key=lambda par: par[1][1])[: len(_erros) - MAX_ENDERECOS]:
+            _erros.pop(onde, None)
+
+
+async def _esperar_a_vez(request: Request) -> None:
+    """Espera o castigo dos erros anteriores deste endereço, se houver."""
+    agora = time.monotonic()
+    _limpar_erros(agora)
+    quantos, quando = _erros.get(_de_onde(request), (0, 0.0))
+    if quantos <= 0 or agora - quando > JANELA_DE_ERROS:
+        return
+    await asyncio.sleep(min(quantos * ESPERA_POR_ERRO, ESPERA_MAXIMA))
+
+
+def _errou(request: Request) -> None:
+    onde = _de_onde(request)
+    quantos, _ = _erros.get(onde, (0, 0.0))
+    _erros[onde] = (quantos + 1, time.monotonic())
+
+
+def _acertou(request: Request) -> None:
+    _erros.pop(_de_onde(request), None)
 
 
 class Credentials(BaseModel):
@@ -88,11 +179,15 @@ async def login(
 ) -> Dict[str, Any]:
     if auth.setup_required(db):
         raise ApiError(428, "setup_required", "O project-os ainda não tem usuário.")
-    user = await auth.authenticate_async(db, payload.username, payload.password)
+    await _esperar_a_vez(request)
+    async with _porta_de_senha():
+        user = await auth.authenticate_async(db, payload.username, payload.password)
     if user is None:
+        _errou(request)
         # One message for both "no such user" and "wrong password": telling them
         # apart is a free list of valid usernames.
         raise ApiError(401, "invalid_credentials", "Usuário ou senha errados.")
+    _acertou(request)
     session = auth.create_session(
         db, user["id"], user_agent=request.headers.get("user-agent"), config=config
     )
