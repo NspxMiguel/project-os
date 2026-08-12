@@ -167,7 +167,10 @@ def test_o_aviso_chega_na_tela_pelo_http(auth_client, monkeypatch):
     assert resposta.status_code == 200, resposta.text
     corpo = resposta.json()
     assert corpo["can_install"] is False
-    assert "Atualizar sistema" in corpo["install_hint"]
+    # O nome exato da tela, porque uma dica que aponta para um lugar que não
+    # existe é pior do que nenhuma dica.
+    assert "Atualizações" in corpo["install_hint"]
+    assert "Sistema do cartão" in corpo["install_hint"]
 
 
 def test_a_imagem_deixa_o_grupo_escrever_no_opt():

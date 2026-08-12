@@ -73,8 +73,8 @@ KEEP_IN_PLACE = (".venv", "PEDIDOS.md")
 #: root-privileged way to update on an image install, and it is the one that
 #: works there: a whole rootfs written to the spare slot. See docs/RECOVERY.md.
 SYSTEM_UPDATE_HINT = (
-    "Nesta caixa a atualização é do sistema inteiro: Configurações > "
-    "Atualizar sistema. Ela escreve o sistema novo no slot livre e reinicia nele."
+    "Nesta caixa a atualização é do sistema inteiro: Atualizações > Sistema do "
+    "cartão. Ela escreve o sistema novo no slot livre e reinicia nele."
 )
 
 
