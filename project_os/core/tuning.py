@@ -73,16 +73,85 @@ def _read_int(path: str) -> Optional[int]:
         return None
 
 
+#: ``None`` = ainda não perguntei. Ver :func:`sudo_ready`.
+_SUDO_OK = None  # type: Optional[bool]
+
+
+def sudo_ready(refresh: bool = False) -> bool:
+    """Se este processo consegue virar root sem senha.
+
+    Na imagem o serviço roda como usuário ``project-os``, não como root -- de
+    propósito. Só que *toda* escrita desta tela é em ``/sys`` ou no
+    ``config.txt``, e os dois são do root. Sem isto, ligar o interruptor de
+    controle de hardware destravava uma tela que continuava sem conseguir mexer
+    em nada: a ventoinha do pedido original ("ai opção de diminuir ventoinha do
+    rp") ficava fora de alcance na única máquina que importa.
+
+    O mesmo sudoers da imagem já dá ``systemctl`` e ``apt-get`` sem senha a este
+    usuário. A pergunta é feita uma vez e guardada, porque ela custa um processo
+    e a resposta não muda no meio de um boot.
+    """
+    global _SUDO_OK
+    if _SUDO_OK is not None and not refresh:
+        return _SUDO_OK
+    if is_root():
+        _SUDO_OK = True
+    elif not shutil.which("sudo"):
+        _SUDO_OK = False
+    else:
+        try:
+            done = subprocess.run(
+                ["sudo", "-n", "true"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=COMMAND_TIMEOUT, check=False,
+            )
+            _SUDO_OK = done.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            _SUDO_OK = False
+    return _SUDO_OK
+
+
+def can_write() -> bool:
+    """Root, ou root a um ``sudo -n`` de distância."""
+    return is_root() or sudo_ready()
+
+
+def _sudo(argv: List[str]) -> List[str]:
+    return argv if is_root() else ["sudo", "-n"] + argv
+
+
 def _write(path: str, value: str) -> None:
     """Write to a sysfs attribute. Raises OSError, which the caller turns into a
     message naming the file -- "permission denied on /sys/class/leds/ACT/brightness"
-    tells you to check the service user; "could not set LED" tells you nothing."""
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write(value)
+    tells you to check the service user; "could not set LED" tells you nothing.
+
+    Como root, escreve direto. Como usuário comum com sudo, passa por um
+    ``tee`` -- que evita montar uma linha de shell com o valor dentro.
+    """
+    if is_root() or not sudo_ready():
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(value)
+        return
+    try:
+        done = subprocess.run(
+            ["sudo", "-n", "tee", path],
+            input=value.encode("utf-8"),
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            timeout=COMMAND_TIMEOUT, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise OSError("Não consegui escrever em %s: %s" % (path, exc))
+    if done.returncode != 0:
+        detalhe = (done.stderr or b"").decode("utf-8", "replace").strip()
+        raise OSError("Não consegui escrever em %s: %s" % (path, detalhe or "sudo recusou"))
 
 
 def _run(argv: List[str]) -> Optional[str]:
-    if not shutil.which(argv[0]):
+    # Com prefixo de sudo, quem tem que existir é o programa depois dele: um
+    # ``which("sudo")`` sempre acha, e "vcgencmd não está disponível" viraria
+    # um erro silencioso de sudo.
+    alvo = argv[2] if argv[:2] == ["sudo", "-n"] and len(argv) > 2 else argv[0]
+    if not shutil.which(alvo):
         return None
     try:
         out = subprocess.run(
@@ -341,7 +410,7 @@ def hdmi() -> Dict[str, Any]:
 def set_hdmi(on: bool) -> Dict[str, Any]:
     """Cuts the HDMI output. Worth maybe 25 mA, and worth more than that on a
     headless box plugged into a TV that keeps waking up."""
-    result = _run(["vcgencmd", "display_power", "1" if on else "0"])
+    result = _run(_sudo(["vcgencmd", "display_power", "1" if on else "0"]))
     if result is None:
         raise OSError("vcgencmd não está disponível nesta máquina.")
     return {"on": on, "output": result}
@@ -384,7 +453,7 @@ def set_wifi_power_save(on: bool, interface: Optional[str] = None) -> Dict[str, 
         raise LookupError("Nenhuma interface Wi-Fi encontrada.")
     changed = []
     for name in names:
-        if _run(["iw", "dev", name, "set", "power_save", "on" if on else "off"]) is None:
+        if _run(_sudo(["iw", "dev", name, "set", "power_save", "on" if on else "off"])) is None:
             raise OSError("O comando iw não está disponível.")
         changed.append(name)
     return {"power_save": on, "interfaces": changed, "temporary": True}
@@ -469,11 +538,24 @@ def _patch_config_txt(values: Dict[str, Optional[str]]) -> Dict[str, Optional[st
 
     body = "\n".join(lines).rstrip("\n") + "\n"
     temp = path + ".project_os-tmp"
-    with open(temp, "w", encoding="utf-8") as handle:
-        handle.write(body)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temp, path)
+    if is_root() or not sudo_ready():
+        with open(temp, "w", encoding="utf-8") as handle:
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, path)
+    else:
+        # Mesmo desenho -- escreve ao lado, move por cima -- só que os dois
+        # passos pedem root, porque /boot é do root e o serviço não é.
+        _write(temp, body)
+        mover = subprocess.run(
+            ["sudo", "-n", "mv", "-f", temp, path],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            timeout=COMMAND_TIMEOUT, check=False,
+        )
+        if mover.returncode != 0:
+            detalhe = (mover.stderr or b"").decode("utf-8", "replace").strip()
+            raise OSError("Não consegui trocar o %s: %s" % (path, detalhe or "sudo recusou"))
     log.info("config.txt updated: %s", ", ".join(sorted(values)))
     return changed
 
@@ -484,13 +566,17 @@ def _patch_config_txt(values: Dict[str, Optional[str]]) -> Dict[str, Optional[st
 def snapshot() -> Dict[str, Any]:
     """Everything the tuning screen shows, in one call."""
     path = config_txt_path()
-    root = is_root()
+    escreve = can_write()
     return {
-        "writable": root,
-        "reason": None if root else (
-            "O project-os não está rodando como root, então só dá pra ler. O "
-            "serviço systemd roda como root; um venv aberto no terminal, não."
+        "writable": escreve,
+        # A frase antiga dizia "o serviço systemd roda como root" -- e não roda:
+        # na imagem ele é o usuário project-os. O que decide é conseguir virar
+        # root sem senha, que é o que o sudoers da imagem dá.
+        "reason": None if escreve else (
+            "O project-os não roda como root nesta máquina e não consegue virar "
+            "root sem senha, então aqui só dá pra ler."
         ),
+        "root": is_root(),
         "config_txt": path,
         "fan": fan(),
         "clock": clock(),

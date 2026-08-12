@@ -430,7 +430,7 @@ export default {
     }
 
     function switchRow(labelText, hintText, checked, onChange, disabled) {
-      return h('div', {class: 'field-row'},
+      return h('div', {class: 'field-row field-row--switch'},
         h('div', {class: 'field-row__label'},
           h('div', null, labelText),
           hintText ? h('div', {class: 'field__hint'}, hintText) : null,

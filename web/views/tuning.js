@@ -40,6 +40,9 @@ setStrings('en', {
   'tuning.fan.curve.celsius': '°C',
   'tuning.fan.curve.speed': 'speed',
   'tuning.fan.curve.save': 'Save curve',
+  'tuning.fan.curve.add': 'Add step',
+  'tuning.fan.curve.empty': 'This card is empty because config.txt has no fan thresholds yet — the board is running the firmware default curve.',
+  'tuning.fan.curve.hint': 'Up to four steps: at each temperature the fan jumps to that speed (0-255). Higher temperatures mean a quieter box and a hotter chip; the Pi throttles itself long before anything is damaged.',
   'tuning.fan.levelSet': 'Fan set to {level}/{max}',
   'tuning.fan.curveSaved': 'Fan curve saved — takes effect on the next boot',
 
@@ -266,16 +269,33 @@ export default {
         h('span', {class: 'small muted'}, t('tuning.fan.curve.speed')),
       ));
 
+      // Sem isto o card era só título e botão Salvar: `thresholds` só traz
+      // passos que JÁ existem no config.txt, e um Raspberry Pi OS de fábrica
+      // não tem nenhuma linha dtparam=fan_temp. Ou seja, na caixa dele a lista
+      // vinha vazia, não havia como criar um passo, e o Salvar reescrevia o
+      // arquivo igualzinho e ainda dizia "curva salva".
+      const podeAdicionar = canWrite() && fanSteps.length < 4;
       const curve = h('div', {class: 'stack stack--sm'},
         h('div', {class: 'row row--between'},
           h('span', {class: 'field__label'}, t('tuning.fan.curve')),
           bootBadge(),
         ),
-        h('div', {class: 'stack stack--sm'}, curveRows),
-        h('button', {
-          class: 'btn btn--sm', type: 'button', disabled: !canWrite(),
-          onClick: saveFanCurve,
-        }, t('tuning.fan.curve.save')),
+        fanSteps.length
+          ? h('div', {class: 'stack stack--sm'}, curveRows)
+          : h('p', {class: 'small muted'}, t('tuning.fan.curve.empty')),
+        h('div', {class: 'row'},
+          h('button', {
+            class: 'btn btn--sm btn--outline', type: 'button', disabled: !podeAdicionar,
+            onClick: addFanStep,
+          }, icon('plus', {size: 14}), t('tuning.fan.curve.add')),
+          fanSteps.length
+            ? h('button', {
+                class: 'btn btn--sm', type: 'button', disabled: !canWrite(),
+                onClick: saveFanCurve,
+              }, t('tuning.fan.curve.save'))
+            : null,
+        ),
+        h('p', {class: 'small muted'}, t('tuning.fan.curve.hint')),
       );
 
       return card(t('tuning.section.fan'), nowBadge(), h('div', {class: 'stack'}, levelRow, curve));
@@ -286,6 +306,23 @@ export default {
         () => api.post('/tuning/fan/level', {level, device: deviceName}),
         t('tuning.fan.levelSet', {level, max: (snapshot.fan.devices[0] || {}).max_level}),
       );
+    }
+
+    /** Um passo novo começa nos padrões do próprio Raspberry Pi OS, subindo a
+     *  cada degrau: quem quer a caixa mais quieta sobe as temperaturas, e quem
+     *  não sabe o que fazer já começa de um lugar que funciona. */
+    const CURVA_PADRAO = [
+      {celsius: 50, speed: 75},
+      {celsius: 60, speed: 125},
+      {celsius: 67, speed: 175},
+      {celsius: 75, speed: 250},
+    ];
+
+    function addFanStep() {
+      const index = fanSteps.length;
+      if (index >= 4) return;
+      fanSteps = fanSteps.concat([{step: index, ...CURVA_PADRAO[index]}]);
+      paintAll();
     }
 
     async function saveFanCurve() {

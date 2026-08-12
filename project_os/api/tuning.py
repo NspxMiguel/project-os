@@ -75,12 +75,12 @@ def _require(config: Any) -> None:
             "Ligue security.allow_hardware_control em Configurações > Desenvolvedor "
             "para mexer em ventoinha, clock e LEDs.",
         )
-    if not tuning.is_root():
+    if not tuning.can_write():
         raise ApiError(
             403,
             "not_root",
-            "Estas mudanças precisam de root. O serviço systemd do project-os roda "
-            "como root; um processo aberto na mão pelo terminal, não.",
+            "Estas mudanças precisam de root, e este processo não é root nem "
+            "consegue virar root sem senha nesta máquina.",
         )
 
 

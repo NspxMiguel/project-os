@@ -522,6 +522,18 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--space-4) 0; }
 .field-row__value { font-weight: 560; text-align: right; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+/* Linha de interruptor. A .field-row nasceu para "rótulo curto: valor curto"
+   (Sistema, Atualizações), com nowrap dos dois lados e overflow escondido do
+   lado do valor. As Configurações reusaram essa linha para pôr um rótulo com
+   frase de ajuda de um lado e o interruptor do outro -- e a frase, que não
+   quebra, empurrava o interruptor para fora e o overflow: hidden o cortava a
+   zero. Resultado: *nenhum* interruptor das Configurações aparecia na tela,
+   nem o de shell, nem o de descoberta na rede. Só se enxergava o texto que
+   explicava o botão que não existia. */
+.field-row--switch { align-items: center; }
+.field-row--switch .field-row__label { white-space: normal; min-width: 0; }
+.field-row--switch .field-row__value { overflow: visible; flex: none; }
+
 /* --------------------------------------------------------------- badges */
 
 .badge {

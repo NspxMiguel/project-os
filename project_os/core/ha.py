@@ -44,7 +44,7 @@ DEFAULT_TIMEOUT = 5.0
 DEFAULT_PORT = 8123
 
 INSTALL_HINT = (
-    'The Home Assistant integration needs httpx. Install it with: '
+    'A integração com o Home Assistant precisa do httpx. Instale com: '
     'pip install "project_os[ha]"'
 )
 
@@ -213,17 +213,17 @@ class HomeAssistantClient(object):
     def missing_config_message(self) -> str:
         if not self.url and not self.token:
             return (
-                "No Home Assistant is configured yet. Add its address and a "
-                "long-lived access token in Settings."
+                "Nenhum Home Assistant configurado ainda. Ponha o endereço dele e "
+                "um token de acesso de longa duração aqui em Integrações."
             )
         if not self.url:
             return (
-                "Home Assistant needs an address, for example "
+                "Falta o endereço do Home Assistant, algo como "
                 "http://homeassistant.local:%d." % DEFAULT_PORT
             )
         return (
-            "Home Assistant needs a long-lived access token. Create one in Home "
-            "Assistant under your profile, Security, Long-lived access tokens."
+            "Falta o token de acesso de longa duração. Crie um no próprio Home "
+            "Assistant: seu perfil, aba Segurança, Tokens de acesso de longa duração."
         )
 
     def summary(self) -> Dict[str, Any]:
@@ -272,18 +272,18 @@ class HomeAssistantClient(object):
         except httpx.TimeoutException:
             return HAResult(
                 False,
-                "Home Assistant at %s did not answer within %.0f seconds."
+                "O Home Assistant em %s não respondeu em %.0f segundos."
                 % (base, self.timeout),
             )
         except httpx.HTTPError as exc:
             return HAResult(
                 False,
-                "Cannot reach Home Assistant at %s. Check the address and that "
-                "the box is switched on. (%s)" % (base, type(exc).__name__),
+                "Não consegui alcançar o Home Assistant em %s. Confira o endereço e se "
+                "a caixa está ligada. (%s)" % (base, type(exc).__name__),
             )
         except Exception as exc:  # malformed URL, unsupported scheme, ...
             return HAResult(
-                False, "That Home Assistant address is not usable: %s." % exc
+                False, "Esse endereço de Home Assistant não serve: %s." % exc
             )
 
         return self._interpret(response, base, path)
@@ -293,27 +293,27 @@ class HomeAssistantClient(object):
         if status in (401, 403):
             return HAResult(
                 False,
-                "Home Assistant rejected the access token (HTTP %d). Create a "
-                "new long-lived access token and paste it again." % status,
+                "O Home Assistant recusou o token (HTTP %d). Crie um "
+                "token de acesso de longa duração novo e cole aqui de novo." % status,
                 status=status,
             )
         if status == 404:
             return HAResult(
                 False,
-                "Home Assistant answered at %s but has nothing at %s (HTTP 404). "
-                "Is that really a Home Assistant address?" % (base, path),
+                "O %s respondeu, mas não tem nada em %s (HTTP 404). Esse endereço é "
+                "mesmo de um Home Assistant?" % (base, path),
                 status=status,
             )
         if status >= 500:
             return HAResult(
                 False,
-                "Home Assistant returned an internal error (HTTP %d). Its own "
-                "log will say why." % status,
+                "O Home Assistant devolveu um erro interno (HTTP %d). O registro "
+                "dele diz por quê." % status,
                 status=status,
             )
         if status >= 400:
             return HAResult(
-                False, "Home Assistant refused the request (HTTP %d)." % status, status=status
+                False, "O Home Assistant recusou o pedido (HTTP %d)." % status, status=status
             )
         try:
             data = response.json()
@@ -331,7 +331,7 @@ class HomeAssistantClient(object):
             # Very old cores expose only /api/; a 404 there is a wrong address.
             fallback = await self.request("GET", "/api/")
             if fallback.ok:
-                return True, "Connected to Home Assistant at %s." % self.url
+                return True, "Conectado ao Home Assistant em %s." % self.url
             return False, fallback.message
         if not result.ok:
             return False, result.message
@@ -340,10 +340,10 @@ class HomeAssistantClient(object):
         name = str(data.get("location_name") or "").strip()
         version = str(data.get("version") or "").strip()
         if name and version:
-            return True, "Connected to %s, running Home Assistant %s." % (name, version)
+            return True, "Conectado a %s, rodando Home Assistant %s." % (name, version)
         if version:
-            return True, "Connected to Home Assistant %s." % version
-        return True, "Connected to Home Assistant at %s." % self.url
+            return True, "Conectado ao Home Assistant %s." % version
+        return True, "Conectado ao Home Assistant em %s." % self.url
 
     async def states(self) -> HAResult:
         """Every entity, exactly as Home Assistant reports it."""
@@ -375,7 +375,7 @@ class HomeAssistantClient(object):
         domain = str(domain or "").strip()
         service = str(service or "").strip()
         if not domain or not service:
-            return HAResult(False, "A service call needs both a domain and a service name.")
+            return HAResult(False, "Uma chamada de serviço precisa do domínio e do nome do serviço.")
         payload = dict(data) if isinstance(data, dict) else {}
         return await self.request(
             "POST",
@@ -417,7 +417,7 @@ class HomeAssistantClient(object):
         title: Optional[str] = None,
     ) -> HAResult:
         if not entity_id or not url:
-            return HAResult(False, "Playing media needs an entity and a media URL.")
+            return HAResult(False, "Para tocar algo faltou a entidade ou o endereço da mídia.")
         data = {
             "entity_id": entity_id,
             "media_content_id": url,
@@ -431,11 +431,11 @@ class HomeAssistantClient(object):
 
     async def set_volume(self, entity_id: str, level: float) -> HAResult:
         if not entity_id:
-            return HAResult(False, "Setting the volume needs an entity.")
+            return HAResult(False, "Para mudar o volume faltou dizer de qual entidade.")
         try:
             value = float(level)
         except (TypeError, ValueError):
-            return HAResult(False, "Volume must be a number between 0 and 1.")
+            return HAResult(False, "O volume tem que ser um número entre 0 e 1.")
         value = max(0.0, min(1.0, value))
         return await self.call_service(
             MEDIA_PLAYER_DOMAIN, "volume_set", {"entity_id": entity_id, "volume_level": value}
@@ -443,7 +443,7 @@ class HomeAssistantClient(object):
 
     async def media_stop(self, entity_id: str) -> HAResult:
         if not entity_id:
-            return HAResult(False, "Stopping playback needs an entity.")
+            return HAResult(False, "Para parar faltou dizer de qual entidade.")
         return await self.call_service(
             MEDIA_PLAYER_DOMAIN, "media_stop", {"entity_id": entity_id}
         )
