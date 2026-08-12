@@ -58,7 +58,7 @@ class PowerAction(BaseModel):
 async def health(request: Request, db: Database = Depends(get_db)) -> Dict[str, Any]:
     """Public liveness probe. Deliberately says almost nothing.
 
-    "Almost": desde a 0.4.8 também diz se o esquema de dois sistemas está de pé.
+    "Almost": também diz se o esquema de dois sistemas está de pé.
     Isso é público de propósito, e é o único jeito de conferir um cartão recém
     gravado -- antes de existir conta não existe sessão, e a pergunta "o
     reparticionamento aconteceu?" é justamente a que ninguém consegue responder
@@ -70,14 +70,30 @@ async def health(request: Request, db: Database = Depends(get_db)) -> Dict[str, 
         "version": __version__,
         "setup_required": auth.setup_required(db),
         "started_at": clock.started_at(request.app.state),
-        "recovery": _estado_dos_slots(),
+        "recovery": _estado_dos_slots(request.app.state),
     }
 
 
-def _estado_dos_slots() -> Dict[str, Any]:
-    """Resumo barato: nada de subprocesso além do que slots já faz, e nunca levanta."""
+def _slot_atual(state: Any) -> Optional[str]:
+    """Em qual slot este sistema está rodando -- descoberto uma vez só.
+
+    Não muda sem reiniciar, e descobrir custa um ``findmnt``. O health é chamado
+    a cada segundo e meio durante uma atualização: sem esta memória seria um
+    processo por batida. Guardado no ``app.state`` e não num global do módulo
+    para não atravessar de um app para outro (nos testes, de um teste para o
+    seguinte).
+    """
+    lembrado = getattr(state, "slot_deste_boot", ...)
+    if lembrado is ...:
+        lembrado = slots.current_slot()
+        state.slot_deste_boot = lembrado
+    return lembrado
+
+
+def _estado_dos_slots(state: Any) -> Dict[str, Any]:
+    """Resumo barato: o slot vem da memória, o resto é um arquivo. Nunca levanta."""
     try:
-        atual = slots.current_slot()
+        atual = _slot_atual(state)
         estado = slots.read_state() if atual else {}
         return {
             "slots": bool(atual) and os.path.isfile(slots.state_path()),
