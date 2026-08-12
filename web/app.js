@@ -31,6 +31,18 @@ import {icon, appIcon} from './lib/icons.js';
 // importadas (e só como reserva, com activate:false), então esta linha tem de
 // vir antes de qualquer uma: quem não tiver tradução aparece em inglês, e não
 // quebrado.
+// O inglês de reserva da própria casca. Estas frases apareciam cruas no meio
+// de uma tela em português -- "This screen failed to load" é justamente o que
+// alguém lê no pior momento possível.
+setStrings('en', {
+  'shell.stream': 'Event stream',
+  'shell.theme': 'Theme',
+  'shell.viewFailed': 'This screen failed to load',
+  'shell.viewCrashed': 'This screen crashed while rendering',
+  'shell.appFailed': '{name} failed to start',
+  'shell.appError': 'The app reported an error.',
+}, {activate: false});
+
 setStrings('pt-BR', PT_BR);
 
 const LS_MODE = 'project_os.mode';
@@ -340,15 +352,15 @@ function renderTopbarControls() {
     ),
     h('span', {
       class: 'conn', dataset: {state: wsState.status || 'idle'},
-      title: 'Event stream: ' + (wsState.status || 'idle'),
+      title: t('shell.stream') + ': ' + t('state.' + (wsState.status === 'open' ? 'live' : wsState.status === 'connecting' ? 'connecting' : 'offline')),
     },
       h('span', {class: 'conn__dot'}),
-      h('span', {class: 'sr-only'}, 'Event stream ' + (wsState.status || 'idle')),
+      h('span', {class: 'sr-only'}, t('shell.stream') + ' ' + (wsState.status || 'idle')),
     ),
     h('button', {
       class: 'btn btn--icon', type: 'button',
-      title: 'Theme: ' + t('theme.' + theme),
-      'aria-label': 'Theme: ' + t('theme.' + theme),
+      title: t('shell.theme') + ': ' + t('theme.' + theme),
+      'aria-label': t('shell.theme') + ': ' + t('theme.' + theme),
       onClick: cycleTheme,
     }, icon(themeIcon, {size: 18})),
     h('button', {
@@ -490,7 +502,7 @@ function loadingGrid(count = 3) {
 }
 
 function errorCard(title, error, onRetry) {
-  const message = error instanceof Error ? error.message : String(error || 'Unknown error');
+  const message = error instanceof Error ? error.message : String(error || t('state.error'));
   const code = error && error.code ? error.code : null;
   return h('div', {class: 'card card--danger'},
     h('div', {class: 'card__header'},
@@ -604,8 +616,8 @@ async function showView(name, routeCtx, {layout = 'shell', title = ''} = {}) {
     if (token !== bootToken) return;
     console.error('[shell] failed to load view', name, err);
     mount(contentEl, layout === 'auth'
-      ? h('div', {class: 'auth__card'}, errorCard('This screen failed to load', err, () => router.reload()))
-      : errorCard('This screen failed to load', err, () => router.reload()));
+      ? h('div', {class: 'auth__card'}, errorCard(t('shell.viewFailed'), err, () => router.reload()))
+      : errorCard(t('shell.viewFailed'), err, () => router.reload()));
     return;
   }
   if (token !== bootToken) return;
@@ -631,7 +643,7 @@ async function showView(name, routeCtx, {layout = 'shell', title = ''} = {}) {
   } catch (err) {
     if (token !== bootToken) return;
     console.error('[shell] view crashed', name, err);
-    mount(contentEl, errorCard('This screen crashed while rendering', err, () => router.reload()));
+    mount(contentEl, errorCard(t('shell.viewCrashed'), err, () => router.reload()));
   }
   window.scrollTo(0, 0);
 }
@@ -718,7 +730,7 @@ async function showAppPanel(routeCtx) {
   if (app && app.state === 'error') {
     const detail = app.error || dig(app, 'traceback', '');
     mount(contentEl, h('div', {class: 'stack'},
-      errorCard(name + ' failed to start', new Error(app.message || 'The app reported an error.'), () => router.reload()),
+      errorCard(t('shell.appFailed', {name}), new Error(app.message || t('shell.appError')), () => router.reload()),
       detail ? h('pre', {class: 'code'}, String(detail)) : null,
     ));
     return;

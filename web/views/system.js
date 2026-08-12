@@ -55,6 +55,7 @@ setStrings('en', {
   'sys.net.up': 'Up',
   'sys.net.sinceBoot': 'Since boot',
   'sys.net.interfaces': 'Interfaces',
+  'sys.net.samples': 'last {count} samples',
   'sys.net.none': 'No interfaces reported.',
   'sys.card.processes': 'Top processes',
   'sys.processes.sub': 'Sorted by memory — the resource a 1 GB board runs out of first',
@@ -320,15 +321,15 @@ function gauge() {
 
 /** Two-series sparkline drawn from plain numbers. */
 function sparkline(width, height) {
-  const rx = svg('polyline', {
+  const rx = svg('path', {
     fill: 'none', stroke: 'var(--accent)', strokeWidth: 1.6,
     strokeLinejoin: 'round', strokeLinecap: 'round',
-    'vector-effect': 'non-scaling-stroke', points: '',
+    'vector-effect': 'non-scaling-stroke', d: '',
   });
-  const tx = svg('polyline', {
+  const tx = svg('path', {
     fill: 'none', stroke: 'var(--info)', strokeWidth: 1.6,
     strokeLinejoin: 'round', strokeLinecap: 'round',
-    strokeDasharray: '3 3', 'vector-effect': 'non-scaling-stroke', points: '',
+    strokeDasharray: '3 3', 'vector-effect': 'non-scaling-stroke', d: '',
   });
   const node = svg('svg', {
     viewBox: '0 0 ' + width + ' ' + height,
@@ -338,24 +339,43 @@ function sparkline(width, height) {
     style: {display: 'block', overflow: 'visible'},
   }, rx, tx);
 
+  // `null` é buraco, não zero. Desenhar zero para uma leitura que não existe é
+  // a mesma mentira do "0 B/s": a linha encosta no chão e quem olha lê "não
+  // passou nada", quando o certo é "não sei". Um buraco parte a linha em dois
+  // trechos, que é como um gráfico diz "faltou dado aqui".
   const project = (values, peak) => {
-    if (values.length < 2) return '';
-    const step = width / (values.length - 1);
-    const points = [];
+    const step = width / Math.max(1, values.length - 1);
+    const trechos = [];
+    let atual = [];
     for (let i = 0; i < values.length; i += 1) {
-      const value = values[i] === null ? 0 : values[i];
-      const y = height - (peak > 0 ? (value / peak) * (height - 2) : 0) - 1;
-      points.push((i * step).toFixed(1) + ',' + y.toFixed(1));
+      if (values[i] === null || values[i] === undefined) {
+        if (atual.length > 1) trechos.push(atual);
+        atual = [];
+        continue;
+      }
+      const y = height - (peak > 0 ? (values[i] / peak) * (height - 2) : 0) - 1;
+      atual.push((i * step).toFixed(1) + ',' + y.toFixed(1));
     }
-    return points.join(' ');
+    if (atual.length > 1) trechos.push(atual);
+    return trechos;
   };
 
   return {
     node,
     set(rxValues, txValues) {
-      const peak = Math.max(1, ...rxValues.map((v) => v || 0), ...txValues.map((v) => v || 0));
-      rx.setAttribute('points', project(rxValues, peak));
-      tx.setAttribute('points', project(txValues, peak));
+      const reais = rxValues.concat(txValues).filter((v) => v !== null && v !== undefined);
+      const peak = Math.max(1, ...reais);
+      // Um <polyline> só desenha uma linha; com buracos vira um <path> de
+      // trechos ("M x,y L ..." por trecho), que é o mesmo desenho quando não há
+      // buraco nenhum.
+      const desenhar = (alvo, values) => {
+        const d = project(values, peak)
+          .map((trecho) => 'M' + trecho.join(' L'))
+          .join(' ');
+        alvo.setAttribute('d', d);
+      };
+      desenhar(rx, rxValues);
+      desenhar(tx, txValues);
     },
   };
 }
@@ -554,7 +574,9 @@ export default {
     const swapMeter = meter(t('sys.mem.swap'), {warn: 40, danger: 75});
     const memDetail = h('div', {class: 'fields'});
     const memCard = card({
-      title: 'Memory',
+      // Estava cru: era a única carta desta tela em inglês numa tela em
+      // português, e o teste de tradução não pega texto que não passa por t().
+      title: t('sys.card.memory'),
       iconName: 'chip',
       body: [memMeter.node, swapMeter.node, memDetail],
     });
@@ -610,9 +632,10 @@ export default {
         h('div', {class: 'stack stack--sm'},
           spark.node,
           h('div', {class: 'row', style: {gap: 'var(--space-3)'}},
-            h('span', {class: 'tiny faint'}, '━ down'),
-            h('span', {class: 'tiny faint'}, '┄ up'),
-            h('span', {class: 'tiny faint', style: {marginLeft: 'auto'}}, 'last ' + HISTORY + ' samples'),
+            h('span', {class: 'tiny faint'}, '━ ' + t('sys.net.down')),
+            h('span', {class: 'tiny faint'}, '┄ ' + t('sys.net.up')),
+            h('span', {class: 'tiny faint', style: {marginLeft: 'auto'}},
+              t('sys.net.samples', {count: HISTORY})),
           ),
         ),
         h('div', {class: 'stat'}, h('span', {class: 'stat__label'}, t('sys.net.sinceBoot')), netTotals),
@@ -744,8 +767,11 @@ export default {
           const seconds = (now - previous.t) / 1000;
           // A counter that went backwards means the interface reset; a rate of
           // zero is a truthful reading of "no idea", not a lie about traffic.
+          // Sem contador dos dois lados não existe taxa. Devolver 0 aqui era
+          // inventar "não passou nada" -- e como rx e tx são independentes,
+          // uma placa que só reporta um dos dois enchia o outro de zeros.
           const delta = (a, b) => {
-            if (a === null || b === null || seconds <= 0) return 0;
+            if (a === null || b === null || seconds <= 0) return null;
             const diff = a - b;
             return diff < 0 ? 0 : diff / seconds;
           };
@@ -756,8 +782,12 @@ export default {
         }
       }
 
-      netDown.textContent = rxRates.length ? fmt.bytes(rxRates[rxRates.length - 1]) + '/s' : '—';
-      netUp.textContent = txRates.length ? fmt.bytes(txRates[txRates.length - 1]) + '/s' : '—';
+      const ultima = (lista) => {
+        const valor = lista.length ? lista[lista.length - 1] : null;
+        return valor === null || valor === undefined ? '—' : fmt.bytes(valor) + '/s';
+      };
+      netDown.textContent = ultima(rxRates);
+      netUp.textContent = ultima(txRates);
       netTotals.textContent = net.rx === null && net.tx === null
         ? '—'
         : fmt.bytes(net.rx) + ' in · ' + fmt.bytes(net.tx) + ' out';

@@ -158,6 +158,14 @@ function create(ns, tag, props, children) {
     for (const key of Object.keys(props)) setProp(el, key, props[key], Boolean(ns));
   }
   for (const child of children) appendChild(el, child);
+  // Um <select value="performance"> só consegue escolher a opção depois que as
+  // opções existem, e as props são aplicadas antes dos filhos -- então o value
+  // era engolido e o campo mostrava sempre o primeiro item da lista. Era assim
+  // que o Governor da tela de hardware dizia "conservative" numa máquina em
+  // "ondemand", e um clique de "salvar" gravaria a mentira que estava na tela.
+  if (isPlainProps(props) && props.value !== undefined && el.tagName === 'SELECT') {
+    setProp(el, 'value', props.value, Boolean(ns));
+  }
   return el;
 }
 

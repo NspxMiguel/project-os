@@ -16,6 +16,12 @@
 
 export const PT_BR = {
   'app.name': 'project-os',
+  'shell.stream': 'Fluxo de eventos',
+  'shell.theme': 'Tema',
+  'shell.viewFailed': 'Esta tela não carregou',
+  'shell.viewCrashed': 'Esta tela quebrou ao desenhar',
+  'shell.appFailed': 'O {name} não conseguiu iniciar',
+  'shell.appError': 'O aplicativo relatou um erro.',
   'nav.dashboard': 'Painel',
   'nav.apps': 'Aplicativos',
   'nav.devices': 'Aparelhos',
@@ -305,6 +311,7 @@ export const PT_BR = {
   'sys.net.up': 'Subindo',
   'sys.net.sinceBoot': 'Desde o boot',
   'sys.net.interfaces': 'Interfaces',
+  'sys.net.samples': 'últimas {count} amostras',
   'sys.net.none': 'Nenhuma interface informada.',
   'sys.card.processes': 'Processos mais pesados',
   'sys.processes.sub': 'Ordenados por memória — o que acaba primeiro numa placa de 1 GB',
