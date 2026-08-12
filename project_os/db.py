@@ -121,6 +121,14 @@ MIGRATIONS = [
         "CREATE INDEX IF NOT EXISTS idx_helper_jobs_state ON helper_jobs(state, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_helper_jobs_helper ON helper_jobs(helper_id)",
     ],
+    [
+        # Tarefa endereçada. A fila original entregava para quem pudesse fazer,
+        # o que é certo para "converta este vídeo" e errado para "ligue o relé
+        # *deste* ESP32" -- com dois ajudantes na casa, a lâmpada acesa podia
+        # ser a do outro cômodo. `helper_id` não servia: ele é quem pegou, e é
+        # escrito na hora da entrega.
+        "ALTER TABLE helper_jobs ADD COLUMN target_id TEXT",
+    ],
 ]  # type: List[List[str]]
 
 SCHEMA_NAMESPACE = "_schema"

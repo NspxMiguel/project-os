@@ -444,19 +444,25 @@ def submit(
     kind: str,
     payload: Optional[Dict[str, Any]] = None,
     needs: Optional[Iterable[str]] = None,
+    target_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Queue a task for whichever helper can do it.
 
     Queuing never fails for lack of a helper: the job waits. A PC that boots an
     hour later picks up what the Pi could not do at 3am.
+
+    ``target_id`` amarra a tarefa a um ajudante. "Converta este vídeo" é para
+    quem puder; "ligue o relé" é para *aquele* ESP32 -- com dois na casa, sem
+    isto a lâmpada que acende podia ser a do outro cômodo.
     """
     job_id = uuid.uuid4().hex[:16]
     wanted = [str(n).strip().lower() for n in (needs or []) if str(n).strip()]
     db.execute(
-        """INSERT INTO helper_jobs (id, kind, payload, needs, state, created_at, attempts)
-           VALUES (?, ?, ?, ?, ?, ?, 0)""",
+        """INSERT INTO helper_jobs
+              (id, kind, payload, needs, state, created_at, attempts, target_id)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?)""",
         (job_id, str(kind), json.dumps(payload or {}), json.dumps(wanted),
-         JOB_QUEUED, utcnow_iso()),
+         JOB_QUEUED, utcnow_iso(), str(target_id) if target_id else None),
     )
     return get_job(db, job_id) or {}
 
@@ -505,6 +511,8 @@ def take(db: Any, helper: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         for row in rows:
             job = _shape_job(row)
             if job is None or not set(job["needs"]).issubset(mine):
+                continue
+            if job.get("target_id") and job["target_id"] != helper["id"]:
                 continue
             db.execute(
                 """UPDATE helper_jobs

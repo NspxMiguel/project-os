@@ -71,6 +71,14 @@ setStrings('en', {
   'helpers.codes.copy.esp32.fields': 'WIFI_SSID, WIFI_PASSWORD, SERVER ({server}), PAIRING_CODE ({code}), and CAPABILITIES for whatever is actually wired up.',
   'helpers.codes.copied': 'Command copied',
   'helpers.jobs.submit': 'Submit test job',
+  'helpers.act.read': 'Read now',
+  'helpers.act.relayOn': 'Relay on',
+  'helpers.act.relayOff': 'off',
+  'helpers.act.queued': 'Sent to {name}. It runs on the next beat.',
+  'helpers.fact.reading': 'reading',
+  'helpers.fact.button': 'button',
+  'helpers.fact.uptime': 'up for',
+  'helpers.fact.ip': 'ip',
   'helpers.jobs.submit.hint': 'A "ping" job needs no capability at all — the honest smoke test that a helper is really taking work.',
   'helpers.jobs.submitted': 'Job queued',
   'helpers.jobs.noRunner': 'Queued, but no paired helper currently offers this yet — it will run once one does.',
@@ -200,6 +208,71 @@ export default {
 
     /* ----------------------------------------------------- paired helpers */
 
+    /** O que o ajudante contou de si na última batida.
+     *
+     *  O ESP32 manda a leitura do sensor e o clique do botão a cada 15
+     *  segundos desde o primeiro dia, e nada no `web/` lia `facts`: a
+     *  temperatura do quarto dos passarinhos virava um número sobrescrito numa
+     *  linha do SQLite. Agora ela aparece.
+     */
+    function fatosDoAjudante(helper) {
+      const facts = helper.facts && typeof helper.facts === 'object' ? helper.facts : null;
+      if (!facts) return null;
+      const escondidos = ['platform', 'python', 'version', 'hostname', 'firmware', 'board',
+                          'sensor_pin', 'relay_pin', 'button_pin'];
+      const pares = Object.keys(facts)
+        .filter((k) => escondidos.indexOf(k) < 0)
+        .filter((k) => facts[k] !== null && facts[k] !== undefined && facts[k] !== '')
+        .map((k) => h('span', {class: 'tag'}, rotuloDoFato(k) + ': ' + String(facts[k])));
+      if (!pares.length) return null;
+      return h('div', {class: 'row', style: {gap: 'var(--space-1)', marginTop: '4px'}}, pares);
+    }
+
+    function rotuloDoFato(chave) {
+      const conhecido = t('helpers.fact.' + chave);
+      return conhecido === 'helpers.fact.' + chave ? chave : conhecido;
+    }
+
+    /** Botões que mandam trabalho de verdade para *este* ajudante.
+     *
+     *  Antes, a única tarefa que a tela sabia enfileirar era um ping, e ainda
+     *  por cima para quem pegasse primeiro. O firmware do ESP32 já sabia
+     *  executar `read` e `relay` desde o começo -- faltava quem pedisse.
+     */
+    function controlesDoAjudante(helper) {
+      const capacidades = helper.capabilities || [];
+      const botoes = [];
+      if (capacidades.indexOf('sensor') >= 0) {
+        botoes.push(h('button', {
+          class: 'btn btn--sm btn--ghost', type: 'button', disabled: !helper.online,
+          onClick: () => enviarTarefa(helper, 'read', {}, ['sensor']),
+        }, icon('pulse', {size: 14}), t('helpers.act.read')));
+      }
+      if (capacidades.indexOf('actuator') >= 0) {
+        botoes.push(h('button', {
+          class: 'btn btn--sm btn--ghost', type: 'button', disabled: !helper.online,
+          onClick: () => enviarTarefa(helper, 'relay', {on: true}, ['actuator']),
+        }, icon('power', {size: 14}), t('helpers.act.relayOn')));
+        botoes.push(h('button', {
+          class: 'btn btn--sm btn--ghost', type: 'button', disabled: !helper.online,
+          onClick: () => enviarTarefa(helper, 'relay', {on: false}, ['actuator']),
+        }, t('helpers.act.relayOff')));
+      }
+      if (!botoes.length) return null;
+      return h('div', {class: 'row', style: {gap: 'var(--space-1)'}}, botoes);
+    }
+
+    async function enviarTarefa(helper, kind, payload, needs) {
+      try {
+        await api.post('/helpers/jobs', {kind, payload, needs, helper_id: helper.id});
+        toast(t('helpers.act.queued', {name: helper.name}), {type: 'success'});
+        await loadJobs();
+        paintAll();
+      } catch (err) {
+        toast((err && err.message) || t('helpers.error.load'), {type: 'error'});
+      }
+    }
+
     function helperRow(helper) {
       const since = helper.online
         ? null
@@ -224,8 +297,10 @@ export default {
             [kindLabel(helper.kind), helper.platform, since].filter(Boolean).join(' · '),
           ),
           h('div', {class: 'list__sub'}, offers),
+          fatosDoAjudante(helper),
         ),
         h('div', {class: 'list__aside'},
+          controlesDoAjudante(helper),
           h('button', {
             class: 'btn btn--sm btn--ghost', type: 'button',
             onClick: () => renameHelper(helper),
@@ -589,11 +664,19 @@ export default {
     const offOffline = ctx.ws ? ctx.ws.on('helpers.offline', () => load()) : null;
     const offEvent = ctx.ws ? ctx.ws.on('helpers.event', () => load()) : null;
 
+    // Cair não gera evento: um ajudante que some simplesmente para de bater.
+    // Quem decide "offline" é a idade da última batida, e essa conta só muda
+    // quando alguém pergunta de novo -- sem isto o selo Online ficava verde até
+    // recarregar a página na mão. O intervalo é metade da carência de 120s, o
+    // que faz o selo mudar no máximo um minuto depois da verdade.
+    const relogio = setInterval(() => { if (!disposed) load(); }, 60000);
+
     await load();
 
     return () => {
       disposed = true;
       stopCountdown();
+      clearInterval(relogio);
       if (offOnline) offOnline();
       if (offOffline) offOffline();
       if (offEvent) offEvent();

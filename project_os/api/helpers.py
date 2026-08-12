@@ -23,7 +23,7 @@ import contextlib
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from starlette.websockets import WebSocketState
 
@@ -76,6 +76,9 @@ class NewJob(BaseModel):
     kind: str
     payload: Dict[str, Any] = {}
     needs: List[str] = []
+    #: Amarra a tarefa a um ajudante. Sem isto, "ligue o relé" ia para qualquer
+    #: um que tivesse relé.
+    helper_id: Optional[str] = None
 
 
 class JobResult(BaseModel):
@@ -166,7 +169,11 @@ async def create_job(
     unknown = [n for n in body.needs if n not in core.CAPABILITIES]
     if unknown:
         raise ApiError(400, "unknown_capability", "Nothing offers: %s." % ", ".join(unknown))
-    job = core.submit(db, body.kind, payload=body.payload, needs=body.needs)
+    if body.helper_id and core.get(db, body.helper_id) is None:
+        raise ApiError(404, "helper_not_found", "Não existe ajudante %r." % body.helper_id)
+    job = core.submit(
+        db, body.kind, payload=body.payload, needs=body.needs, target_id=body.helper_id
+    )
     return {"job": job, "will_run": core.can_run(db, body.needs)}
 
 
@@ -272,20 +279,38 @@ def _agent(db: Any, token: Optional[str]) -> Dict[str, Any]:
 @router.post("/agent/heartbeat")
 async def heartbeat(
     body: Dict[str, Any],
+    request: Request,
     db: Any = Depends(get_db),
 ) -> Dict[str, Any]:
     """The HTTP alternative to the websocket, for agents too small to hold one.
 
     An ESP32 that wakes every minute, reports a temperature and sleeps again has
     no business keeping a socket open.
+
+    Publica no barramento igual ao websocket. Sem isto a tela de Ajudantes ficava
+    escutando ``helpers.online`` e ``helpers.event`` que só o websocket emitia --
+    e os dois agentes que este projeto entrega falam por aqui, não por lá. O
+    resultado era uma tela "ao vivo" onde nada nunca acontecia: o ESP32 mandava
+    a leitura e o clique do botão a cada 15 segundos e ninguém via.
     """
     helper = _agent(db, body.get("token"))
+    estava_online = bool(helper.get("online"))
     updated = core.touch(
         db,
         helper["id"],
         facts=body.get("facts"),
         capabilities=body.get("capabilities"),
     )
+    bus = getattr(request.app.state, "bus", None)
+    if bus is not None:
+        if not estava_online:
+            bus.publish_nowait("helpers.online", {"helper": updated or helper})
+        fatos = body.get("facts")
+        if isinstance(fatos, dict) and fatos:
+            bus.publish_nowait(
+                "helpers.event",
+                {"helper_id": helper["id"], "name": "facts", "data": fatos},
+            )
     job = core.take(db, updated or helper)
     return {"helper": updated, "job": job, "poll_seconds": POLL_SECONDS}
 

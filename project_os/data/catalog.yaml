@@ -137,9 +137,9 @@
   disk_mb: 700
   summary: Firmware pra ESP32/ESP8266, feito por YAML.
   description: >-
-    Compila e grava firmware nos seus microcontroladores. Compilar num Pi é
-    lento; se houver um ajudante com CPU sobrando, o project-os manda a compilação
-    pra lá.
+    Compila e grava firmware nos seus microcontroladores. Compilar num Pi 3 é
+    lento — de alguns minutos por placa — e a compilação acontece dentro do
+    próprio ESPHome, não passa pela fila de ajudantes do project-os.
   tags: [casa, esp32, diy]
 
 - id: zwave-js-ui
@@ -216,8 +216,8 @@
   description: >-
     Servidor de mídia sem conta e sem assinatura. Um Pi entrega bem quando a TV
     consegue tocar o arquivo do jeito que ele está; quando precisa converter na
-    hora, engasga. Se houver um ajudante com CPU sobrando, a conversão vai pra
-    ele.
+    hora, engasga — e essa conversão é dentro do Jellyfin, um ajudante ligado
+    não tira esse peso da placa.
   tags: [filmes, séries, streaming]
 
 - id: navidrome
@@ -493,7 +493,8 @@
   summary: Todo papel da casa, digitalizado e pesquisável.
   description: >-
     Lê o texto dos documentos escaneados e acha por palavra. O reconhecimento é
-    pesado; com um ajudante ligado, ele faz essa parte.
+    pesado e roda dentro do próprio Paperless, na placa — num Pi 3 conte minutos
+    por documento.
   tags: [documentos, ocr, scanner]
 
 - id: grafana
