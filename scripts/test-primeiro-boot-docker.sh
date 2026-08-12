@@ -222,9 +222,16 @@ if [ "${COM_APT:-0}" = "1" ]; then
     [ "$ESTADO" = "done" ] && ok "o apt terminou pelo sudoers da imagem" \
         || falha "a instalação terminou como '$ESTADO': $(curl -s -b "$BISCOITOS" "http://127.0.0.1:$PORTA/api/packages/jobs" | head -c 400)"
 
-    docker exec "$NOME" sh -c 'command -v sl' >/dev/null 2>&1 \
-        && ok "o binário apareceu na caixa" \
-        || falha "o apt disse que terminou mas o programa não está lá"
+    # Pelo dpkg, não pelo PATH: o "sl" instala em /usr/games, que não está no
+    # PATH de um shell não interativo -- a primeira versão desta conferência
+    # acusou o produto de mentir sobre uma instalação que tinha funcionado.
+    if docker exec "$NOME" dpkg-query -W -f '${Status}' sl 2>/dev/null | grep -q "install ok installed"; then
+        ok "o dpkg confirma o pacote instalado na caixa"
+    else
+        falha "o apt disse que terminou mas o dpkg não conhece o pacote"
+        curl -s -b "$BISCOITOS" "http://127.0.0.1:$PORTA/api/packages/jobs" | head -c 600
+        echo
+    fi
 fi
 
 echo "== erros no log do serviço =="
