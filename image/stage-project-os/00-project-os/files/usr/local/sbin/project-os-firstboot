@@ -31,6 +31,13 @@ ssid=""
 password=""
 country=""
 while IFS='=' read -r key value; do
+    # Some editors put a byte order mark at the start of the file. It is
+    # invisible, and it welds itself to the first key: "ssid" becomes
+    # "\xef\xbb\xbfssid", which matches nothing, so the whole file is ignored and
+    # the Pi never joins the network. On a box with no screen that is
+    # indistinguishable from a box that did not boot, and the only fix left is
+    # the card back in the laptop -- the exact trip this project exists to avoid.
+    key=${key#$'\xef\xbb\xbf'}
     key=$(printf '%s' "$key" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
     value=$(printf '%s' "${value-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')
     case "$key" in
