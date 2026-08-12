@@ -72,6 +72,13 @@ machine, not process migration. Nothing here pretends to be magic.
 and whatever you add to it. On a small Pi some of that will be slow. That is
 your call to make, not the software's.
 
+**Updates itself, and survives a bad one.** The card carries two systems, A and
+B. An update writes the *other* one and reboots into it; the one that was
+working is left untouched. A system that does not come back up — or comes up and
+never answers — is given three tries and then the card boots the last one that
+worked, on its own, from the initramfs. The card never has to come out of the
+Pi. See [docs/RECOVERY.md](docs/RECOVERY.md).
+
 ## Requirements
 
 - A Raspberry Pi with **1 GB of RAM or more** — 3B, 3B+, 4, 5, Zero 2 W, 400.
@@ -127,6 +134,7 @@ install command.
 | [docs/HOME.md](docs/HOME.md) | Smart home: Home Assistant, Tuya, eWeLink and friends |
 | [docs/BIRDTUNES.md](docs/BIRDTUNES.md) | The first app: music for birds, on an Apple TV or a Chromecast |
 | [docs/SIMPLE-PROJECT-OS.md](docs/SIMPLE-PROJECT-OS.md) | The ESP32 build |
+| [docs/RECOVERY.md](docs/RECOVERY.md) | Two systems on one card: updating, rolling back, and why the card stays in the Pi |
 | [docs/ARGOS.md](docs/ARGOS.md) | Hooks for an external assistant |
 
 ## License
