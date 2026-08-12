@@ -176,9 +176,16 @@ awk '$1 !~ /^#/ && $2 == "/" { achou = 1 } END { exit !achou }' /mnt/raiz/etc/fs
 # A identidade da caixa tem que atravessar a atualização: sem o Wi-Fi, o slot
 # novo sobe sem rede, nunca confirma, e três boots depois volta atrás -- toda
 # atualização por Wi-Fi terminaria em rollback.
+# -F: procura o texto, não uma expressão regular. Sem isso o "^" de
+# "^project-os:" vira âncora de início de linha e a busca só acha o que estiver
+# na primeira coluna -- no script essa string mora no meio de uma linha, dentro
+# de aspas. O resultado era acusar a imagem de não levar a senha dele quando ela
+# leva. É o mesmo alarme falso que este verificador já deu ao procurar
+# "NoNewPrivileges" e achar o comentário que explica por que ele não está lá:
+# aqui se confere conteúdo, então a busca é literal.
 FALTOU_ID=""
 for peca in "NetworkManager/system-connections" "ssh_host_ed25519_key" "^project-os:"; do
-    grep -q "$peca" /mnt/raiz/usr/local/sbin/project-os-system-update || FALTOU_ID="$FALTOU_ID $peca"
+    grep -qF -- "$peca" /mnt/raiz/usr/local/sbin/project-os-system-update || FALTOU_ID="$FALTOU_ID $peca"
 done
 [ -z "$FALTOU_ID" ] \
     && ok "a atualização leva Wi-Fi, senha e chaves de SSH para o slot novo" \
