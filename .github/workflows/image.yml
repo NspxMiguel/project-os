@@ -118,6 +118,25 @@ jobs:
           echo "size=$(stat -c %s "pi-gen/deploy/${name}")" >> "$GITHUB_OUTPUT"
           ls -lh pi-gen/deploy
 
+      - name: Conferir a imagem antes de publicar
+        # Quase cinquenta conferências no que vai para o cartão -- initramfs por
+        # kernel com os módulos certos, o decisor de slot lá dentro, o fstab, o
+        # sudoers, os ajudantes -- e uma simulação do primeiro boot: estica a
+        # imagem para o tamanho de um cartão e roda o reparticionamento de
+        # verdade, com o layout.sh de dentro da própria imagem.
+        #
+        # Roda depois de empacotar o rootfs de propósito: a conferência escreve
+        # na imagem (é assim que ela simula o primeiro boot), então os dois
+        # arquivos que vão ser publicados já estão prontos e intactos.
+        #
+        # Uma imagem que não passa aqui não chega ao release. O preço de publicar
+        # um cartão ruim é ele com o cartão na mão de novo, que é justamente o
+        # que este projeto existe para não pedir.
+        run: |
+          set -e
+          img=$(ls pi-gen/work/*/export-image/*.img | head -n1)
+          sudo bash project-os/scripts/verify-image-docker.sh "$img"
+
       - uses: actions/upload-artifact@v4
         with:
           name: project-os-image
