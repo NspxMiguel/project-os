@@ -191,6 +191,29 @@ done
     && ok "a atualização leva Wi-Fi, senha e chaves de SSH para o slot novo" \
     || falha "o ajudante de atualização não leva:$FALTOU_ID"
 
+# O carimbo de "este slot está inteiro".
+#
+# O slot A tem que sair de fábrica carimbado. Sem isso, no dia em que o Pi
+# estiver rodando o slot B, o clone olharia para o slot A, não veria carimbo
+# nenhum, e copiaria por cima do sistema antigo -- que é o caminho de volta.
+[ -f /mnt/raiz/etc/project-os-slot-completo ] \
+    && ok "o slot A sai de fábrica carimbado de completo" \
+    || falha "falta o carimbo de slot completo (o clone passaria por cima do caminho de volta)"
+
+# E os dois que escrevem um slot têm que carimbar no fim.
+grep -qF "project-os-slot-completo" /mnt/raiz/usr/local/sbin/project-os-clone-slot \
+    && ok "o clone carimba o slot no fim da cópia" \
+    || falha "o clone não carimba o slot"
+grep -qF "project-os-slot-completo" /mnt/raiz/usr/local/sbin/project-os-system-update \
+    && ok "a atualização carimba o slot no fim" \
+    || falha "a atualização não carimba o slot"
+
+# Um rsync que sai 24 ("sumiu arquivo durante a cópia") copiou tudo que importa:
+# num sistema ligado isso é o normal, e tratar como falha abortaria a cópia.
+grep -qF '"$CODIGO" -ne 24' /mnt/raiz/usr/local/sbin/project-os-clone-slot \
+    && ok "o clone aceita o código 24 do rsync" \
+    || falha "o clone trata 'sumiu arquivo' como falha (abortaria quase toda cópia)"
+
 # rsync é quem clona o sistema para o slot reserva.
 [ -x /mnt/raiz/usr/bin/rsync ] && ok "rsync instalado (clona o slot B)" \
                               || falha "rsync não está na imagem; o slot B ficaria vazio"

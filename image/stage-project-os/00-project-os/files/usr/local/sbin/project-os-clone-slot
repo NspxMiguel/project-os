@@ -34,10 +34,24 @@ esac
 
 # Já tem sistema lá? Então não é a primeira vez, e copiar por cima apagaria a
 # versão anterior -- que é justamente o caminho de volta.
+#
+# A pergunta certa não é "tem /usr e /etc?". Uma cópia interrompida no meio tem
+# os dois, e essa resposta errada é cara: o slot fica com meio sistema, este
+# script marca "já clonei" e nunca mais tenta, e a caixa passa a contar com um
+# caminho de volta que não sobe. No dia em que o slot de hoje parar, o initramfs
+# alterna para esse lixo, ele também não sobe, e não há mais de onde voltar --
+# que é exatamente a viagem até o PC que este projeto existe para evitar.
+#
+# Então a pergunta é "tem o carimbo de sistema completo?". Quem termina de
+# escrever um slot é quem carimba: este script no fim da cópia, o
+# project-os-system-update no fim da atualização, e a própria imagem já sai de
+# fábrica com o carimbo no slot A.
+COMPLETO="etc/project-os-slot-completo"
+
 mkdir -p "$MONTAGEM"
 if mount "$ALVO" "$MONTAGEM" 2>/dev/null; then
-    if [ -d "$MONTAGEM/usr" ] && [ -d "$MONTAGEM/etc" ]; then
-        registrar "o slot $ALVO já tem um sistema; nada a fazer"
+    if [ -f "$MONTAGEM/$COMPLETO" ]; then
+        registrar "o slot $ALVO já tem um sistema completo; nada a fazer"
         umount "$MONTAGEM" 2>/dev/null || true
         mkdir -p "$(dirname "$MARCA")" && touch "$MARCA"
         exit 0
@@ -50,17 +64,31 @@ fi
 registrar "clonando o sistema para $ALVO (leva alguns minutos)"
 # --one-file-system: /proc, /sys, /dev e a partição de dados não são o sistema.
 # --numeric-ids: os números importam, não os nomes deste sistema aqui.
-if command -v rsync >/dev/null 2>&1; then
-    rsync -aHAX --numeric-ids --one-file-system --delete \
-        --exclude=/boot/firmware/ --exclude=/var/lib/project-os/ \
-        / "$MONTAGEM/" >/dev/null 2>&1 || {
-            registrar "a cópia falhou; o slot $ALVO segue vazio"
-            umount "$MONTAGEM" 2>/dev/null || true
-            exit 0
-        }
-else
+if ! command -v rsync >/dev/null 2>&1; then
     registrar "sem rsync; desistindo"
     umount "$MONTAGEM" 2>/dev/null || true
+    exit 0
+fi
+
+# O carimbo sai da cópia de propósito: se ele viesse junto, uma cópia
+# interrompida chegaria carimbada de completa. Ele só é escrito no fim, por
+# quem viu a cópia terminar.
+rm -f "$MONTAGEM/$COMPLETO"
+rsync -aHAX --numeric-ids --one-file-system --delete \
+    --exclude=/boot/firmware/ --exclude=/var/lib/project-os/ \
+    --exclude="/$COMPLETO" \
+    / "$MONTAGEM/" >/dev/null 2>&1
+CODIGO=$?
+
+# 24 é "sumiu arquivo durante a cópia", e num sistema que está rodando isso é o
+# normal, não um problema: log rotacionado, arquivo temporário de um serviço.
+# Tratar isso como falha abortaria a cópia de um sistema perfeitamente bom --
+# num Pi ligado, quase toda vez.
+if [ "$CODIGO" -ne 0 ] && [ "$CODIGO" -ne 24 ]; then
+    registrar "a cópia falhou (código $CODIGO); o slot $ALVO fica sem carimbo e o próximo boot tenta de novo"
+    umount "$MONTAGEM" 2>/dev/null || true
+    # Sem marca: é isso que faz o próximo boot tentar outra vez em vez de dar
+    # por pronto um slot pela metade.
     exit 0
 fi
 
@@ -83,6 +111,12 @@ if [ -x /usr/share/project-os/fstab-slot.sh ]; then
         "$MONTAGEM/etc/fstab" "$ALVO" "${DISCO}${SEP}1" || \
         registrar "não consegui ajustar o fstab do slot $ALVO"
 fi
+
+# O carimbo, por último de tudo: depois da cópia, dos diretórios e do fstab.
+# Ele quer dizer "este slot está inteiro e serve de caminho de volta", e é a
+# única coisa que autoriza alguém a confiar nisso.
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$MONTAGEM/$COMPLETO" 2>/dev/null || \
+    : > "$MONTAGEM/$COMPLETO"
 
 sync
 umount "$MONTAGEM" 2>/dev/null || true

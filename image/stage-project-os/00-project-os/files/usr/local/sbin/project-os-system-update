@@ -128,5 +128,16 @@ if [ -f "$MONTAGEM/etc/shadow" ] && grep -q "^project-os:" /etc/shadow 2>/dev/nu
     printf '%s\n' "$LINHA" >> "$MONTAGEM/etc/shadow"
 fi
 
+# O carimbo de "este slot está inteiro", por último de tudo -- depois do
+# desempacotamento, do fstab e da identidade.
+#
+# É o que o project-os-clone-slot lê para saber que não pode copiar por cima
+# deste slot: sem ele, o clone do primeiro boot passaria por cima de um sistema
+# recém-atualizado. E como ele é escrito aqui no fim, um desempacotamento que
+# morre no meio deixa o slot sem carimbo, que é a verdade.
+rm -f "$MONTAGEM/etc/project-os-slot-completo"
+date -u +"%Y-%m-%dT%H:%M:%SZ" > "$MONTAGEM/etc/project-os-slot-completo" 2>/dev/null || \
+    : > "$MONTAGEM/etc/project-os-slot-completo"
+
 sync
 echo "slot $SLOT gravado"

@@ -106,6 +106,20 @@ arquivo só — que na v0.4.1 era o de 64 bits — deixa o Pi esperando para sem
 cartão SD cujo driver não está lá dentro. Preso pela build e por
 `scripts/verify-image-docker.sh`, que confere os quatro, um a um.
 
+**Um slot só conta como caminho de volta se estiver carimbado.** O arquivo
+`/etc/project-os-slot-completo` é escrito no fim de quem termina de gravar um slot
+— o clone, a atualização — e já vem na imagem, no slot A. A pergunta "esse slot já
+tem sistema?" é respondida por ele, e não por "tem `/usr` e `/etc`?": uma cópia
+interrompida tem os dois, e essa resposta errada é cara. O slot fica com meio
+sistema, o clone marca "já fiz" e nunca mais tenta, e a caixa passa a contar com um
+caminho de volta que não sobe. No dia em que o slot de hoje parar, o initramfs
+alterna para esse lixo, ele também não sobe, e não há mais de onde voltar.
+E o `rsync` que sai com **24** ("sumiu arquivo durante a cópia") copiou tudo que
+importa: num sistema ligado isso é o normal — log rotacionado, temporário de
+serviço — e tratar como falha abortaria a cópia de um sistema perfeitamente bom,
+quase toda vez. Preso por `tests/test_ciclo_completo.py`, que faz o cartão viver o
+ciclo inteiro num disco de verdade.
+
 ## 4. Como uma atualização de sistema acontece
 
 Nada disso é escrito à mão: é o botão "Atualizar" da tela, com o passo a passo

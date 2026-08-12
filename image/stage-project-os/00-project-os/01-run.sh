@@ -111,6 +111,15 @@ grep -q "pos-data" /etc/fstab || cat >> /etc/fstab <<'FSTAB'
 LABEL=pos-data  /var/lib/project-os  ext4  defaults,noatime,nofail,x-systemd.device-timeout=15  0  2
 FSTAB
 
+# O carimbo de "este slot está inteiro".
+#
+# O slot A sai de fábrica completo, e precisa dizer isso: é o carimbo que impede
+# o project-os-clone-slot de copiar por cima de um slot que já tem sistema. Sem
+# ele aqui, o dia em que o Pi estiver rodando o slot B e o clone olhar para o
+# slot A, o A não teria carimbo nenhum -- e o clone passaria por cima do sistema
+# antigo, que é justamente o caminho de volta.
+date -u +"%Y-%m-%dT%H:%M:%SZ" > /etc/project-os-slot-completo
+
 # Locked: no password, so no login, until the first-run screen sets one.
 passwd --lock project-os >/dev/null 2>&1 || true
 
