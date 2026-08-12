@@ -270,6 +270,23 @@ grep -q "project-os-slot-state" /mnt/raiz/etc/sudoers.d/010_project-os \
 # do Debian (root:root 755) a atualização do app morre com "Permission denied"
 # depois de baixar o pacote -- e a caixa só se conserta baixando um rootfs
 # inteiro.
+# O que o sudo realmente permite nesta imagem, dito em voz alta.
+#
+# O pi-gen escreve /etc/sudoers.d/010_pi-nopasswd para o primeiro usuário --
+# que aqui é o project-os, o mesmo que roda o serviço -- com
+# "ALL=(ALL) NOPASSWD: ALL". Ou seja: root sem senha, e a nossa lista escopada
+# ao lado é escolha de estilo, não trava. Isso é deliberado enquanto o modo
+# Advanced for "um linux normal" e o serviço dividir a conta com o dono, mas tem
+# que estar na cara de quem confere a imagem, não escondido num arquivo que
+# ninguém abre.
+LARGO=$(grep -rlE "^project-os[[:space:]]+ALL=\(ALL\)[[:space:]]+NOPASSWD:[[:space:]]*ALL" \
+    /mnt/raiz/etc/sudoers.d/ 2>/dev/null | head -n 1)
+if [ -n "$LARGO" ]; then
+    ok "sudo: o project-os tem root sem senha por $(basename "$LARGO") (é assim de propósito)"
+else
+    ok "sudo: nenhum NOPASSWD:ALL -- só a lista escopada (o terminal perde root sem senha de sistema)"
+fi
+
 # Por número, não por nome: quem responde "stat -c %U" é o /etc/passwd **deste**
 # contêiner, que não conhece o usuário project-os da imagem -- perguntar pelo
 # nome acusava a imagem de não ter feito um chown que ela fez. Os números saem do
