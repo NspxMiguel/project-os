@@ -214,6 +214,19 @@ grep -qF '"$CODIGO" -ne 24' /mnt/raiz/usr/local/sbin/project-os-clone-slot \
     && ok "o clone aceita o código 24 do rsync" \
     || falha "o clone trata 'sumiu arquivo' como falha (abortaria quase toda cópia)"
 
+# O arquivo de Wi-Fi do cartão é lido por um script que precisa aguentar o
+# editor que ele usar. Um BOM invisível no começo colava-se na primeira chave e
+# fazia o arquivo inteiro ser ignorado: o Pi liga, não entra na rede, e não tem
+# como avisar ninguém.
+grep -qF 'key=${key#$' /mnt/raiz/usr/local/sbin/project-os-firstboot \
+    && ok "o Wi-Fi do cartão aguenta arquivo com BOM" \
+    || falha "o script de Wi-Fi não tira o BOM (um arquivo salvo no editor errado some com o Pi da rede)"
+
+# Um slot recém-instalado só pode se dar por bom depois de aparecer na rede.
+grep -qF "def slot_por_provar" /mnt/raiz/opt/project-os/project_os/core/slots.py \
+    && ok "um slot novo só confirma depois de aparecer na rede" \
+    || falha "falta a trava de rede: uma atualização que derrube a rede se daria por boa"
+
 # rsync é quem clona o sistema para o slot reserva.
 [ -x /mnt/raiz/usr/bin/rsync ] && ok "rsync instalado (clona o slot B)" \
                               || falha "rsync não está na imagem; o slot B ficaria vazio"
