@@ -234,6 +234,17 @@ if [ "${COM_APT:-0}" = "1" ]; then
     fi
 fi
 
+echo "== a caixa consegue trocar a própria pasta de código? =="
+# A troca de versão do app acontece em volta de /opt/project-os: pasta de
+# trabalho ao lado e duas renomeações, todas em /opt. Se o serviço não escreve
+# lá, a atualização do app não tem como funcionar nesta imagem -- e até a 0.4.7
+# não tinha mesmo.
+if docker exec "$NOME" test -w /opt; then
+    ok "o serviço escreve em /opt (a atualização do app funciona nesta imagem)"
+else
+    falha "o serviço não escreve em /opt; só dá para atualizar pelo sistema inteiro"
+fi
+
 echo "== erros no log do serviço =="
 if docker logs "$NOME" 2>&1 | grep -qE "Traceback|ERROR"; then
     falha "o serviço registrou erro"
