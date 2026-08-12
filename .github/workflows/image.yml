@@ -132,10 +132,16 @@ jobs:
         # Uma imagem que não passa aqui não chega ao release. O preço de publicar
         # um cartão ruim é ele com o cartão na mão de novo, que é justamente o
         # que este projeto existe para não pedir.
+        #
+        # 20 GB e não os 62 GB do cartão dele: o runner acabou de construir uma
+        # imagem e o que sobra de disco é pouco. Vinte é o menor cartão em que os
+        # dois slots de 8 GB e a partição de dados ainda cabem -- é o layout de
+        # verdade, com bem menos metadado de formatação para escrever.
         run: |
           set -e
           img=$(ls pi-gen/work/*/export-image/*.img | head -n1)
-          sudo bash project-os/scripts/verify-image-docker.sh "$img"
+          df -h /
+          sudo bash project-os/scripts/verify-image-docker.sh "$img" 20000
 
       - uses: actions/upload-artifact@v4
         with:
