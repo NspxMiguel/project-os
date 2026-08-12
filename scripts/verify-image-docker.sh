@@ -30,6 +30,18 @@ IMG="${1:?uso: verify-image-docker.sh <imagem.img>}"
 CARTAO_MB="${2:-62000}"
 FALHAS=0
 
+# Este script **escreve** no arquivo que recebe: estica para o tamanho do cartão
+# e roda o reparticionamento em cima. Um .img.xz passado aqui por engano vira um
+# arquivo de 62 GB com o .xz intacto no começo e zeros no resto -- e o erro que
+# aparece é "não reconheço a tabela de partições", que não conta essa história.
+case "$IMG" in
+    *.xz|*.gz|*.zip)
+        echo "Esta conferência precisa da imagem descompactada (e escreve nela)."
+        echo "Faça:  xz -dk $IMG   e passe o .img."
+        exit 2
+        ;;
+esac
+
 apt-get update -qq >/dev/null 2>&1
 apt-get install -y -qq fdisk dosfstools e2fsprogs parted util-linux cpio xz-utils file \
     initramfs-tools-core zstd >/dev/null 2>&1
@@ -258,19 +270,27 @@ grep -q "project-os-slot-state" /mnt/raiz/etc/sudoers.d/010_project-os \
 # do Debian (root:root 755) a atualização do app morre com "Permission denied"
 # depois de baixar o pacote -- e a caixa só se conserta baixando um rootfs
 # inteiro.
-GRUPO_OPT=$(stat -c '%G' /mnt/raiz/opt)
+# Por número, não por nome: quem responde "stat -c %U" é o /etc/passwd **deste**
+# contêiner, que não conhece o usuário project-os da imagem -- perguntar pelo
+# nome acusava a imagem de não ter feito um chown que ela fez. Os números saem do
+# passwd e do group de dentro da própria imagem.
+UID_SERVICO=$(awk -F: '$1 == "project-os" { print $3 }' /mnt/raiz/etc/passwd | head -n 1)
+GID_SERVICO=$(awk -F: '$1 == "project-os" { print $3 }' /mnt/raiz/etc/group | head -n 1)
+[ -n "$UID_SERVICO" ] && ok "a imagem tem o usuário project-os (uid $UID_SERVICO)" \
+                      || falha "não achei o usuário project-os no passwd da imagem"
+
 MODO_OPT=$(stat -c '%a' /mnt/raiz/opt)
 # 0$MODO_OPT: a mode é octal, e o "0" na frente é o que faz o shell ler como tal.
 GRUPO_ESCREVE=$(( ((0$MODO_OPT / 8) % 8) & 2 ))
-if [ "$GRUPO_OPT" = "project-os" ] && [ "$GRUPO_ESCREVE" -ne 0 ]; then
-    ok "/opt deixa o grupo project-os escrever ($GRUPO_OPT $MODO_OPT)"
+if [ "$(stat -c '%g' /mnt/raiz/opt)" = "${GID_SERVICO:-nao-existe}" ] && [ "$GRUPO_ESCREVE" -ne 0 ]; then
+    ok "/opt deixa o grupo project-os escrever (modo $MODO_OPT)"
 else
-    falha "/opt não deixa o serviço trocar a pasta do código ($GRUPO_OPT $MODO_OPT)"
+    falha "/opt não deixa o serviço trocar a pasta do código (gid $(stat -c '%g' /mnt/raiz/opt), modo $MODO_OPT)"
 fi
 
-[ "$(stat -c '%U' /mnt/raiz/opt/project-os)" = "project-os" ] \
+[ "$(stat -c '%u' /mnt/raiz/opt/project-os)" = "${UID_SERVICO:-nao-existe}" ] \
     && ok "a pasta do código é do serviço" \
-    || falha "/opt/project-os não é do usuário project-os"
+    || falha "/opt/project-os é do uid $(stat -c '%u' /mnt/raiz/opt/project-os), não do project-os"
 
 # Diretiva ativa, não a palavra: o arquivo tem um comentário longo explicando
 # justamente por que ela não está lá, e a primeira versão deste teste acusou o
