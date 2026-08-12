@@ -95,8 +95,19 @@ def test_energia_recusa_acao_inventada(auth_client):
     ],
 )
 def test_o_apt_recusa_nome_hostil_pelo_http(auth_client, nome):
-    resposta = auth_client.post("/api/packages/install", json={"name": nome, "source": "apt"})
-    assert resposta.status_code in (400, 403, 404, 422), "%r passou: %s" % (nome, resposta.text)
+    """O campo é "package". A primeira versão deste teste mandava "name".
+
+    Com o campo errado a resposta é 422 por falta de campo obrigatório -- e como
+    o teste aceitava 422, ele passava sem nunca ter mostrado um nome hostil ao
+    validador. Aqui o 422 não vale: a recusa tem que ser do nome.
+    """
+    resposta = auth_client.post(
+        "/api/packages/install", json={"package": nome, "source": "apt"}
+    )
+    assert resposta.status_code in (400, 403), "%r passou: %s" % (nome, resposta.text)
+    assert "bad_name" in resposta.text or "inválido" in resposta.text or "válido" in resposta.text, (
+        "recusou por outro motivo que não o nome: %s" % resposta.text
+    )
 
 
 def espionar_comandos(monkeypatch):

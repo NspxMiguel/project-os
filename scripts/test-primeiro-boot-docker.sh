@@ -196,6 +196,37 @@ for ARQUIVO in / /app.js /lib/dom.js /views/updates.js /style.css; do
     [ "$CODIGO" = "200" ] && ok "serve $ARQUIVO" || falha "$ARQUIVO respondeu $CODIGO"
 done
 
+# O modo Advanced é "um linux normal": instalar pacote pelo navegador, com o
+# sudoers da imagem. Fica atrás de COM_APT=1 porque baixa de verdade e, em
+# emulação, demora -- mas é a promessa mais literal do produto, então quando a
+# imagem muda vale rodar uma vez.
+if [ "${COM_APT:-0}" = "1" ]; then
+    echo "== instalar um pacote pelo navegador, como ele faria =="
+    PEDIDO=$(curl -s -o "$TRAB/apt.json" -w '%{http_code}' -b "$BISCOITOS" -X POST \
+        -H 'content-type: application/json' -d '{"package":"sl","source":"apt"}' \
+        "http://127.0.0.1:$PORTA/api/packages/install")
+    case "$PEDIDO" in
+        200|201|202) ok "a instalação foi aceita ($PEDIDO)" ;;
+        *) falha "instalar pacote respondeu $PEDIDO: $(head -c 300 "$TRAB/apt.json")" ;;
+    esac
+
+    ESTADO=""
+    for _ in $(seq 1 120); do
+        ESTADO=$(curl -s -b "$BISCOITOS" "http://127.0.0.1:$PORTA/api/packages/jobs" \
+            | tr ',' '\n' | grep -m1 '"state"' | cut -d'"' -f4)
+        case "$ESTADO" in
+            done|error|failed) break ;;
+        esac
+        sleep 10
+    done
+    [ "$ESTADO" = "done" ] && ok "o apt terminou pelo sudoers da imagem" \
+        || falha "a instalação terminou como '$ESTADO': $(curl -s -b "$BISCOITOS" "http://127.0.0.1:$PORTA/api/packages/jobs" | head -c 400)"
+
+    docker exec "$NOME" sh -c 'command -v sl' >/dev/null 2>&1 \
+        && ok "o binário apareceu na caixa" \
+        || falha "o apt disse que terminou mas o programa não está lá"
+fi
+
 echo "== erros no log do serviço =="
 if docker logs "$NOME" 2>&1 | grep -qE "Traceback|ERROR"; then
     falha "o serviço registrou erro"

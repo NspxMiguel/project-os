@@ -425,8 +425,12 @@ class JobRunner(object):
 
     # -- writes ---------------------------------------------------------
     def start(self, action: str, source: str, package: str) -> Job:
-        _require_backend(source)
+        # O nome primeiro, o backend depois: um nome inválido é inválido em
+        # qualquer máquina, e conferir o backend antes fazia a resposta depender
+        # de a caixa ter apt -- num Mac de desenvolvimento, "firefox; rm -rf /"
+        # era recusado por não existir apt, o que esconde se o validador presta.
         name = check_name(source, package)
+        _require_backend(source)
         argv = install_argv(source, name) if action == "install" else remove_argv(source, name)
 
         with self._lock:
