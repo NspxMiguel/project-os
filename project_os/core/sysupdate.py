@@ -272,6 +272,24 @@ def install(manifest_url: str = "", download_dir: str = "",
     os.makedirs(pasta, exist_ok=True)
     destino = os.path.join(pasta, "project-os-rootfs-%s.tar.gz" % info["latest"])
 
+    # O manifesto diz o tamanho, então dá para saber antes se cabe. Sem isto a
+    # descoberta vem no fim de meio giga de download, com a partição de dados
+    # dele lotada e um arquivo pela metade para limpar. A folga de 20% é o
+    # arquivo mais o respiro que qualquer sistema de arquivos quer ter.
+    anunciado = int(info.get("size") or 0)
+    if anunciado > 0:
+        try:
+            livre = shutil.disk_usage(pasta).free
+        except OSError:
+            livre = 0
+        if livre and livre < anunciado * 1.2:
+            raise SystemUpdateError(
+                "O sistema novo tem %d MB e só há %d MB livres em %s."
+                % (anunciado // (1024 * 1024), livre // (1024 * 1024), pasta),
+                code="no_space",
+                hint="Libere espaço (Arquivos, ou apague downloads antigos) e tente de novo.",
+            )
+
     diga("baixando o sistema %s" % info["latest"])
     ultimo = [-1]
 

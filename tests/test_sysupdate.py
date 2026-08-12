@@ -233,6 +233,41 @@ def test_num_cartao_antigo_a_instalacao_e_recusada_antes_de_baixar(monkeypatch, 
     assert not baixou, "não faz sentido baixar 600 MB para descobrir que não dá"
 
 
+def test_sem_espaco_a_instalacao_e_recusada_antes_de_baixar(monkeypatch, tmp_path):
+    """Meio giga só cabe onde cabe, e o manifesto diz o tamanho antes.
+
+    Sem esta conferência a descoberta vinha no fim: disco cheio no meio da
+    escrita, com a partição de dados dele lotada de sobra.
+    """
+    import collections
+
+    conf = str(tmp_path / "slot.conf")
+    slots.write_state({"slot": "A", "good": "A", "tries": 0, "recovery": 0}, conf)
+    monkeypatch.setattr(slots, "available", lambda: True)
+    monkeypatch.setattr(slots, "current_slot", lambda: "A")
+    monkeypatch.setattr(slots, "state_path", lambda: conf)
+    monkeypatch.setattr(sysupdate, "helper_available", lambda: True)
+    monkeypatch.setattr(
+        sysupdate.updates, "_fetch_json",
+        lambda url, **k: {"system": {
+            "version": "99.0.0", "url": "http://x/rootfs.tar.gz",
+            "sha256": "a" * 64, "size": 900 * 1024 * 1024,
+        }},
+    )
+    Uso = collections.namedtuple("Uso", "total used free")
+    monkeypatch.setattr(sysupdate.shutil, "disk_usage", lambda caminho: Uso(1 << 30, 1 << 30, 100 * 1024 * 1024))
+
+    baixou = []
+    monkeypatch.setattr(sysupdate, "download", lambda *a, **k: baixou.append(a))
+
+    with pytest.raises(sysupdate.SystemUpdateError) as erro:
+        sysupdate.install(download_dir=str(tmp_path / "downloads"))
+
+    assert erro.value.code == "no_space"
+    assert not baixou, "começou a baixar sabendo que não cabia"
+    assert "MB" in erro.value.message or "GB" in erro.value.message, erro.value.message
+
+
 # --- a API -------------------------------------------------------------------
 # O conftest recarrega o pacote entre os testes, então existem dois objetos-módulo
 # de core.slots vivos: o que este arquivo importou e o que a API guardou. Patch
