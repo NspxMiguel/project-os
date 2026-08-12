@@ -334,9 +334,16 @@ export default {
           h('div', {class: 'notice__body'}, h('span', null,
             item.install_reason || t('store.notice.pending', {kind: item.kind})))));
       } else if (runtimeDown) {
+        // O hint só existe quando há algo a fazer — motor instalado mas fora de
+        // alcance (permissão no soquete, daemon parado). "Não tem docker" não
+        // ganha conselho nenhum, porque a resposta é instalar pelo Advanced.
         notices.push(h('div', {class: 'notice notice--warn'},
           icon('warning', {size: 16}),
-          h('div', {class: 'notice__body'}, h('span', null, item.container_runtime.reason || t('store.notice.noRuntime')))));
+          h('div', {class: 'notice__body'},
+            h('span', null, item.container_runtime.reason || t('store.notice.noRuntime')),
+            item.container_runtime.hint
+              ? h('code', {class: 'small muted'}, item.container_runtime.hint)
+              : null)));
       }
 
       let footer;

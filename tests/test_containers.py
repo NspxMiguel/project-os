@@ -111,6 +111,11 @@ class FakeRuntime:
                 return FakeCompletedProcess(1, stderr=b"no such container")
             return FakeCompletedProcess(0, stdout=b"hello from the container\n")
 
+        if verb == "info":
+            # "dá para falar com o motor?" -- a loja pergunta isso antes de
+            # prometer instalação. Neste motor de mentira, dá.
+            return FakeCompletedProcess(0, stdout=b"27.0.0\n")
+
         raise AssertionError("unexpected command: %r" % (argv,))
 
 
@@ -153,10 +158,56 @@ def test_no_runtime_is_reported_honestly(monkeypatch: pytest.MonkeyPatch) -> Non
         containers.require_runtime()
 
 
+def falar_com_o_motor(monkeypatch, saida: int, erro: bytes = b"") -> None:
+    """Finge o ``docker info``, que é a pergunta "dá para falar com o motor?"."""
+    import subprocess
+
+    def rodar(argv, timeout=None):
+        return subprocess.CompletedProcess(argv, saida, b"", erro)
+
+    monkeypatch.setattr(containers, "_run", rodar)
+
+
 def test_docker_found_before_podman(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(containers.shutil, "which", lambda name: ("/usr/bin/" + name) if name in ("docker", "podman") else None)
+    falar_com_o_motor(monkeypatch, 0)
     assert containers.detect_runtime() == "docker"
     assert containers.runtime_status() == {"available": True, "engine": "docker", "reason": None}
+
+
+def test_docker_instalado_mas_sem_permissao_no_soquete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O caso do Pi: ele instala o docker pelo Advanced e o serviço não é root.
+
+    O binário está no PATH, então a loja dizia "pode instalar" e o erro só
+    aparecia no meio do spinner, com a mensagem do docker. O usuário do serviço
+    não está no grupo docker -- e não tem como se colocar lá sozinho.
+    """
+    monkeypatch.setattr(
+        containers.shutil, "which",
+        lambda name: "/usr/bin/docker" if name == "docker" else None,
+    )
+    falar_com_o_motor(
+        monkeypatch, 1,
+        b"permission denied while trying to connect to the Docker daemon socket",
+    )
+
+    status = containers.runtime_status()
+    assert status["available"] is False, "prometeu instalar o que não vai conseguir"
+    assert status["engine"] == "docker", "o motor está lá; sumir com ele esconde o problema"
+    assert "grupo" in status["reason"].lower() or "docker" in status["reason"].lower()
+    assert status.get("hint"), "sem dizer o que fazer, a mensagem só frustra"
+
+
+def test_o_motor_fora_do_ar_tambem_e_dito_antes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        containers.shutil, "which",
+        lambda name: "/usr/bin/docker" if name == "docker" else None,
+    )
+    falar_com_o_motor(monkeypatch, 1, b"Cannot connect to the Docker daemon. Is the docker daemon running?")
+
+    status = containers.runtime_status()
+    assert status["available"] is False
+    assert status["reason"]
 
 
 def test_podman_found_when_docker_is_absent(monkeypatch: pytest.MonkeyPatch) -> None:

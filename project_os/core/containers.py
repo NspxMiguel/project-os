@@ -70,15 +70,61 @@ def detect_runtime() -> Optional[str]:
     return None
 
 
+#: Long enough for a busy daemon, short enough that the store page still feels
+#: like a page. ``docker info`` on a Pi with nothing running answers instantly.
+PING_TIMEOUT = 8.0
+
+
+def runtime_reachable(engine: str) -> Dict[str, Any]:
+    """Whether this engine will actually take orders, and why not.
+
+    ``shutil.which`` only answers "the binary exists". On the image the service
+    runs as ``project-os``, which is not in the ``docker`` group -- so a box
+    where Advanced mode installed docker has the binary on PATH and a socket
+    that answers "permission denied". The store used to promise an install and
+    let the refusal arrive mid-spinner, in docker's own words.
+    """
+    try:
+        resultado = _run([engine, "info", "--format", "{{.ServerVersion}}"], timeout=PING_TIMEOUT)
+    except ContainerError as exc:
+        return {"ok": False, "reason": str(exc), "hint": ""}
+    if resultado.returncode == 0:
+        return {"ok": True, "reason": "", "hint": ""}
+
+    erro = (resultado.stderr or b"").decode("utf-8", "replace").strip()
+    if "permission denied" in erro.lower():
+        return {
+            "ok": False,
+            "reason": "O %s está instalado, mas este serviço não tem permissão para falar com ele." % engine,
+            "hint": "No terminal (Advanced) ou por SSH: sudo usermod -aG %s project-os && "
+                    "sudo systemctl restart project-os" % engine,
+        }
+    return {
+        "ok": False,
+        "reason": "O %s está instalado, mas não respondeu: %s" % (engine, erro.splitlines()[0] if erro else "sem detalhe"),
+        "hint": "Confira se o serviço do %s está ligado." % engine,
+    }
+
+
 def runtime_status() -> Dict[str, Any]:
     """What the store shows before anyone clicks install."""
     engine = detect_runtime()
+    if engine is None:
+        return {
+            "available": False,
+            "engine": None,
+            "reason": "No container runtime is installed (looked for %s)." % " or ".join(RUNTIMES),
+        }
+    alcance = runtime_reachable(engine)
+    if alcance["ok"]:
+        return {"available": True, "engine": engine, "reason": None}
     return {
-        "available": engine is not None,
+        "available": False,
+        # O motor continua nomeado de propósito: sumir com ele aqui faria a tela
+        # dizer "não tem docker" para quem acabou de instalar o docker.
         "engine": engine,
-        "reason": None
-        if engine is not None
-        else "No container runtime is installed (looked for %s)." % " or ".join(RUNTIMES),
+        "reason": alcance["reason"],
+        "hint": alcance["hint"],
     }
 
 
