@@ -73,6 +73,19 @@ def _require_shell(config: Any) -> None:
             "shell_disabled",
             "O terminal está desligado. Ligue o security.allow_shell em Configurações › Desenvolvedor.",
         )
+    # O terminal exige sessão de verdade, sempre. Duas chaves defensáveis
+    # sozinhas -- ligar o terminal porque é o sentido do modo Advanced, e
+    # desligar o login porque "é minha casa" -- juntas davam execução de comando
+    # a quem estivesse na rede, sem senha nenhuma, com o usuário que tem apt sem
+    # senha. Ou seja: root para qualquer coisa ligada no Wi-Fi, inclusive as
+    # lâmpadas que esta caixa existe para conversar.
+    if not config.get("security.auth_enabled", True):
+        raise ApiError(
+            403,
+            "shell_needs_auth",
+            "O terminal só funciona com login, e o security.auth_enabled está "
+            "desligado. Ligue de volta no arquivo de configuração para usar o terminal.",
+        )
 
 
 def _login_shell() -> str:
@@ -226,8 +239,11 @@ def _authorise(websocket: WebSocket) -> Optional[int]:
         return CLOSE_DISABLED
     if _pty is None:
         return CLOSE_NO_PTY
+    # Sem login, sem pty -- ver _require_shell. Antes esta linha era o contrário
+    # ("auth desligada, pode entrar"), e era a porta mais perigosa das duas: um
+    # terminal de verdade, com senha que não ecoa e Ctrl-C, para quem chegasse.
     if not auth.auth_enabled(websocket):
-        return None
+        return CLOSE_UNAUTHENTICATED
     db = getattr(websocket.app.state, "db", None)
     if db is None or auth.setup_required(db):
         return CLOSE_UNAUTHENTICATED

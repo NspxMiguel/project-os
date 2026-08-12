@@ -24,6 +24,19 @@
 
 set -uo pipefail
 
+# Soltar todo loop e desmontar tudo na saída, inclusive em erro. Um loop que
+# fica preso não morre com o contêiner: sobra na VM do Docker apontando para um
+# arquivo apagado, e o próximo teste que procurar partição por PARTUUID acha a
+# do lixo -- foi assim que este projeto acusou um defeito que não existia.
+soltar_tudo() {
+    for ponto in /mnt/raiz /mnt/boot /mnt/slot /boot/firmware; do
+        umount "$ponto" 2>/dev/null || true
+    done
+    losetup -D 2>/dev/null || true
+}
+trap soltar_tudo EXIT
+
+
 BASE=/repo/image/stage-project-os/00-project-os/files
 # A área de trabalho fica onde o clone não olha. A imagem do cartão de teste
 # não faz parte do sistema de arquivos de um Pi -- deixá-la em /tmp faria o

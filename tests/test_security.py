@@ -165,14 +165,64 @@ def test_service_control_is_disabled_by_default(auth_client) -> None:
     assert "allow_service_control" in str(response.json())
 
 
+def ligar(auth_client, **valores) -> None:
+    """Change settings the way the settings screen does: {"values": {...}}.
+
+    Spelled out because the first version of the test below sent the flat dict.
+    A flat body is not an error -- ``values`` simply defaults to empty, the PUT
+    answers 200 with ``changed: []``, and nothing is turned on. The test then
+    asserted 403 against a shell that had never been enabled, and passed for
+    three months while the hole it was written to guard was wide open.
+    """
+    response = auth_client.put("/api/settings", json={"values": valores})
+    assert response.status_code == 200, response.text
+    assert sorted(response.json()["changed"]) == sorted(valores), response.text
+
+
 def test_shell_stays_disabled_when_auth_is_off(auth_client) -> None:
-    """An unauthenticated RCE endpoint must be impossible to configure by accident."""
-    auth_client.put(
-        "/api/settings",
-        json={"security.allow_shell": True, "security.auth_enabled": False},
+    """An unauthenticated RCE endpoint must be impossible to configure by accident.
+
+    Two switches, each defensible alone: ``allow_shell`` because the terminal is
+    the point of Advanced mode, ``auth_enabled: false`` because "it is my house,
+    I do not want a login screen". Together they used to mean: anything on the
+    network -- including the light bulbs this box exists to talk to -- can run
+    commands as the service user, which has passwordless apt, which is root.
+    """
+    ligar(auth_client, **{"security.allow_shell": True})
+    autenticado = auth_client.post("/api/shell/exec", json={"command": "echo oi", "cwd": "."})
+    assert autenticado.status_code == 200, "o terminal ligado tem que funcionar para o dono"
+
+    ligar(auth_client, **{"security.auth_enabled": False})
+    auth_client.cookies.clear()
+    response = auth_client.post("/api/shell/exec", json={"command": "id", "cwd": "."})
+    assert response.status_code == 403, response.text
+    assert "auth_enabled" in str(response.json()), "the error must name the setting to flip"
+
+
+def test_the_terminal_websocket_also_refuses_when_auth_is_off(auth_client) -> None:
+    """The same hole, one door over. The PTY is the more dangerous of the two.
+
+    Asserted on the first frame rather than on "some exception happened": the
+    first version of this test expected any exception, and the socket happily
+    answered ``{"type": "ready", "shell": "/bin/zsh", "pid": ...}`` before an
+    unrelated CancelledError at teardown made the test pass.
+    """
+    ligar(auth_client, **{"security.allow_shell": True, "security.auth_enabled": False})
+    auth_client.cookies.clear()
+
+    # O quadro fica guardado fora do try de propósito: sair do "with" levanta
+    # CancelledError quando o servidor fecha, e zerar a variável no except
+    # apagaria justamente a prova de que o terminal tinha aberto.
+    quadro = None
+    try:
+        with auth_client.websocket_connect("/api/shell/ws") as ws:
+            quadro = ws.receive_json()
+    except Exception:
+        pass  # recusado no aperto de mão, ou fechado antes de falar
+
+    assert quadro is None or quadro.get("type") != "ready", (
+        "o terminal abriu um pty sem sessão: %s" % str(quadro)[:200]
     )
-    response = auth_client.post("/api/shell/exec", json={"command": "echo hello", "cwd": "."})
-    assert response.status_code == 403
 
 
 def test_websocket_requires_authentication(client) -> None:
