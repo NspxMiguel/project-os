@@ -11,14 +11,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
-from project_os import __version__, auth
-from project_os.core import clock, hardware, syspass, sysinfo, updates
+from project_os import __version__, auth, paths
+from project_os.core import clock, hardware, slots, syspass, sysinfo, updates
 from project_os.db import Database
 from project_os.errors import ApiError
 from project_os.main import get_config, get_db
@@ -55,13 +56,38 @@ class PowerAction(BaseModel):
 # ---------------------------------------------------------------------------
 @router.get("/health")
 async def health(request: Request, db: Database = Depends(get_db)) -> Dict[str, Any]:
-    """Public liveness probe. Deliberately says almost nothing."""
+    """Public liveness probe. Deliberately says almost nothing.
+
+    "Almost": desde a 0.4.8 também diz se o esquema de dois sistemas está de pé.
+    Isso é público de propósito, e é o único jeito de conferir um cartão recém
+    gravado -- antes de existir conta não existe sessão, e a pergunta "o
+    reparticionamento aconteceu?" é justamente a que ninguém consegue responder
+    nessa hora sem tirar o cartão do Pi. Não conta nada que um curioso na rede já
+    não veja: versão e "ainda não tem dono" já saíam aqui.
+    """
     return {
         "status": "ok",
         "version": __version__,
         "setup_required": auth.setup_required(db),
         "started_at": clock.started_at(request.app.state),
+        "recovery": _estado_dos_slots(),
     }
+
+
+def _estado_dos_slots() -> Dict[str, Any]:
+    """Resumo barato: nada de subprocesso além do que slots já faz, e nunca levanta."""
+    try:
+        atual = slots.current_slot()
+        estado = slots.read_state() if atual else {}
+        return {
+            "slots": bool(atual) and os.path.isfile(slots.state_path()),
+            "slot": atual or "",
+            "good": str(estado.get("good") or ""),
+            "tries": int(estado.get("tries") or 0),
+            "data_partition": os.path.ismount(str(paths.home())),
+        }
+    except Exception:  # pragma: no cover - um health nunca pode ser o que quebra
+        return {"slots": False, "slot": "", "good": "", "tries": 0, "data_partition": False}
 
 
 @router.get("/stats")
