@@ -473,3 +473,30 @@ def test_container_app_without_a_spec_still_reports_installer_pending(auth_clien
     response = auth_client.post("/api/store/frigate/install", json={"accept_oversize": True})
     assert response.status_code == 501
     assert response.json()["error"] == "installer_pending"
+
+
+def test_a_loja_pergunta_ao_motor_uma_vez_por_pagina(auth_client, monkeypatch) -> None:
+    """Trinta contêineres no catálogo não podem virar trinta "docker info".
+
+    Enquanto a resposta era "o binário existe", perguntar por item custava um
+    shutil.which. Desde que passou a ser "o motor responde", cada pergunta é um
+    processo -- e cada um pode esperar até o timeout antes de desistir.
+    """
+    import project_os.api.store as api_store
+
+    chamadas = []
+
+    def contar():
+        chamadas.append(1)
+        return {"available": True, "engine": "docker", "reason": None}
+
+    monkeypatch.setattr(api_store.containers, "runtime_status", contar)
+
+    resposta = auth_client.get("/api/store")
+    assert resposta.status_code == 200
+    itens = resposta.json()["items"]
+    conteineres = [i for i in itens if i["kind"] == "container"]
+    assert conteineres, "o catálogo não tem contêiner nenhum; este teste não prova nada"
+    assert len(chamadas) == 1, "perguntou %d vezes para %d contêineres" % (
+        len(chamadas), len(conteineres),
+    )

@@ -54,7 +54,8 @@ def _installed_ids(plugins: Any) -> List[str]:
     return [item["id"] for item in plugins.list_apps() if item.get("state") != "disabled"]
 
 
-def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None) -> Dict[str, Any]:
+def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None,
+              runtime: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     item = dict(entry)
     item["installed"] = entry["id"] in installed
     if item["kind"] == "builtin":
@@ -68,7 +69,11 @@ def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None) 
     if item["kind"] == "container":
         # Said up front, on the card, before the install button: a machine
         # with neither docker nor podman should not find that out mid-spinner.
-        item["container_runtime"] = containers.runtime_status()
+        # Perguntado uma vez por página e passado adiante: desde que a resposta
+        # deixou de ser "o binário existe" e passou a ser "o motor responde",
+        # cada pergunta é um "docker info". Um catálogo com trinta contêineres
+        # faria trinta -- e cada um pode demorar até o timeout.
+        item["container_runtime"] = runtime if runtime is not None else containers.runtime_status()
         item["installable"] = bool(item.get("container"))
     return item
 
@@ -82,7 +87,11 @@ async def browse(
 ) -> Dict[str, Any]:
     board = hardware.detect()
     installed = _installed_ids(plugins)
-    items = [_decorate(entry, installed, plugins) for entry in catalog.entries(board)]
+    entradas = catalog.entries(board)
+    # Só pergunta ao motor de contêiner se a página tem algum contêiner.
+    runtime = (containers.runtime_status()
+               if any(e.get("kind") == "container" for e in entradas) else None)
+    items = [_decorate(entry, installed, plugins, runtime) for entry in entradas]
 
     if category:
         items = [item for item in items if item["category"] == category]
