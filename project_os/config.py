@@ -359,15 +359,23 @@ class Config(object):
         data = self.raw_dict()
         return redact_dict(data) if redact else data
 
-    def layers(self) -> Dict[str, Dict[str, Any]]:
-        """Debug aid: what each layer contributed."""
+    def layers(self, redact: bool = True) -> Dict[str, Dict[str, Any]]:
+        """Debug aid: what each layer contributed. Secrets masked by default.
+
+        ``as_dict`` has masked secrets since the first version, and this went out
+        beside it in the same response with the real values in it -- the Home
+        Assistant token in clear text under ``file`` or ``runtime``, on the same
+        screen that shows ``********`` two keys above. Redaction that any part of
+        the payload undoes is decoration, so the mask is the default here too.
+        """
         with self._lock:
-            return {
+            camadas = {
                 "defaults": copy.deepcopy(self._defaults),
                 "file": copy.deepcopy(self._file),
                 "env": copy.deepcopy(self._env),
                 "runtime": copy.deepcopy(self._runtime),
             }
+        return redact_dict(camadas) if redact else camadas
 
     # -- writes ----------------------------------------------------------
     def set(self, path: str, value: Any) -> None:

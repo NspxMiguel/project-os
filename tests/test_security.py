@@ -78,9 +78,36 @@ def test_authenticated_session_can_read_settings(auth_client) -> None:
 
 
 def test_secrets_are_redacted_in_the_settings_response(auth_client) -> None:
-    auth_client.put("/api/settings", json={"integrations.home_assistant.token": "s3cr3t-token"})
+    """The token has to be stored for its absence to mean anything.
+
+    The first version sent the flat body, which stores nothing at all -- so the
+    secret was never there to leak and the test passed without exercising
+    redaction once.
+    """
+    gravado = auth_client.put(
+        "/api/settings", json={"values": {"integrations.home_assistant.token": "s3cr3t-token"}}
+    )
+    assert gravado.json()["changed"] == ["integrations.home_assistant.token"], gravado.text
+
     body = auth_client.get("/api/settings").json()
     assert "s3cr3t-token" not in str(body)
+    assert "home_assistant" in str(body), "a chave sumiu inteira; isto não prova redação"
+
+
+def test_the_layers_half_of_the_response_is_redacted_too(auth_client) -> None:
+    """A mesma resposta traz "settings" e "layers". As duas passam pela máscara.
+
+    O "layers" existe para explicar de onde cada valor veio (padrão, arquivo,
+    variável de ambiente) e saía cru: o token do Home Assistant em texto limpo
+    duas chaves abaixo do ``********``. Redação que outra metade da resposta
+    desfaz não é redação.
+    """
+    auth_client.put(
+        "/api/settings", json={"values": {"integrations.home_assistant.token": "s3cr3t-token"}}
+    )
+    camadas = auth_client.get("/api/settings").json()["layers"]
+    assert "s3cr3t-token" not in str(camadas)
+    assert "********" in str(camadas), "nem mascarou nem guardou -- o valor sumiu do layers"
 
 
 # ----------------------------------------------------------------------- filesystem sandbox
@@ -226,14 +253,23 @@ def test_the_terminal_websocket_also_refuses_when_auth_is_off(auth_client) -> No
 
 
 def test_websocket_requires_authentication(client) -> None:
-    from starlette.websockets import WebSocketDisconnect
+    """No frame, not merely "some exception".
 
+    ``pytest.raises((WebSocketDisconnect, Exception))`` also passes when the
+    socket answers happily and something unrelated blows up on the way out --
+    which is exactly how the terminal socket kept a hole hidden for months.
+    """
     client.post("/api/setup", json={"username": "miguel", "password": "correct horse battery"})
     client.cookies.clear()
 
-    with pytest.raises((WebSocketDisconnect, Exception)):
+    quadro = None
+    try:
         with client.websocket_connect("/api/ws") as ws:
-            ws.receive_json()
+            quadro = ws.receive_json()
+    except Exception:
+        pass
+
+    assert quadro is None, "o websocket falou com quem não tem sessão: %s" % str(quadro)[:200]
 
 
 def test_frontend_assets_are_revalidated(client) -> None:
