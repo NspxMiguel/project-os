@@ -155,6 +155,31 @@ O preço é que uma mudança no decisor de slot só chega numa gravação nova. 
 decisor fizer o que promete — e ele é pequeno e testado justamente por isso — esse
 preço não é cobrado.
 
+### As duas atualizações, e qual funciona onde
+
+A tela oferece duas, e elas não são a mesma coisa:
+
+* **Atualizar o app** troca só a árvore de código em `/opt/project-os`. Rápido,
+  alguns megabytes.
+* **Atualizar o sistema** escreve um rootfs inteiro no slot livre e reinicia nele.
+  É meio giga, e é a única que troca o que está fora do `/opt` — ajudantes em
+  `/usr/local/sbin`, o sudoers, o systemd, as permissões do próprio `/opt`.
+
+A troca do app não acontece *dentro* da pasta do código: acontece em volta dela
+(pasta de trabalho ao lado, renomeia a atual para `.previous-<versão>`, renomeia a
+nova para o lugar). São três operações em `/opt` — e num cartão gravado até a
+**0.4.7** o `/opt` é `root:root 755`, enquanto o serviço roda como `project-os`.
+Naquelas imagens a atualização do app não tinha como funcionar: baixava o pacote e
+morria com `Permission denied`.
+
+Da **0.4.8** em diante a imagem deixa o grupo do serviço escrever em `/opt`, e o
+próprio app confere isso antes de baixar qualquer coisa (`updates.can_apply`): onde
+não dá, a tela diz que não dá e aponta a atualização de sistema, em vez de gastar
+meio giga para terminar num erro de permissão.
+
+Num cartão gravado com 0.4.6 ou 0.4.7, então, o caminho é: **atualizar o sistema**
+uma vez. Depois disso as duas funcionam.
+
 ## 5. O que conta como "esse sistema presta"
 
 Um slot só vira `good` quando o project-os **atende uma requisição**. Não quando o
