@@ -447,8 +447,16 @@ class Database(object):
             clauses.append("level = ?")
             params.append(level.upper())
         if source:
-            clauses.append("source LIKE ?")
+            # O que fica gravado em ``source`` é o nome do logger Python, e o
+            # de um app é ``project_os.app.birdtunes``. A tela (e o botão de
+            # Registros de cada app) sempre pediu ``app.birdtunes`` -- prefixo
+            # que nunca casava, então todo botão de log caía em "nenhuma linha
+            # bate com este filtro", em qualquer máquina. Aceitar as duas
+            # formas conserta os dois lados sem obrigar ninguém a saber que
+            # existe um prefixo ``project_os.``.
+            clauses.append("(source LIKE ? OR source LIKE ?)")
             params.append("%s%%" % source)
+            params.append("project_os.%s%%" % source)
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY id DESC LIMIT ?"

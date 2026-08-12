@@ -26,6 +26,7 @@ setStrings('en', {
   'tuning.error.load': 'Could not read the hardware tuning screen.',
   'tuning.disabled.title': 'Hardware control is off',
   'tuning.disabled.text': 'Turn on security.allow_hardware_control in Settings > Developer to change the fan, clock or LEDs from here. Reading still works without it.',
+  'tuning.disabled.link': 'Open Settings > Developer',
   'tuning.notRoot.title': 'Read-only from here',
   'tuning.notRoot.text': 'project-os is not running as root, so these values can be read but not changed. The systemd service runs as root; a venv opened by hand in a terminal does not.',
 
@@ -187,11 +188,15 @@ export default {
     function gateNotice() {
       if (!snapshot) return null;
       if (!snapshot.enabled) {
+        // The link matters more than it looks: this text names a screen, and
+        // for a long time that screen did not have the switch it names.
         return h('div', {class: 'notice notice--warn'},
           icon('lock', {size: 18}),
           h('div', {class: 'notice__body'},
             h('div', {class: 'notice__title'}, t('tuning.disabled.title')),
             h('p', null, snapshot.reason || t('tuning.disabled.text')),
+            h('a', {class: 'btn btn--sm btn--outline', href: '#/settings/developer'},
+              t('tuning.disabled.link')),
           ),
         );
       }

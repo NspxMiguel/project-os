@@ -89,6 +89,25 @@ setStrings('en', {
   'settings.developer.verboseLogging': 'Verbose logging',
   'settings.developer.verboseLogging.hint': 'Switches the log level to DEBUG. Noisy — turn it off again once you have what you needed.',
   'settings.developer.docsLink': 'Open /api/docs',
+  'settings.developer.allowHardware': 'Allow hardware control',
+  'settings.developer.allowHardware.hint': 'Unlocks Hardware tuning: fan, clock, LEDs, HDMI, Wi-Fi power save. Off by default because a wrong clock setting is one of the few things here that can leave the box needing a keyboard and a monitor.',
+  'settings.developer.allowServices': 'Allow service control',
+  'settings.developer.allowServices.hint': 'Unlocks the Start/Stop/Restart buttons on the Services screen, and the two buttons below. Runs systemctl as root.',
+  'settings.developer.allowFileWrite': 'Allow writing files',
+  'settings.developer.allowFileWrite.hint': 'Lets the Files screen save, upload, rename and delete. Reading works either way.',
+  'settings.developer.allowPackages': 'Allow installing packages',
+  'settings.developer.allowPackages.hint': 'Lets the Packages screen install and remove system software with apt. On by default — installing things from the browser is the point of Advanced mode.',
+  'settings.developer.power': 'Power',
+  'settings.developer.power.sub': 'The board itself, not just project-os',
+  'settings.developer.power.needsServices': 'Service control is off above, so these two would be refused.',
+  'settings.developer.reboot': 'Reboot the board',
+  'settings.developer.reboot.confirm.title': 'Reboot now?',
+  'settings.developer.reboot.confirm.body': 'The box goes away for about a minute. This page finds it again on its own when it comes back.',
+  'settings.developer.reboot.sent': 'Rebooting. This page comes back by itself.',
+  'settings.developer.shutdown': 'Shut down',
+  'settings.developer.shutdown.confirm.title': 'Shut down?',
+  'settings.developer.shutdown.confirm.body': 'The board turns itself off. Only unplugging and plugging the power back in brings it up again — there is no button here for that.',
+  'settings.developer.shutdown.sent': 'Shutting down. Wait for the green light to stop blinking before pulling the cable.',
 }, {activate: false});
 
 const LS_THEME = 'project_os.theme';
@@ -543,9 +562,34 @@ export default {
       );
     }
 
+    async function power(action) {
+      const ok = await confirm(t('settings.developer.' + action + '.confirm.body'), {
+        title: t('settings.developer.' + action + '.confirm.title'),
+        danger: true,
+      });
+      if (!ok || disposed) return;
+      try {
+        await api.post('/system/power', {action, confirm: true});
+        if (disposed) return;
+        toast(t('settings.developer.' + action + '.sent'), {type: 'info'});
+      } catch (err) {
+        if (disposed) return;
+        toast((err instanceof ApiError && err.message) || t('settings.action.saveFailed'), {type: 'error'});
+      }
+    }
+
     function developerSection() {
       const allowShell = !!dig(state.settings, 'security.allow_shell', false);
       const verbose = dig(state.settings, 'logging.level', 'INFO') === 'DEBUG';
+      // The three switches below used to exist only in config.py. Tuning,
+      // Services and Files each printed "turn it on in Settings > Developer"
+      // and this tab did not have them -- so Hardware tuning was read-only
+      // forever and Services never showed a button. The text pointed at a
+      // place that did not exist; now it does.
+      const allowHardware = !!dig(state.settings, 'security.allow_hardware_control', false);
+      const allowServices = !!dig(state.settings, 'security.allow_service_control', false);
+      const allowFileWrite = !!dig(state.settings, 'security.allow_file_write', true);
+      const allowPackages = !!dig(state.settings, 'security.allow_package_management', true);
       return h('div', {class: 'stack stack--lg'},
         h('div', {class: 'notice notice--warn'},
           icon('warning', {size: 18}),
@@ -562,8 +606,37 @@ export default {
                 state.dockTerminal, (checked) => setDockTerminal(checked), !allowShell),
               !allowShell ? h('p', {class: 'muted small'}, t('settings.developer.terminal.needsShell')) : null,
             ),
+            switchRow(t('settings.developer.allowHardware'), t('settings.developer.allowHardware.hint'), allowHardware,
+              (checked) => saveValues({'security.allow_hardware_control': checked})),
+            switchRow(t('settings.developer.allowServices'), t('settings.developer.allowServices.hint'), allowServices,
+              (checked) => saveValues({'security.allow_service_control': checked})),
+            switchRow(t('settings.developer.allowFileWrite'), t('settings.developer.allowFileWrite.hint'), allowFileWrite,
+              (checked) => saveValues({'security.allow_file_write': checked})),
+            switchRow(t('settings.developer.allowPackages'), t('settings.developer.allowPackages.hint'), allowPackages,
+              (checked) => saveValues({'security.allow_package_management': checked})),
             switchRow(t('settings.developer.verboseLogging'), t('settings.developer.verboseLogging.hint'), verbose,
               (checked) => saveValues({'logging.level': checked ? 'DEBUG' : 'INFO'})),
+          ),
+        }),
+        // POST /api/system/power has existed since the first Advanced build and
+        // nothing in the front end called it, while two screens told you to
+        // reboot. These are that call.
+        card({
+          title: t('settings.developer.power'), sub: t('settings.developer.power.sub'), iconName: 'power',
+          body: h('div', {class: 'stack stack--sm'},
+            !allowServices
+              ? h('p', {class: 'muted small'}, t('settings.developer.power.needsServices'))
+              : null,
+            h('div', {class: 'row'},
+              h('button', {
+                class: 'btn btn--outline', disabled: !allowServices,
+                onClick: () => power('reboot'),
+              }, icon('refresh', {size: 14}), t('settings.developer.reboot')),
+              h('button', {
+                class: 'btn btn--danger', disabled: !allowServices,
+                onClick: () => power('shutdown'),
+              }, icon('power', {size: 14}), t('settings.developer.shutdown')),
+            ),
           ),
         }),
       );

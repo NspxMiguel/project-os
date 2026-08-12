@@ -37,6 +37,7 @@ setStrings('en', {
   'services.units.unavailable.detail': 'This looks like a developer machine rather than a Pi -- there is no systemctl to ask.',
   'services.units.locked': 'Control is turned off',
   'services.units.locked.detail': 'Turn on security.allow_service_control in Settings to start, stop or restart units from here.',
+  'services.units.locked.link': 'Open Settings > Developer',
   'services.apps.title': 'Apps',
   'services.apps.sub': 'Running under project-os’ own plugin manager',
   'services.apps.none': 'No apps installed',
@@ -206,7 +207,7 @@ export default {
         h('span', {class: 'list__aside'},
           activeBadge(unit.active, unit.sub),
           h('a', {
-            class: 'btn btn--ghost btn--sm', href: '#/logs?source=' + encodeURIComponent(unit.name),
+            class: 'btn btn--ghost btn--sm', href: '#/logs?unit=' + encodeURIComponent(unit.name),
             title: t('services.action.logs'),
           }, icon('logs', {size: 14})),
           controls,
@@ -241,7 +242,9 @@ export default {
           icon('lock', {size: 18}),
           h('div', {class: 'notice__body'},
             h('span', {class: 'notice__title'}, t('services.units.locked')),
-            h('span', {class: 'small muted'}, t('services.units.locked.detail')))));
+            h('span', {class: 'small muted'}, t('services.units.locked.detail')),
+            h('a', {class: 'btn btn--sm btn--outline', href: '#/settings/developer'},
+              t('services.units.locked.link')))));
       }
       body.push(units.length
         ? h('div', {class: 'list'}, units.map((unit) => unitRow(unit, payload.can_control)))

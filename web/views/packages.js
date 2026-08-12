@@ -39,6 +39,7 @@ setStrings('en', {
   'packages.action.working': 'Working…',
   'packages.remove.confirm': 'Remove {name}? Anything that depends on it may stop working.',
   'packages.disabled': 'Installing is turned off. Switch on security.allow_package_management in Settings › Developer.',
+  'packages.disabled.link': 'Open Settings > Developer',
   'packages.backends.title': 'Package managers on this machine',
   'packages.backend.ready': 'ready',
   'packages.backend.unavailable': 'not usable',
@@ -224,7 +225,11 @@ export default {
           state.backends.filter((b) => !b.can_install && b.reason).map(
             (b) => h('p', {class: 'muted small'}, b.reason),
           ),
-          !state.enabled ? h('div', {class: 'notice notice--warning'}, t('packages.disabled')) : null,
+          !state.enabled ? h('div', {class: 'notice notice--warning'},
+            h('div', {class: 'notice__body'},
+              h('span', null, t('packages.disabled')),
+              h('a', {class: 'btn btn--sm btn--outline', href: '#/settings/developer'},
+                t('packages.disabled.link')))) : null,
         ),
       });
     }

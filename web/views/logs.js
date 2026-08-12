@@ -35,6 +35,12 @@ setStrings('en', {
   'logs.error.title': 'Could not load logs',
   'logs.live': 'Live',
   'logs.offline': 'Not receiving live updates',
+  'logs.unit.badge': 'Journal of {unit}',
+  'logs.unit.note': 'These lines come from the system journal, not from project-os — they do not stream, so reload to see new ones.',
+  'logs.unit.all': 'All logs',
+  'logs.unit.empty': 'The journal has nothing for this unit',
+  'logs.unit.empty.detail': 'Either it never started on this machine, or its lines have already been rotated away.',
+  'logs.reload': 'Reload',
 }, {activate: false});
 
 // Cap on DOM rows kept at once. Logs can arrive fast (a noisy app in a crash
@@ -76,6 +82,10 @@ export default {
     let paused = false;
     let level = '';
     let source = (ctx.query && ctx.query.source) || '';
+    // A tela de Serviços manda `?unit=mosquitto` para as unidades do systemd:
+    // elas não escrevem uma linha na tabela `log` do project-os, quem tem esse
+    // registro é o journald. Com unidade, esta tela lê o journal e não o banco.
+    const unit = (ctx.query && ctx.query.unit) || '';
     let search = '';
     let lineCount = 0;
     let liveConnected = false;
@@ -127,13 +137,26 @@ export default {
           h('p', {class: 'page__lead'}, t('logs.lead')),
         ),
         h('div', {class: 'page__actions'},
-          h('span', {class: 'badge ' + (liveConnected ? 'badge--ok' : 'badge--plain')},
-            liveConnected ? t('logs.live') : t('logs.offline')),
+          unit
+            ? h('span', {class: 'badge badge--plain'}, t('logs.unit.badge', {unit}))
+            : h('span', {class: 'badge ' + (liveConnected ? 'badge--ok' : 'badge--plain')},
+                liveConnected ? t('logs.live') : t('logs.offline')),
         ),
       ]);
     }
 
     function renderToolbar() {
+      if (unit) {
+        mount(toolbarHost, [
+          h('a', {class: 'btn btn--sm btn--outline', href: '#/logs'}, t('logs.unit.all')),
+          searchInput,
+          h('div', {class: 'row', style: {marginLeft: 'auto', gap: 'var(--space-1)'}},
+            h('button', {class: 'btn btn--sm', type: 'button', onClick: reload},
+              icon('refresh', {size: 14}), t('logs.reload')),
+            copyBtn, clearBtn),
+        ]);
+        return;
+      }
       mount(toolbarHost, [
         levelSelect,
         sourceInput,
@@ -144,6 +167,13 @@ export default {
     }
 
     function renderNotice() {
+      if (unit) {
+        mount(noticeHost, h('div', {class: 'notice notice--info'},
+          icon('info', {size: 16}),
+          h('div', {class: 'notice__body'},
+            h('span', {class: 'small muted'}, t('logs.unit.note')))));
+        return;
+      }
       mount(noticeHost, paused
         ? h('div', {class: 'notice notice--info'},
             icon('pause', {size: 16}),
@@ -235,11 +265,15 @@ export default {
       loadError = null;
       renderBody('loading');
       try {
-        const raw = await api.get('/system/logs', {
-          query: {limit: 200, level: level || null, source: source || null},
-        });
+        const raw = unit
+          ? await api.get('/system/logs/unit/' + encodeURIComponent(unit), {query: {limit: 400}})
+          : await api.get('/system/logs', {
+              query: {limit: 200, level: level || null, source: source || null},
+            });
         if (disposed) return;
-        const lines = Array.isArray(raw.lines) ? raw.lines.slice().reverse() : [];
+        const lines = Array.isArray(raw.lines)
+          ? (unit ? raw.lines.slice() : raw.lines.slice().reverse())
+          : [];
         if (!lines.length) {
           renderBody('empty');
           return;
@@ -263,8 +297,8 @@ export default {
       if (state === 'empty') {
         mount(bodyHost, h('div', {class: 'empty'},
           h('span', {class: 'empty__icon'}, icon('logs', {size: 22})),
-          h('p', {class: 'empty__title'}, t('logs.empty.title')),
-          h('p', {class: 'empty__text'}, t('logs.empty.detail'))));
+          h('p', {class: 'empty__title'}, unit ? t('logs.unit.empty') : t('logs.empty.title')),
+          h('p', {class: 'empty__text'}, unit ? t('logs.unit.empty.detail') : t('logs.empty.detail'))));
         return;
       }
       // 'loading' and 'ready' both show the live-updating card; appendLine()
@@ -277,8 +311,16 @@ export default {
     renderNotice();
     sourceInput.value = source;
 
-    if (ctx.ws && typeof ctx.ws.on === 'function') {
-      unsubscribe = ctx.ws.on('log', onLiveFrame);
+    if (ctx.ws && typeof ctx.ws.on === 'function' && !unit) {
+      // Três assinaturas, não uma. Com só a de 'log', o selo ficava no estado
+      // que tinha na hora que a tela abriu: um ajudante — ou o próprio Pi —
+      // podia cair e o selo continuava verde até alguém recarregar na mão.
+      const offs = [
+        ctx.ws.on('log', onLiveFrame),
+        ctx.ws.on('__open', () => { liveConnected = true; renderHeader(); }),
+        ctx.ws.on('__close', () => { liveConnected = false; renderHeader(); }),
+      ];
+      unsubscribe = () => offs.forEach((off) => { if (typeof off === 'function') off(); });
       liveConnected = Boolean(ctx.ws.isOpen && ctx.ws.isOpen());
       renderHeader();
     }

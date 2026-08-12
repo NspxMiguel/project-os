@@ -23,6 +23,7 @@ setStrings('en', {
   'files.lead': 'Browse, edit and move files project-os is allowed to touch.',
   'files.roots': 'Allowed locations',
   'files.readonly': 'Writing is turned off in Settings (security.allow_file_write).',
+  'files.readonly.link': 'Open Settings > Developer',
   'files.upload': 'Upload',
   'files.newFolder': 'New folder',
   'files.empty.title': 'This folder is empty',
@@ -270,7 +271,9 @@ export default {
       }
       mount(bodyHost, [
         !writable ? h('div', {class: 'notice notice--info'},
-          icon('lock', {size: 18}), h('div', {class: 'notice__body'}, h('span', {class: 'small muted'}, t('files.readonly')))) : null,
+          icon('lock', {size: 18}), h('div', {class: 'notice__body'},
+            h('span', {class: 'small muted'}, t('files.readonly')),
+            h('a', {class: 'btn btn--sm btn--outline', href: '#/settings/developer'}, t('files.readonly.link')))) : null,
         h('div', {class: 'list'}, listing.entries.map(entryRow)),
       ]);
     }

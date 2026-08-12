@@ -165,6 +165,99 @@ async def logs(
     return {"lines": db.recent_log(limit=limit, level=level, source=source)}
 
 
+@router.get("/logs/unit/{unit}")
+async def unit_logs(
+    unit: str,
+    limit: int = Query(200, ge=1, le=2000),
+    user: Dict[str, Any] = Depends(auth.require_auth),
+) -> Dict[str, Any]:
+    """As linhas do journal de uma unidade systemd.
+
+    A tabela ``log`` do sqlite só tem o que o próprio project-os escreveu. Uma
+    unidade do sistema -- mosquitto, home-assistant, o próprio project-os --
+    nunca escreveu uma linha ali, e mesmo assim a tela de Serviços oferecia um
+    botão de Registros para cada uma. O botão levava sempre para "nenhuma linha
+    bate com este filtro". Quem escreve essas linhas é o journald, e é dele que
+    esta rota lê.
+
+    Só lê. Não precisa do ``allow_service_control`` -- ler log não muda nada, e
+    exigir a chave transformaria "por que este serviço não sobe?" numa pergunta
+    que só dá para responder depois de ligar o controle de serviços.
+    """
+    stem = unit[: -len(".service")] if unit.endswith(".service") else unit
+    if not any(stem.startswith(prefix) for prefix in MANAGED_UNIT_PREFIXES):
+        raise ApiError(
+            403, "unit_not_managed", "O project-os não cuida da unidade %r." % unit
+        )
+    if not shutil.which("journalctl"):
+        raise ApiError(
+            503,
+            "no_journal",
+            "Esta máquina não tem journalctl, então não há registro de sistema para ler.",
+        )
+    # Mesmo raciocínio do systemctl: como usuário comum, o journal do sistema
+    # costuma vir vazio; com o sudo sem senha que a imagem já dá, vem inteiro.
+    argv = updates.systemctl_argv(binary="journalctl") + [
+        "-u", "%s.service" % stem, "-n", str(limit), "--no-pager", "--output=short-iso",
+    ]
+    saida = await _run(argv)
+    if saida is None:
+        raise ApiError(
+            503,
+            "journal_unavailable",
+            "O journalctl não respondeu para %s.service." % stem,
+        )
+    return {"unit": "%s.service" % stem, "lines": _parse_journal(saida)}
+
+
+def _parse_journal(saida: str) -> List[Dict[str, Any]]:
+    """``short-iso`` vira a mesma forma que a tela já sabe desenhar.
+
+    Formato: ``2026-08-12T15:04:05+0000 host unidade[123]: mensagem``. O que não
+    couber nesse molde vira uma linha de mensagem pura em vez de sumir -- um
+    "-- Boot 3f2a --" do journal é informação, não lixo.
+    """
+    linhas = []  # type: List[Dict[str, Any]]
+    for bruta in saida.splitlines():
+        bruta = bruta.rstrip()
+        if not bruta:
+            continue
+        partes = bruta.split(" ", 2)
+        if len(partes) == 3 and partes[0][:4].isdigit() and "T" in partes[0]:
+            resto = partes[2]
+            fonte, _, mensagem = resto.partition(": ")
+            if not mensagem:
+                fonte, mensagem = "", resto
+            linhas.append(
+                {
+                    "ts": partes[0],
+                    "level": _nivel_do_texto(mensagem),
+                    "source": fonte.strip(),
+                    "message": mensagem.strip(),
+                }
+            )
+        else:
+            linhas.append({"ts": None, "level": "INFO", "source": "", "message": bruta})
+    return linhas
+
+
+def _nivel_do_texto(mensagem: str) -> str:
+    """O journal não carrega nível nesta saída; o texto quase sempre carrega.
+
+    Chutar INFO para tudo pintaria uma tela de erros de cinza. Isto é heurística
+    declarada, não adivinhação escondida: só olha a palavra inteira.
+    """
+    baixa = mensagem.lower()
+    for palavra, nivel in (
+        ("error", "ERROR"), ("erro", "ERROR"), ("failed", "ERROR"), ("falhou", "ERROR"),
+        ("fatal", "CRITICAL"), ("critical", "CRITICAL"),
+        ("warning", "WARNING"), ("warn", "WARNING"), ("aviso", "WARNING"),
+    ):
+        if palavra in baixa.split() or ("%s:" % palavra) in baixa:
+            return nivel
+    return "INFO"
+
+
 @router.delete("/logs")
 async def clear_logs(
     db: Database = Depends(get_db), user: Dict[str, Any] = Depends(auth.require_auth)

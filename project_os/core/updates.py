@@ -469,7 +469,7 @@ def under_systemd() -> bool:
     return bool(os.environ.get("INVOCATION_ID")) or os.path.exists("/run/systemd/system")
 
 
-def systemctl_argv() -> List[str]:
+def systemctl_argv(binary: str = "systemctl") -> List[str]:
     """``systemctl`` prefixed with sudo unless this process is already root.
 
     The service runs as an unprivileged user on purpose, so a bare ``systemctl
@@ -481,13 +481,17 @@ def systemctl_argv() -> List[str]:
     :mod:`project_os.core.sysupdate`, because the same trap caught the Services
     screen months later: it ran a bare ``systemctl restart`` and every button on
     it failed on a real box. One copy of this decision, not four.
+
+    ``binary`` existe porque o ``journalctl`` tem exatamente o mesmo problema:
+    como usuário comum o journal do sistema vem vazio, e a tela de Registros de
+    um serviço ficaria em branco sem erro nenhum.
     """
     getuid = getattr(os, "geteuid", None)
     if getuid is not None and getuid() == 0:
-        return ["systemctl"]
+        return [binary]
     if shutil.which("sudo"):
-        return ["sudo", "-n", "systemctl"]
-    return ["systemctl"]
+        return ["sudo", "-n", binary]
+    return [binary]
 
 
 def restart(on_line: Optional[Any] = None) -> str:
