@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
 from project_os import __version__, auth
-from project_os.core import clock, hardware, syspass, sysinfo
+from project_os.core import clock, hardware, syspass, sysinfo, updates
 from project_os.db import Database
 from project_os.errors import ApiError
 from project_os.main import get_config, get_db
@@ -225,7 +225,11 @@ async def _control(
         )
     if not shutil.which("systemctl"):
         raise ApiError(503, "no_systemd", "Não existe systemctl nesta máquina.")
-    await _run(["systemctl", action, "%s.service" % stem], check=True)
+    # Com sudo quando este processo não é root -- ver updates.systemctl_argv.
+    # Sem isso, todo botão desta tela falha num Pi de verdade: o serviço roda
+    # como usuário project-os e o logind recusa um systemctl restart de quem não
+    # tem sessão, com "Interactive authentication required".
+    await _run(updates.systemctl_argv() + [action, "%s.service" % stem], check=True)
     log.info("%s %s.service (by %s)", action, stem, user.get("username"))
     return {"ok": True, "unit": "%s.service" % stem, "action": action}
 
@@ -251,9 +255,11 @@ async def power(
         )
     if not payload.confirm:
         raise ApiError(400, "confirm_required", "Send confirm=true to %s." % payload.action)
-    command = ["systemctl", "reboot" if payload.action == "reboot" else "poweroff"]
     if not shutil.which("systemctl"):
         raise ApiError(503, "no_systemd", "Não existe systemctl nesta máquina.")
+    command = updates.systemctl_argv() + [
+        "reboot" if payload.action == "reboot" else "poweroff"
+    ]
     log.warning("%s requested by %s", payload.action, user.get("username"))
     # Fire and forget: the box goes away before the command returns, so awaiting
     # it would guarantee a timeout error on an operation that actually worked.

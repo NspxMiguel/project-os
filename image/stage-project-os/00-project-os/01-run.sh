@@ -81,6 +81,22 @@ python3 -m venv /opt/project-os/.venv
 
 chown -R project-os:project-os /opt/project-os
 
+# E /opt em si, porque a troca de versão acontece em volta da pasta do código,
+# não dentro dela: pasta de trabalho ao lado, renomeia a atual para
+# .previous-<versão>, renomeia a nova para o lugar. Três operações em /opt.
+#
+# Com /opt no padrão do Debian (root:root 755) o serviço -- que roda como
+# project-os -- não consegue nenhuma das três, e a atualização do app morria com
+# "[Errno 13] Permission denied: /opt/.project_os-update-xxxx" depois de baixar o
+# pacote inteiro. Sem isto, a única forma de a caixa se consertar é baixar um
+# rootfs de meio giga para o outro slot.
+#
+# Não é abrir mão de nada: o sudoers logo abaixo já dá apt-get sem senha a este
+# usuário, e apt-get sem senha é root com passos extras. O dono do /opt continua
+# sendo o root; quem ganha escrita é o grupo do serviço.
+chgrp project-os /opt
+chmod 775 /opt
+
 # sudo without a password, for the package manager in Advanced mode -- "o botao
 # advanced eu falei q é um linux normal". Scoped to apt/flatpak, not to a shell.
 cat > /etc/sudoers.d/010_project-os <<'SUDO'

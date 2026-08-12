@@ -727,6 +727,7 @@ export const PT_BR = {
   'sys.unavailable': 'Este cartão tem um sistema só.',
   'updates.disabled': 'As atualizações estão desligadas nas configurações.',
   'updates.log': 'Registro',
+  'updates.blocked': 'Esta caixa não troca o app por conta própria.',
 
   // ---------------------------------------------------------------- BirdTunes
   'bt.title': 'BirdTunes',

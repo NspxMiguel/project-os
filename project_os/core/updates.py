@@ -69,6 +69,14 @@ UNIT_NAME = "project-os.service"
 #: Never inside the code tree, and never removed by an update.
 KEEP_IN_PLACE = (".venv", "PEDIDOS.md")
 
+#: Said whenever the code tree cannot be swapped in place. There is a second,
+#: root-privileged way to update on an image install, and it is the one that
+#: works there: a whole rootfs written to the spare slot. See docs/RECOVERY.md.
+SYSTEM_UPDATE_HINT = (
+    "Nesta caixa a atualização é do sistema inteiro: Configurações > "
+    "Atualizar sistema. Ela escreve o sistema novo no slot livre e reinicia nele."
+)
+
 
 class UpdateError(Exception):
     def __init__(self, message: str, code: str = "update_failed", hint: str = "") -> None:
@@ -223,11 +231,47 @@ def check_git(branch: str = "main", root: Optional[str] = None) -> Dict[str, Any
     }
 
 
+def can_apply(root: Optional[str] = None) -> Tuple[bool, str]:
+    """Whether the code tree can be swapped from here, and why not.
+
+    The swap happens *around* the code tree, not inside it: a staging directory
+    beside it, then two renames. All three touch the **parent**. On the image
+    that parent is ``/opt``, still ``root:root 755`` while the service runs as
+    ``project-os`` -- so every one of them is refused, and the first refusal used
+    to arrive as a raw ``PermissionError`` after the whole tarball had been
+    downloaded.
+
+    Answered here rather than at the failure site so the update screen can say
+    so before offering a button that cannot work.
+
+    A git checkout is a different story and always allowed: ``git reset --hard``
+    rewrites files *inside* the tree and never touches the parent. Blocking it
+    here would gray out a button that works.
+    """
+    where = os.path.abspath(root or root_dir())
+    if is_git_checkout(where):
+        return True, ""
+    parent = os.path.dirname(where)
+    if not os.access(parent, os.W_OK | os.X_OK):
+        return False, (
+            "Não posso escrever em %s, e a troca de versão acontece lá "
+            "(pasta nova ao lado, duas renomeações)." % parent
+        )
+    return True, ""
+
+
 def check(manifest_url: str = DEFAULT_MANIFEST_URL, branch: str = "main",
           root: Optional[str] = None) -> Dict[str, Any]:
     if method(root) == METHOD_GIT:
-        return check_git(branch, root)
-    return check_tarball(manifest_url)
+        result = check_git(branch, root)
+    else:
+        result = check_tarball(manifest_url)
+    pode, motivo = can_apply(root)
+    result["can_install"] = pode
+    result["install_blocked"] = motivo
+    if not pode:
+        result["install_hint"] = SYSTEM_UPDATE_HINT
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +354,13 @@ def apply_tarball(info: Dict[str, Any], root: Optional[str] = None,
     """Download, verify, and swap the code tree. Returns where the old one went."""
     where = os.path.abspath(root or root_dir())
     say = on_line or (lambda line: None)
+
+    # Antes de baixar: sem permissão na pasta de cima, nada disto vai acontecer,
+    # e descobrir isso depois do download é meio giga jogado fora para acabar
+    # mostrando "[Errno 13] Permission denied" na tela dele.
+    pode, motivo = can_apply(where)
+    if not pode:
+        raise UpdateError(motivo, code="root_not_writable", hint=SYSTEM_UPDATE_HINT)
 
     parent = os.path.dirname(where)
     workdir = tempfile.mkdtemp(prefix=".project_os-update-", dir=parent)
@@ -418,13 +469,18 @@ def under_systemd() -> bool:
     return bool(os.environ.get("INVOCATION_ID")) or os.path.exists("/run/systemd/system")
 
 
-def _systemctl_argv() -> List[str]:
+def systemctl_argv() -> List[str]:
     """``systemctl`` prefixed with sudo unless this process is already root.
 
     The service runs as an unprivileged user on purpose, so a bare ``systemctl
     restart`` is refused -- which meant the update swapped the code, said it had
     finished, and left the old version serving until the next power cut. The
     image's sudoers grants exactly this command with no password.
+
+    Public, and imported by :mod:`project_os.api.system` and
+    :mod:`project_os.core.sysupdate`, because the same trap caught the Services
+    screen months later: it ran a bare ``systemctl restart`` and every button on
+    it failed on a real box. One copy of this decision, not four.
     """
     getuid = getattr(os, "geteuid", None)
     if getuid is not None and getuid() == 0:
@@ -448,7 +504,7 @@ def restart(on_line: Optional[Any] = None) -> str:
         # update reported success and the box went on serving the old code until
         # somebody happened to reboot it.
         say("reiniciando o serviço project-os")
-        subprocess.Popen(_systemctl_argv() + ["restart", UNIT_NAME])
+        subprocess.Popen(systemctl_argv() + ["restart", UNIT_NAME])
         return "systemd"
     argv = restart_argv()
     # The swap renamed the directory this process is sitting in, and a working

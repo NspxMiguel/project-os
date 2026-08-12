@@ -302,7 +302,7 @@ def install(manifest_url: str = "", download_dir: str = "",
     }
     if reboot:
         diga("reiniciando")
-        subprocess.Popen(updates._systemctl_argv() + ["reboot"])
+        subprocess.Popen(updates.systemctl_argv() + ["reboot"])
     return resultado
 
 

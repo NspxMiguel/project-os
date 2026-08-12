@@ -240,6 +240,25 @@ grep -q "project-os-slot-state" /mnt/raiz/etc/sudoers.d/010_project-os \
     && ok "o sudoers libera o ajudante de estado dos slots" \
     || falha "o sudoers não libera o ajudante de estado (a troca de slot não seria gravada)"
 
+# A pasta do código é do serviço, mas a troca de versão acontece na pasta de
+# cima: /opt/.project_os-update-xxxx, depois duas renomeações. Com /opt no padrão
+# do Debian (root:root 755) a atualização do app morre com "Permission denied"
+# depois de baixar o pacote -- e a caixa só se conserta baixando um rootfs
+# inteiro.
+GRUPO_OPT=$(stat -c '%G' /mnt/raiz/opt)
+MODO_OPT=$(stat -c '%a' /mnt/raiz/opt)
+# 0$MODO_OPT: a mode é octal, e o "0" na frente é o que faz o shell ler como tal.
+GRUPO_ESCREVE=$(( ((0$MODO_OPT / 8) % 8) & 2 ))
+if [ "$GRUPO_OPT" = "project-os" ] && [ "$GRUPO_ESCREVE" -ne 0 ]; then
+    ok "/opt deixa o grupo project-os escrever ($GRUPO_OPT $MODO_OPT)"
+else
+    falha "/opt não deixa o serviço trocar a pasta do código ($GRUPO_OPT $MODO_OPT)"
+fi
+
+[ "$(stat -c '%U' /mnt/raiz/opt/project-os)" = "project-os" ] \
+    && ok "a pasta do código é do serviço" \
+    || falha "/opt/project-os não é do usuário project-os"
+
 # Diretiva ativa, não a palavra: o arquivo tem um comentário longo explicando
 # justamente por que ela não está lá, e a primeira versão deste teste acusou o
 # comentário.

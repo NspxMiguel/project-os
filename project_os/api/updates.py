@@ -324,7 +324,7 @@ async def system_rollback(user: Dict[str, Any] = Depends(auth.require_auth)) -> 
     log.warning("voltando para o slot %s por pedido de %s", alvo, user.get("username"))
     import subprocess
 
-    subprocess.Popen(updates._systemctl_argv() + ["reboot"])
+    subprocess.Popen(updates.systemctl_argv() + ["reboot"])
     return {"ok": True, "slot": alvo}
 
 

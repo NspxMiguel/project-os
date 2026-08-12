@@ -38,6 +38,9 @@ setStrings('en', {
   'updates.rollback': 'Go back to the previous version',
   'updates.disabled': 'Updates are turned off in settings.',
   'updates.log': 'Log',
+  // On an image install the code lives in a directory this service cannot swap
+  // (see updates.can_apply). Saying so beats an [Errno 13] after a download.
+  'updates.blocked': 'This box cannot swap the app on its own.',
 }, {activate: false});
 
 const POLL_MS = 1200;
@@ -235,15 +238,26 @@ export default {
           body: h('p', {class: 'muted'}, check.notes || ''),
         });
       }
+      // can_install === false means the swap would fail before it started: the
+      // code tree's parent belongs to root. The version still gets announced,
+      // and the system update below is the way in on that kind of install.
+      const bloqueado = check.can_install === false;
       return card({
         title: t('updates.available', {version: check.latest}),
         iconName: 'download',
-        body: check.notes
-          ? h('div', {class: 'stack stack--sm'},
-              h('div', {class: 'field-row__label'}, t('updates.notes')),
-              h('p', null, check.notes))
-          : null,
-        footer: h('div', {class: 'row'},
+        body: h('div', {class: 'stack stack--sm'},
+          check.notes
+            ? h('div', {class: 'stack stack--sm'},
+                h('div', {class: 'field-row__label'}, t('updates.notes')),
+                h('p', null, check.notes))
+            : null,
+          bloqueado
+            ? h('div', {class: 'stack stack--sm'},
+                h('p', null, t('updates.blocked')),
+                h('p', {class: 'muted'}, check.install_hint || check.install_blocked || ''))
+            : null,
+        ),
+        footer: bloqueado ? null : h('div', {class: 'row'},
           h('button', {
             class: 'btn btn--primary', type: 'button',
             disabled: state.waiting || (state.job && state.job.state === 'running'),

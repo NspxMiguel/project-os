@@ -360,7 +360,7 @@ def test_the_restart_asks_sudo_when_it_is_not_root(monkeypatch):
 
     monkeypatch.setattr(updates.os, "geteuid", lambda: 1000, raising=False)
     monkeypatch.setattr(updates.shutil, "which", lambda name: "/usr/bin/" + name)
-    assert updates._systemctl_argv() == ["sudo", "-n", "systemctl"]
+    assert updates.systemctl_argv() == ["sudo", "-n", "systemctl"]
 
 
 def test_the_restart_does_not_ask_sudo_when_it_is_already_root(monkeypatch):
@@ -368,7 +368,7 @@ def test_the_restart_does_not_ask_sudo_when_it_is_already_root(monkeypatch):
 
     monkeypatch.setattr(updates.os, "geteuid", lambda: 0, raising=False)
     monkeypatch.setattr(updates.shutil, "which", lambda name: "/usr/bin/" + name)
-    assert updates._systemctl_argv() == ["systemctl"]
+    assert updates.systemctl_argv() == ["systemctl"]
 
 
 def test_the_restart_targets_the_unit_the_image_installs():
