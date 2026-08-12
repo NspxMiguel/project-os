@@ -245,6 +245,26 @@ else
     falha "o serviço não escreve em /opt; só dá para atualizar pelo sistema inteiro"
 fi
 
+# E o próprio código concorda com o sistema de arquivos? A resposta do can_apply
+# é o que a tela mostra; se ela discordar do "test -w" acima, alguém vai ver um
+# botão que não devia estar lá (ou não ver um que devia).
+VEREDITO=$(docker exec "$NOME" /opt/project-os/.venv/bin/python3 -c '
+import sys
+sys.path.insert(0, "/opt/project-os")
+try:
+    from project_os.core import updates
+except Exception as exc:
+    print("erro:%s" % exc); raise SystemExit(0)
+pode = getattr(updates, "can_apply", None)
+print("sem-can_apply" if pode is None else ("pode" if pode()[0] else "nao-pode"))
+' 2>/dev/null | tail -n 1)
+case "$VEREDITO" in
+    pode)          ok "o can_apply concorda: dá para trocar o código nesta imagem" ;;
+    nao-pode)      falha "o can_apply diz que não dá, mas o /opt é gravável (ou vice-versa)" ;;
+    sem-can_apply) ok "esta imagem é anterior ao can_apply (0.4.7 ou mais velha)" ;;
+    *)             falha "não consegui perguntar ao can_apply: $VEREDITO" ;;
+esac
+
 echo "== erros no log do serviço =="
 if docker logs "$NOME" 2>&1 | grep -qE "Traceback|ERROR"; then
     falha "o serviço registrou erro"
