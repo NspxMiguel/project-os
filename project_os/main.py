@@ -394,6 +394,16 @@ async def _confirmar_slot_novo(limite: float = ESPERA_REDE) -> None:
     )
 
 
+def _started_at_de(state: Any) -> Optional[str]:
+    """Quando a caixa subiu, contado para trás pelo relógio monotônico."""
+    try:
+        from project_os.core import clock
+
+        return clock.started_at(state)
+    except Exception:  # pragma: no cover - health nunca pode falhar por isto
+        return getattr(state, "started_at", None)
+
+
 @contextlib.asynccontextmanager
 def _settle_timezone(config: Any) -> None:
     """Ask the network what timezone this box is in, once, when nobody said.
@@ -475,9 +485,12 @@ async def lifespan(app: FastAPI):
 
     tasks.append(asyncio.create_task(_stats_loop(bus), name="system-stats"))
     state.tasks = tasks
-    state.started_at = (
-        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    )
+    # Marcado pelo relógio monotônico, não pelo de parede: numa Raspberry sem
+    # bateria de relógio a hora do boot é a hora que veio gravada no cartão, e o
+    # NTP só corrige depois. Ver core/clock.py.
+    from project_os.core import clock as _clock
+
+    _clock.mark_start(state)
     log.info("project-os ready on port %s", config.get("server.port", 8099))
 
     # "Este sistema presta." É aqui, e não antes: o kernel ter subido e o systemd
@@ -630,7 +643,7 @@ def create_app() -> FastAPI:
                 "status": "ok",
                 "version": __version__,
                 "setup_required": pending,
-                "started_at": getattr(request.app.state, "started_at", None),
+                "started_at": _started_at_de(request.app.state),
             }
         )
 

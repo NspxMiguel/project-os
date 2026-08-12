@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 log = logging.getLogger(__name__)
@@ -128,4 +130,52 @@ def ensure(config: Any) -> Dict[str, Any]:
     return result
 
 
-__all__ = ["DEFAULT_LOOKUP_URL", "ensure", "lookup"]
+# ---------------------------------------------------------------------------
+# desde quando esta caixa está ligada
+# ---------------------------------------------------------------------------
+# Uma Raspberry não tem bateria de relógio. Ela sobe com a hora que estava
+# gravada no cartão -- que numa imagem recém-gravada é **a hora em que a imagem
+# foi construída** -- e só depois o NTP acerta.
+#
+# Foi medido no Pi dele, no primeiro boot do cartão novo: a imagem trazia
+# fake-hwclock 2026-08-12 04:23:57 e o serviço estampou started_at
+# 2026-08-12T04:24:14Z, dezessete segundos depois. O relógio de verdade era
+# 15:49. A tela passaria a dizer que a caixa estava ligada há onze horas, para
+# sempre, até o serviço reiniciar -- e ele ia perguntar por quê.
+#
+# Estampar a hora no boot é o erro. O que se guarda é um ponto no relógio
+# monotônico (que não anda para trás nem pula quando o NTP corrige) e o começo é
+# calculado na hora de responder: agora menos quanto tempo faz. Assim a resposta
+# é certa mesmo que o relógio dê um salto de onze horas no meio.
+
+
+def mark_start(state: Any) -> None:
+    """Guarda o começo de duas formas: monotônica (que vale) e de parede."""
+    state.started_monotonic = time.monotonic()
+    state.started_at = (
+        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
+
+
+def uptime(state: Any) -> Optional[float]:
+    """Quantos segundos esta caixa está de pé, ou None se ninguém marcou."""
+    inicio = getattr(state, "started_monotonic", None)
+    if inicio is None:
+        return None
+    return max(0.0, time.monotonic() - float(inicio))
+
+
+def started_at(state: Any) -> Optional[str]:
+    """Quando esta caixa subiu, contado para trás a partir de agora.
+
+    Cai para a estampa do boot quando não há referência monotônica -- não é
+    melhor, é o que existia antes, e é melhor que None.
+    """
+    faz = uptime(state)
+    if faz is None:
+        return getattr(state, "started_at", None)
+    quando = datetime.now(timezone.utc) - timedelta(seconds=faz)
+    return quando.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+__all__ = ["DEFAULT_LOOKUP_URL", "ensure", "lookup", "mark_start", "started_at", "uptime"]

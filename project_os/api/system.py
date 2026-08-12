@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 
 from project_os import __version__, auth
-from project_os.core import hardware, syspass, sysinfo
+from project_os.core import clock, hardware, syspass, sysinfo
 from project_os.db import Database
 from project_os.errors import ApiError
 from project_os.main import get_config, get_db
@@ -60,7 +60,7 @@ async def health(request: Request, db: Database = Depends(get_db)) -> Dict[str, 
         "status": "ok",
         "version": __version__,
         "setup_required": auth.setup_required(db),
-        "started_at": getattr(request.app.state, "started_at", None),
+        "started_at": clock.started_at(request.app.state),
     }
 
 
