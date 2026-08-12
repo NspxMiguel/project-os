@@ -335,6 +335,27 @@ def mark_current_good(path: str = "") -> Optional[Dict[str, Any]]:
     return state
 
 
+def slot_por_provar(path: str = "") -> bool:
+    """Este slot ainda não provou que presta?
+
+    Verdade só logo depois de uma atualização: o initramfs apontou o boot para um
+    sistema que nunca foi confirmado. Num boot comum -- o slot que está rodando
+    já é o ``good`` -- isto é falso, e a confirmação acontece assim que o
+    project-os fica de pé, sem esperar por mais nada.
+
+    A diferença importa porque a exigência que vem depois desta pergunta é ter
+    rede. Cobrar rede de todo boot faria um roteador fora do ar virar troca de
+    sistema: três ligadas sem rede e o initramfs desistiria de um sistema
+    perfeitamente bom, alternando as versões nas costas do dono. Cobrar de um
+    slot recém-instalado é outra história -- é a única chance de perceber que a
+    atualização deixou a caixa inalcançável enquanto ainda dá para voltar.
+    """
+    here = current_slot()
+    if here is None:
+        return False
+    return read_state(path).get("good") != here
+
+
 def status(path: str = "") -> Dict[str, Any]:
     """O que a tela mostra sobre o esquema de slots."""
     here = current_slot()
@@ -357,5 +378,6 @@ __all__ = [
     "MAX_TRIES", "SLOTS", "SLOT_A", "SLOT_B",
     "available", "boot_into", "current_slot", "disk_of", "format_state",
     "mark_current_good", "other_slot", "parse_state", "read_state",
+    "slot_por_provar",
     "slot_device", "state_path", "status", "update_state", "write_state",
 ]

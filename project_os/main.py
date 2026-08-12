@@ -359,6 +359,41 @@ def get_plugins(request: Request) -> PluginManager:
 # ---------------------------------------------------------------------------
 # application
 # ---------------------------------------------------------------------------
+#: Quanto esperar um slot novo aparecer na rede antes de desistir dele. Um Pi 3B
+#: no Wi-Fi costuma pegar endereço em 10 a 30 segundos; este limite é folgado de
+#: propósito, porque o custo de errar para menos é desfazer uma atualização boa.
+ESPERA_REDE = 120.0
+
+
+async def _confirmar_slot_novo(limite: float = ESPERA_REDE) -> None:
+    """Confirma um slot recém-instalado, mas só depois que ele aparece na rede.
+
+    Se o tempo acabar sem endereço, este slot **não** é confirmado -- e é isso
+    que faz o initramfs voltar, na terceira ligada, para o sistema que sabia
+    aparecer. Uma atualização que derruba a rede se desfaz sozinha.
+    """
+    from project_os.core import slots, sysinfo
+
+    fim = time.monotonic() + limite
+    while time.monotonic() < fim:
+        try:
+            if sysinfo.local_ips():
+                confirmado = slots.mark_current_good()
+                if confirmado:
+                    log.info("slot %s confirmado (apareceu na rede)", confirmado.get("good"))
+                return
+        except Exception:  # pragma: no cover - nunca derrubar o boot por isto
+            log.exception("erro ao confirmar o slot novo")
+            return
+        await asyncio.sleep(2.0)
+
+    log.warning(
+        "o sistema novo não apareceu na rede em %.0fs; não vou confirmá-lo -- "
+        "se isto se repetir, o cartão volta sozinho para o sistema anterior",
+        limite,
+    )
+
+
 @contextlib.asynccontextmanager
 def _settle_timezone(config: Any) -> None:
     """Ask the network what timezone this box is in, once, when nobody said.
@@ -453,12 +488,30 @@ async def lifespan(app: FastAPI):
     # Enquanto isto não acontece, o initramfs conta as tentativas; na terceira
     # ele volta para o último sistema que chegou até esta linha. Ver
     # docs/RECOVERY.md.
+    # Um slot recém-instalado tem uma exigência a mais: aparecer na rede.
+    #
+    # Chegar até aqui prova que o sistema sobe e que o project-os atende. Não
+    # prova que ele é **alcançável** -- e uma caixa sem tela que não aparece na
+    # rede é indistinguível de uma caixa morta. Se uma atualização quebrasse a
+    # rede, este slot se daria por bom e a única saída seria o cartão no PC, que
+    # é justamente o que não pode acontecer.
+    #
+    # A exigência vale só para slot que ainda não foi confirmado, ou seja, logo
+    # depois de uma atualização. Cobrar rede de todo boot faria um roteador fora
+    # do ar virar troca de sistema: três ligadas sem rede e o initramfs
+    # desistiria de um sistema perfeitamente bom, alternando versões nas costas
+    # do dono.
     try:
         from project_os.core import slots
 
-        confirmado = slots.mark_current_good()
-        if confirmado:
-            log.info("slot %s confirmado", confirmado.get("good"))
+        if slots.slot_por_provar():
+            tasks.append(
+                asyncio.create_task(_confirmar_slot_novo(), name="slot-confirm")
+            )
+        else:
+            confirmado = slots.mark_current_good()
+            if confirmado:
+                log.info("slot %s confirmado", confirmado.get("good"))
     except Exception:  # pragma: no cover - nunca impedir o boot por causa disto
         log.exception("não consegui confirmar o slot")
 

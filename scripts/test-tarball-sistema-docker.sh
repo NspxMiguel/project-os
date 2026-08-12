@@ -50,15 +50,18 @@ echo "  tarball: $((TAM / 1024 / 1024)) MB"
 # A forma do tarball importa: um "./" na frente é o normal; uma pasta a mais em
 # volta ("project-os-rootfs/usr/...") faria o slot receber um sistema dentro de
 # uma pasta, e nada disso subiria.
-TOPO=$(tar -tzf "$TARBALL" 2>/dev/null | head -40 | sed 's|^\./||' | cut -d/ -f1 | sort -u | grep -v '^$' | head -8)
-echo "  primeiros nomes: $(echo "$TOPO" | tr '\n' ' ')"
-echo "$TOPO" | grep -qx "usr" && ok "o sistema está na raiz do tarball (sem pasta a mais em volta)" \
-                              || falha "o tarball tem uma pasta a mais em volta: $(echo "$TOPO" | tr '\n' ' ')"
+# A listagem inteira, uma vez só: olhar só o começo do arquivo mede a ordem em
+# que o tar gravou, não o que tem dentro.
+LISTA="$TRAB/lista.txt"
+tar -tzf "$TARBALL" 2>/dev/null | sed 's|^\./||' | cut -d/ -f1 | sort -u | grep -v '^$' > "$LISTA"
+echo "  nomes de topo: $(tr '\n' ' ' < "$LISTA")"
 
-for exigido in etc usr bin lib sbin var; do
-    tar -tzf "$TARBALL" 2>/dev/null | sed 's|^\./||' | cut -d/ -f1 | grep -qx "$exigido" \
-        && ok "tem /$exigido" || falha "o tarball não tem /$exigido"
+FALTOU=""
+for exigido in etc usr bin lib sbin var opt boot; do
+    grep -qx "$exigido" "$LISTA" || FALTOU="$FALTOU /$exigido"
 done
+[ -z "$FALTOU" ] && ok "o sistema está na raiz do tarball, inteiro" \
+                 || falha "o tarball não tem:$FALTOU"
 
 echo
 echo "== desempacotando no slot B, com o ajudante de verdade =="
@@ -114,14 +117,28 @@ mount "${LOOP}p3" "$MNT"
 
 # Um sistema que sobe precisa destes. Faltando qualquer um, o kernel monta a
 # raiz e para -- e numa caixa sem tela isso é indistinguível de "não ligou".
+# -e segue o link; -L pega o link em si. Aqui a diferença é tudo: /sbin/init é
+# um link para /lib/systemd/systemd, e visto de fora do slot esse caminho é
+# resolvido contra a raiz deste container, onde ele não existe. Perguntar só com
+# -e faria o teste acusar de faltar um init que está lá.
+existe() { [ -e "$1" ] || [ -L "$1" ]; }
+
 for caminho in sbin/init etc/fstab etc/passwd usr/bin bin/sh lib; do
-    [ -e "$MNT/$caminho" ] && ok "/$caminho" || falha "o slot B ficou sem /$caminho"
+    existe "$MNT/$caminho" && ok "/$caminho" || falha "o slot B ficou sem /$caminho"
 done
 
 [ -x "$MNT/opt/project-os/bin/project-os" ] \
     && ok "o project-os está lá e é executável" || falha "o slot B ficou sem o project-os"
-[ -e "$MNT/opt/project-os/.venv/bin/python" ] || [ -e "$MNT/opt/project-os/.venv/bin/python3" ] \
-    && ok "o virtualenv veio junto" || falha "o slot B ficou sem o virtualenv (não sobe o serviço)"
+# O virtualenv: sem ele o serviço não sobe, o slot novo nunca confirma, e toda
+# atualização terminaria voltando atrás. O python dele é um link para o python do
+# sistema -- de novo, só -L enxerga.
+if [ -f "$MNT/opt/project-os/.venv/pyvenv.cfg" ] && existe "$MNT/opt/project-os/.venv/bin/python"; then
+    ok "o virtualenv veio junto ($(ls "$MNT/opt/project-os/.venv/lib" 2>/dev/null | head -1))"
+else
+    falha "o slot B ficou sem o virtualenv (o serviço não subiria)"
+fi
+[ -x "$MNT/opt/project-os/.venv/bin/uvicorn" ] \
+    && ok "o uvicorn está instalado no slot novo" || falha "o slot novo não tem uvicorn"
 [ -f "$MNT/etc/systemd/system/project-os.service" ] \
     && ok "o serviço veio junto" || falha "o slot B ficou sem o arquivo de serviço"
 [ -f "$MNT/usr/share/project-os/layout.sh" ] && [ -f "$MNT/usr/local/sbin/project-os-system-update" ] \
