@@ -44,11 +44,26 @@ RESTART_REQUIRED = (
 READ_ONLY_PATHS = ("security.file_roots",)
 
 
+#: Um corpo sem ``values`` -- ``{"security.allow_shell": true}`` em vez de
+#: ``{"values": {"security.allow_shell": true}}`` -- não é um erro de sintaxe: o
+#: campo tem padrão vazio, então a resposta era 200 com ``changed: []`` e **nada
+#: mudava**. Um teste de segurança inteiro passou meses assim, ligando um
+#: terminal que nunca ligava e depois conferindo que ele estava desligado.
+#:
+#: Recusar o campo estranho custa uma linha e transforma um silêncio num 422 que
+#: diz o nome do campo.
+ESTRITO = {"extra": "forbid"}
+
+
 class SettingsPatch(BaseModel):
+    model_config = ESTRITO
+
     values: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AppSettingsPatch(BaseModel):
+    model_config = ESTRITO
+
     values: Dict[str, Any] = Field(default_factory=dict)
 
 

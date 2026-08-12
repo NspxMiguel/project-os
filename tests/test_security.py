@@ -94,6 +94,24 @@ def test_secrets_are_redacted_in_the_settings_response(auth_client) -> None:
     assert "home_assistant" in str(body), "a chave sumiu inteira; isto não prova redação"
 
 
+def test_um_corpo_sem_values_e_recusado_em_vez_de_ignorado(auth_client) -> None:
+    """O silêncio que escondeu o buraco do terminal por meses.
+
+    ``{"security.allow_shell": true}`` respondia 200 com ``changed: []``: campo
+    desconhecido ignorado, nada mudado, ninguém avisado. Agora é 422 com o nome
+    do campo -- para mim, para a tela, e para qualquer script dele.
+    """
+    resposta = auth_client.put("/api/settings", json={"security.allow_shell": True})
+    assert resposta.status_code == 422, resposta.text
+    assert "allow_shell" in resposta.text, resposta.text
+
+    correto = auth_client.put(
+        "/api/settings", json={"values": {"security.allow_shell": True}}
+    )
+    assert correto.status_code == 200
+    assert correto.json()["changed"] == ["security.allow_shell"]
+
+
 def test_the_layers_half_of_the_response_is_redacted_too(auth_client) -> None:
     """A mesma resposta traz "settings" e "layers". As duas passam pela máscara.
 
