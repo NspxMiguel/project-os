@@ -101,3 +101,38 @@ def test_um_tarball_adulterado_e_recusado(anunciado, raiz_falsa):
     assert not isinstance(erro.value, KeyError), "recusou por falta de campo, não pelo sha"
     assert "0.0.1" in (raiz_falsa / "project_os" / "__init__.py").read_text(encoding="utf-8"), \
         "escreveu antes de conferir a soma"
+
+
+def test_o_manifesto_de_sistema_aponta_para_um_arquivo_que_existe():
+    """A atualização de sistema é a que evita a viagem até o PC.
+
+    Um manifesto que anuncia um sistema cujo arquivo não existe -- ou cujo
+    tamanho não bate -- transforma o botão "Atualizar sistema" em erro. E a
+    descoberta seria no dia em que ele precisasse dele.
+
+    Confere sem baixar 880 MB: um HEAD na URL do release e o Content-Length
+    contra o tamanho anunciado.
+    """
+    import urllib.request
+
+    from project_os.core import updates
+
+    manifesto = updates._fetch_json(updates.DEFAULT_MANIFEST_URL)
+    sistema = manifesto.get("system") or {}
+    if not sistema:
+        pytest.skip("o manifesto ainda não anuncia um sistema")
+
+    assert len(sistema.get("sha256") or "") == 64, "o sistema anunciado veio sem sha256"
+    assert sistema.get("url"), "o sistema anunciado veio sem url"
+
+    pedido = urllib.request.Request(sistema["url"], method="HEAD")
+    with urllib.request.urlopen(pedido, timeout=30) as resposta:
+        tamanho = int(resposta.headers.get("Content-Length") or 0)
+
+    esperado = int(sistema.get("size") or 0)
+    if esperado:
+        assert tamanho == esperado, (
+            "o arquivo do sistema tem %d bytes e o manifesto anuncia %d" % (tamanho, esperado)
+        )
+    else:
+        assert tamanho > 100 * 1024 * 1024, "o arquivo do sistema é pequeno demais para ser um rootfs"
