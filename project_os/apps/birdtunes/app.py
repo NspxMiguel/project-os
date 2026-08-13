@@ -30,6 +30,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse
 
+import anyio
+
 from project_os import auth, paths
 from project_os.core.plugins import AppContext, AppInstance
 from project_os.errors import ApiError
@@ -343,9 +345,17 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
 
     @router.post("/convert")
     async def post_convert(body: Dict[str, Any], _: Any = auth_dep) -> Dict[str, Any]:
+        """Converte de verdade. Antes devolvia a lista de ids e nada acontecia.
+
+        Roda em thread porque o ffmpeg é bloqueante e um flac de dez minutos num
+        Pi 3 segura o laço de eventos -- e com ele todas as outras telas.
+        """
         if not sources.ffmpeg_available():
             raise ApiError(409, "ffmpeg_missing", "O ffmpeg não está instalado, então não dá para converter as faixas.")
-        return {"queued": list(body.get("track_ids") or [])}
+        ids = [str(i) for i in (body.get("track_ids") or []) if str(i).strip()]
+        if not ids:
+            raise ApiError(400, "no_tracks", "Diga quais faixas converter.")
+        return await anyio.to_thread.run_sync(lambda: instance.convert_tracks(ids))
 
     # -- stats / history -------------------------------------------------
     @router.get("/stats")
@@ -890,6 +900,40 @@ class BirdTunesApp(AppInstance):
             "incompatible": len(incompatible),
             "incompatible_tracks": [t["id"] for t in incompatible],
             "ffmpeg_available": sources.ffmpeg_available(),
+        }
+
+    # -- conversão ------------------------------------------------------
+    def convert_tracks(self, track_ids: List[str]) -> Dict[str, Any]:
+        """Converte faixas para MP3 e devolve o que aconteceu com cada uma.
+
+        Bloqueante de propósito -- quem chama roda isto numa thread. A faixa
+        nova entra na biblioteca pelo mesmo caminho de sempre (o scan), então
+        ela herda pasta, playlists por pasta e tudo o mais; a antiga fica no
+        disco, porque desfazer uma conversão não é botão nenhum.
+        """
+        convertidas = []  # type: List[Dict[str, Any]]
+        falhas = []  # type: List[Dict[str, Any]]
+        for track_id in track_ids:
+            track = library.get_track(self.ctx.db, track_id)
+            if track is None or not track.get("path"):
+                falhas.append({"id": track_id, "error": "essa faixa não está na biblioteca"})
+                continue
+            try:
+                destino = sources.convert_to_mp3(track["path"])
+            except Exception as exc:  # noqa: BLE001 -- vira mensagem, não traceback
+                self.log.warning("convert failed for %s: %s", track_id, exc)
+                falhas.append({"id": track_id, "error": str(exc)})
+                continue
+            convertidas.append({"id": track_id, "path": destino,
+                                "title": track.get("title") or ""})
+
+        if convertidas:
+            # Uma varredura só no fim, com os mesmos parâmetros do scan normal.
+            self.scan_library()
+        return {
+            "converted": convertidas,
+            "failed": falhas,
+            "count": len(convertidas),
         }
 
     # -- stats ---------------------------------------------------------

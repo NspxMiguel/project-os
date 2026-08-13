@@ -634,6 +634,8 @@ class PluginManager(object):
                 continue
             self._apps[app_id] = record
 
+        await self._readopt_containers()
+
         autostart = bool(self.config.get("apps.autostart", True))
         for app_id in sorted(self._apps):
             record = self._apps[app_id]
@@ -651,6 +653,88 @@ class PluginManager(object):
             "apps: %d discovered, %d running", len(self._apps), len(running)
         )
         return self.list_apps()
+
+    async def _readopt_containers(self) -> None:
+        """Traz de volta os apps de contêiner depois de um reinício.
+
+        ``discover()`` varre pastas, e um app de contêiner não tem pasta: ele é
+        uma entrada do catálogo mais um contêiner rodando. Sem isto, reiniciar o
+        project-os fazia o app **sumir** da tela de Aplicativos e da loja --
+        enquanto o contêiner seguia rodando, ocupando a porta e a memória, sem
+        botão nenhum para parar. A loja ainda oferecia instalar de novo, e a
+        instalação batia num nome de contêiner já usado.
+
+        O que sobrevive ao reinício é a lista ``apps.enabled`` no config. Para
+        cada id que está lá, não foi descoberto em pasta nenhuma, e tem bloco
+        ``container:`` no catálogo, o registro é remontado -- sem criar nada:
+        se o contêiner não existir mais, ``start()`` o recria, que é o mesmo
+        caminho de sempre.
+        """
+        habilitados = self.enabled_ids()
+        if not habilitados:
+            return
+        faltando = [app_id for app_id in habilitados if app_id not in self._apps]
+        if not faltando:
+            return
+
+        from project_os.core import catalog, containers
+
+        engine = None
+        for app_id in faltando:
+            entrada = catalog.get(app_id)
+            if not entrada or entrada.get("kind") != "container" or not entrada.get("container"):
+                continue
+            if engine is None:
+                engine = containers.detect_runtime()
+                if engine is None:
+                    self.log.warning(
+                        "app de contêiner %s está habilitado e não há motor de "
+                        "contêiner nesta máquina", app_id,
+                    )
+                    return
+            try:
+                spec = containers.parse_spec(app_id, entrada["container"])
+            except containers.ContainerError as exc:
+                self.log.error("catálogo quebrado para %s: %s", app_id, exc)
+                continue
+            self._register_container(app_id, entrada, spec, engine)
+            self.log.info("app de contêiner %s readotado depois do reinício", app_id)
+
+    def _register_container(
+        self, app_id: str, entry: Dict[str, Any], spec: Dict[str, Any], engine: str
+    ) -> LoadedApp:
+        """O registro de um app de contêiner, sem ligar nada.
+
+        Mesma montagem usada na instalação e na readoção -- duas cópias disso
+        foi como o app sumiu no reinício em primeiro lugar.
+        """
+        data_dir = paths.data_dir(app_id)
+        instance = ContainerAppInstance(
+            app_id, engine, spec, data_dir,
+            logger=logging.getLogger("project_os.app.%s" % app_id),
+        )
+        manifest = {
+            "id": app_id,
+            "name": entry.get("name", app_id),
+            "version": str(entry.get("version") or "0.0.0"),
+            "description": entry.get("description", ""),
+            "icon": entry.get("icon", "box"),
+            "category": entry.get("category", "other"),
+            "permissions": [],
+            "config_schema": [],
+            "ui": {},
+            "entrypoint": "container",
+        }
+        record = self._apps.get(app_id)
+        if record is None:
+            record = LoadedApp(
+                app_id, manifest, data_dir, source="container", state=STATE_STOPPED
+            )
+            self._apps[app_id] = record
+        else:
+            record.manifest = manifest
+        record.instance = instance
+        return record
 
     def has(self, app_id: str) -> bool:
         """Whether this app exists as code on this machine.
@@ -756,37 +840,11 @@ class PluginManager(object):
         and hand back its state -- so a container's failure to pull or start
         shows up the same way a builtin's failure to start would: recorded on
         the app, not raised out of the endpoint.
+
+        A montagem do registro é a mesma de ``_register_container`` -- e é a
+        mesma que roda no boot seguinte, para o app não sumir no reinício.
         """
-        data_dir = paths.data_dir(app_id)
-        instance = ContainerAppInstance(
-            app_id, engine, spec, data_dir, logger=logging.getLogger("project_os.app.%s" % app_id)
-        )
-        manifest = {
-            "id": app_id,
-            "name": entry.get("name", app_id),
-            "version": str(entry.get("version") or "0.0.0"),
-            "description": entry.get("description", ""),
-            "icon": entry.get("icon", "box"),
-            "category": entry.get("category", "other"),
-            "permissions": [],
-            "config_schema": [],
-            "ui": {},
-            # start()/discover_and_start_enabled() both treat a falsy
-            # entrypoint as "nothing to start" -- true for a manifest.json app
-            # with no code to import, but not for a container app, which very
-            # much has something to start. This value is never parsed as a
-            # module:function reference: record.instance is set below, before
-            # enable() runs, so _instantiate() (the only reader of
-            # "entrypoint") is always skipped for a container app.
-            "entrypoint": "container",
-        }
-        record = self._apps.get(app_id)
-        if record is None:
-            record = LoadedApp(app_id, manifest, data_dir, source="container", state=STATE_STOPPED)
-            self._apps[app_id] = record
-        else:
-            record.manifest = manifest
-        record.instance = instance
+        self._register_container(app_id, entry, spec, engine)
         return await self.enable(app_id)
 
     async def uninstall_container(self, app_id: str) -> Dict[str, Any]:
@@ -845,7 +903,28 @@ class PluginManager(object):
     def _describe(self, record: LoadedApp) -> Dict[str, Any]:
         data = record.to_dict()
         data["status"] = self.status_of(record)
+        # As portas que o app publica na máquina. Um app de contêiner não tem
+        # pasta web/, então `has_ui` é falso e a tela de Aplicativos não
+        # desenhava botão nenhum de abrir: os dois únicos apps que instalam de
+        # verdade ficavam inalcançáveis depois de instalados, a menos que a
+        # pessoa adivinhasse a porta e digitasse na barra de endereço.
+        portas = self._host_ports(record)
+        if portas:
+            data["ports"] = portas
         return data
+
+    @staticmethod
+    def _host_ports(record: LoadedApp) -> List[int]:
+        instance = record.instance
+        spec = getattr(instance, "spec", None)
+        if not isinstance(spec, dict):
+            return []
+        portas = []  # type: List[int]
+        for item in spec.get("ports") or []:
+            porta = item.get("host") if isinstance(item, dict) else None
+            if isinstance(porta, int) and porta > 0:
+                portas.append(porta)
+        return portas
 
     def status_of(self, record: LoadedApp) -> Dict[str, Any]:
         instance = record.instance
@@ -863,6 +942,19 @@ class PluginManager(object):
 
     def list_apps(self) -> List[Dict[str, Any]]:
         return [self._describe(self._apps[app_id]) for app_id in sorted(self._apps)]
+
+    def installed_ids(self) -> List[str]:
+        """Os apps que estão *ligados*, não os que por acaso estão no disco.
+
+        Um app embutido está sempre no disco -- ele vem dentro do project-os.
+        Contar isso como instalado fazia a loja dizer "Instalado" para o
+        BirdTunes numa máquina onde ele nunca foi ligado, e a ficha do aparelho
+        contar o passo "instalar o BirdTunes" como já feito. A pergunta certa é
+        a mesma nos dois lugares, então mora aqui e não em cada tela.
+        """
+        return [
+            item["id"] for item in self.list_apps() if item.get("state") != "disabled"
+        ]
 
     def routers(self) -> List[Tuple[str, APIRouter]]:
         """``(app_id, router)`` for every app that exposes an API."""

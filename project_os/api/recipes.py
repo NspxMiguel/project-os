@@ -41,7 +41,7 @@ class RunStep(BaseModel):
 
 
 def installed_ids(plugins: Any) -> List[str]:
-    return [item["id"] for item in plugins.list_apps()]
+    return list(plugins.installed_ids())
 
 
 @router.get("")

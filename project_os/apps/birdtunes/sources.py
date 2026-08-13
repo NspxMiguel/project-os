@@ -97,6 +97,61 @@ def ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
+#: Qualidade do VBR do lame. 2 é "quase transparente" e ainda cabe num cartão.
+MP3_QUALITY = "2"
+
+#: Uma faixa de dez minutos num Pi 3 leva bem menos que isso; o teto existe
+#: para um arquivo quebrado não segurar a fila para sempre.
+CONVERT_TIMEOUT = 900.0
+
+
+def convert_to_mp3(source: str, dest_dir: Optional[str] = None) -> str:
+    """Converte um arquivo para MP3 ao lado do original e devolve o caminho novo.
+
+    O botão "Converter para MP3" existia na tela desde o começo e o endpoint
+    respondia ``{"queued": [...]}`` -- uma lista de ids de volta, sem fila,
+    sem ffmpeg, sem arquivo nenhum. Quem tinha um flac e uma Apple TV (que não
+    toca flac) clicava, via um toast de sucesso e continuava sem tocar nada.
+
+    O original não é apagado: quem quiser recuperar o flac depois de ouvir o
+    mp3 não tem como desfazer uma conversão.
+    """
+    if not ffmpeg_available():
+        raise RuntimeError("O ffmpeg não está instalado nesta máquina.")
+    if not os.path.isfile(source):
+        raise FileNotFoundError(source)
+    pasta = dest_dir or os.path.dirname(source)
+    base = os.path.splitext(os.path.basename(source))[0]
+    destino = os.path.join(pasta, "%s.mp3" % base)
+    if os.path.abspath(destino) == os.path.abspath(source):
+        raise RuntimeError("%s já é um mp3." % os.path.basename(source))
+    if os.path.exists(destino):
+        return destino
+
+    import subprocess
+
+    parcial = destino + ".part.mp3"
+    argv = [
+        "ffmpeg", "-nostdin", "-y", "-i", source,
+        "-vn", "-codec:a", "libmp3lame", "-q:a", MP3_QUALITY,
+        parcial,
+    ]
+    try:
+        done = subprocess.run(
+            argv, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            timeout=CONVERT_TIMEOUT, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("O ffmpeg não conseguiu rodar: %s" % exc)
+    if done.returncode != 0 or not os.path.exists(parcial):
+        detalhe = (done.stderr or b"").decode("utf-8", "replace").strip().splitlines()
+        raise RuntimeError(detalhe[-1] if detalhe else "o ffmpeg falhou")
+    # Só vira o arquivo final depois de pronto: uma queda de energia no meio
+    # deixaria um mp3 truncado na biblioteca, e a biblioteca varre por extensão.
+    os.replace(parcial, destino)
+    return destino
+
+
 _ERROR_PREFIX = re.compile(r"^ERROR:\s*(\[[^\]]+\]\s*)?([\w-]{6,}:\s*)?")
 
 
@@ -436,6 +491,7 @@ __all__ = [
     "available",
     "cancel_job",
     "create_job",
+    "convert_to_mp3",
     "ffmpeg_available",
     "get_job",
     "list_jobs",

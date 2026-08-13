@@ -41,6 +41,7 @@ setStrings('en', {
   'apps.action.stop': 'Stop',
   'apps.action.restart': 'Restart',
   'apps.action.open': 'Open',
+  'apps.action.openPort': 'This app serves its own screen on port {port} of this machine.',
   'apps.action.uninstall': 'Uninstall',
   'apps.uninstall.confirm': 'Uninstall {name}? Its settings and data are kept, in case you install it again.',
   'apps.toast.uninstalled': '{name} uninstalled',
@@ -255,6 +256,17 @@ export default {
       if (app.has_ui) {
         footer.push(h('a', {class: 'btn btn--ghost btn--sm', href, style: {marginLeft: 'auto'}},
           t('apps.action.open'), icon('chevron', {size: 14})));
+      } else if (Array.isArray(app.ports) && app.ports.length) {
+        // App de contêiner: a tela dele não é uma pasta web/ aqui dentro, é uma
+        // porta desta máquina. Sem este botão, os dois únicos apps que instalam
+        // de verdade ficavam inalcançáveis depois de instalados -- só chegava
+        // lá quem adivinhasse a porta e digitasse na barra de endereço.
+        const alvo = location.protocol + '//' + location.hostname + ':' + app.ports[0];
+        footer.push(h('a', {
+          class: 'btn btn--ghost btn--sm', href: alvo,
+          target: '_blank', rel: 'noopener', style: {marginLeft: 'auto'},
+          title: t('apps.action.openPort', {port: app.ports[0]}),
+        }, t('apps.action.open'), icon('link', {size: 14})));
       }
 
       return card({

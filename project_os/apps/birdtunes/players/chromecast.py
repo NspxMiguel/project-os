@@ -33,7 +33,15 @@ from .base import (
 
 INSTALL_HINT = "pip install pychromecast (Chromecast support is an optional dependency)"
 
-DEVICE_KINDS = ["chromecast", "google_cast", "chromecast_audio", "google_home", "nest_audio"]
+#: Os nomes que a descoberta realmente usa (``core/discovery.py``,
+#: KIND_CAPABILITIES). A lista antiga -- google_cast, chromecast_audio,
+#: google_home, nest_audio -- era inventada: nenhum desses quatro sai da
+#: descoberta, e os dois que saem de verdade, ``cast_audio`` (Google Home, Nest
+#: Audio, Chromecast Audio) e ``cast_group`` (grupo de caixas), não estavam
+#: aqui. A tela filtra os aparelhos por esta lista, então uma Google Home nunca
+#: aparecia como saída -- justamente a caixa mais provável de tocar para os
+#: passarinhos.
+DEVICE_KINDS = ["chromecast", "cast_audio", "cast_group"]
 
 CONNECT_TIMEOUT = 20.0
 #: How often to poll media status for end-of-track, in seconds.

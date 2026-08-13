@@ -173,6 +173,7 @@ export const PT_BR = {
   'apps.action.stop': 'Parar',
   'apps.action.restart': 'Reiniciar',
   'apps.action.open': 'Abrir',
+  'apps.action.openPort': 'Este app serve a tela dele na porta {port} desta máquina.',
   'apps.action.uninstall': 'Desinstalar',
   'apps.uninstall.confirm': 'Desinstalar {name}? As configurações e os dados ficam guardados, caso você instale de novo.',
   'apps.toast.uninstalled': '{name} desinstalado',

@@ -82,7 +82,10 @@ async def device_recipes(
     device = registry.get(device_id)
     if device is None:
         raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % device_id)
-    installed = [item["id"] for item in plugins.list_apps()]
+    # Ligados, não "existem no disco": um app embutido está sempre no disco, e
+    # com a lista errada a ficha do aparelho já nascia dizendo que o passo de
+    # instalar o BirdTunes estava feito.
+    installed = list(plugins.installed_ids())
     # recipes.for_device reads the device like a mapping (device.get(...)), so it
     # gets the mapping. Handing it the dataclass raised AttributeError and the
     # "what you can do with this device" card only ever showed an error.

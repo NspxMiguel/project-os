@@ -36,7 +36,10 @@ from .base import (
 INSTALL_HINT = "pip install pyatv (AirPlay support is an optional dependency)"
 
 #: Device kinds from core discovery this backend can drive.
-DEVICE_KINDS = ["apple_tv", "airplay", "airplay_speaker", "homepod", "raop"]
+#: Os nomes da descoberta, não os dos protocolos: "airplay" e "raop" são tipos
+#: de serviço mDNS, e nenhum dos dois é um `kind` de aparelho -- estavam aqui
+#: sem casar com nada.
+DEVICE_KINDS = ["apple_tv", "homepod", "airplay_speaker"]
 
 #: Pairing protocols we let the UI ask for, lowest friction first.
 PAIRING_PROTOCOLS = ("airplay", "raop", "companion")
