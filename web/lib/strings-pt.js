@@ -649,6 +649,7 @@ export const PT_BR = {
   'store.empty.text': 'Tente outra busca ou outra categoria.',
   'store.error.load': 'Não deu para carregar a loja.',
   'store.action.retry': 'Tentar de novo',
+  'store.action.started': 'Instalando o {name} pelo apt — acompanhe na tela de Programas.',
   'store.action.install': 'Instalar',
   'store.action.installing': 'Instalando…',
   'store.action.remove': 'Remover',

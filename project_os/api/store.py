@@ -66,6 +66,28 @@ def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None,
             item["install_reason"] = (
                 "%s ainda não foi feito — está na lista." % entry["name"]
             )
+    if item["kind"] == "service":
+        # 23 dos 34 itens do catálogo são serviço, e nenhum instalador de
+        # serviço foi escrito: o botão Instalar deles terminava sempre em
+        # "installer_pending", depois do clique. Os que têm pacote no Debian
+        # instalam de verdade pelo mesmo apt da tela de Programas; o resto diz
+        # no cartão, antes do clique, que ainda não instala daqui.
+        item["installable"] = bool(entry.get("apt"))
+        if item["installable"]:
+            item["install_method"] = "apt"
+            item["install_package"] = entry["apt"]
+        else:
+            item["install_reason"] = (
+                "%s ainda não instala pela loja: falta o instalador de serviço. "
+                "Dá para instalar na mão pelo Terminal ou pela tela de Programas."
+                % entry["name"]
+            )
+    if item["kind"] == "recipe":
+        item["installable"] = False
+        item["install_reason"] = (
+            "%s é uma receita: os passos ficam em Aparelhos, não num botão de "
+            "instalar." % entry["name"]
+        )
     if item["kind"] == "container":
         # Said up front, on the card, before the install button: a machine
         # with neither docker nor podman should not find that out mid-spinner.
@@ -75,6 +97,15 @@ def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None,
         # faria trinta -- e cada um pode demorar até o timeout.
         item["container_runtime"] = runtime if runtime is not None else containers.runtime_status()
         item["installable"] = bool(item.get("container"))
+        if not item["installable"]:
+            # Immich, Frigate e Paperless não são um contêiner: são pilhas
+            # (banco, fila, modelos). Um bloco `container:` de um só serviço
+            # aqui seria uma mentira diferente, não um conserto.
+            item["install_reason"] = (
+                "%s precisa de mais de um contêiner (banco de dados e afins), e "
+                "este instalador roda um só. Está listado para você saber que "
+                "existe e quanto custa." % entry["name"]
+            )
     return item
 
 
@@ -100,7 +131,11 @@ async def browse(
         items = [
             item
             for item in items
-            if needle in item["name"].lower()
+            # O id entra na busca porque é ele que as outras telas mandam: o
+            # selo "Está na loja" e os cartões de sugestão linkam por id, e
+            # procurar "home-assistant" não achava o "Home Assistant".
+            if needle in item["id"].lower()
+            or needle in item["name"].lower()
             or needle in item["summary"].lower()
             or any(needle in tag.lower() for tag in item.get("tags", []))
         ]
@@ -171,6 +206,28 @@ async def install(
         result = await plugins.enable(app_id)
         log.info("installed builtin app %s (by %s)", app_id, user.get("username"))
         return {"ok": True, "installed": True, "app": result}
+
+    if entry["kind"] == "service" and entry.get("apt"):
+        # O instalador que já existe, o mesmo da tela de Programas: apt-get com
+        # log ao vivo e job id. Nada de novo aqui além de chamar.
+        from project_os.api import packages as packages_api
+        from project_os.core import packages
+
+        packages_api._require_writes(config)
+        try:
+            job = packages_api.runner().start("install", "apt", entry["apt"])
+        except packages.PackageError as exc:
+            raise packages_api._translate(exc)
+        log.info("installing service app %s via apt (by %s)", app_id, user.get("username"))
+        # Não é "instalado": é "começou". O apt-get num Pi 3 leva minutos, e a
+        # tela acompanha pelo mesmo job da tela de Programas.
+        return {
+            "ok": True,
+            "installed": False,
+            "started": True,
+            "job": job.as_dict(tail=0),
+            "watch": "/api/packages/jobs/%s" % job.id,
+        }
 
     if entry["kind"] == "container" and entry.get("container"):
         engine = containers.detect_runtime()

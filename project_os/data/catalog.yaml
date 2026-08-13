@@ -25,6 +25,11 @@
 #                     dos dados do app (~/.project_os/data/<id>/<name>), path é
 #                     onde ela é montada dentro do container, mode é rw ou ro.
 #     env             mapa NOME: valor de variáveis de ambiente.
+#   apt           só para kind: service. O pacote Debian que instala isto de
+#                 verdade, pelo mesmo instalador da tela de Programas (apt-get,
+#                 com log ao vivo). Sem este campo a loja diz, no cartão, que
+#                 ainda não instala daqui -- em vez de mostrar um botão que
+#                 termina em "installer_pending".
 #   Sem container: aqui, a loja lista o app mas o instalador ainda responde
 #   "installer_pending" -- mais honesto que fingir suporte a compose ou a
 #   passagem de dispositivo (/dev/video*, Coral) que este instalador não faz.
@@ -96,6 +101,7 @@
   disk_mb: 15
   summary: O broker MQTT em si, se você ainda não tem um.
   description: Broker MQTT leve, instalado pelo apt e supervisionado pelo project-os.
+  apt: mosquitto
   tags: [casa, mqtt, infra]
 
 - id: home-assistant
@@ -291,6 +297,7 @@
     instalar apps de terceiros sem espalhar dependência pelo sistema. A loja
     oferece instalar sozinha quando algum app precisa; aparece aqui só para você
     poder decidir antes.
+  apt: docker.io
   tags: [infra, container]
 
 - id: caddy
@@ -391,6 +398,7 @@
   description: >-
     Mais leve e mais fechado que o Tailscale, e mais trabalhoso: exige abrir uma
     porta no roteador e distribuir as chaves na mão.
+  apt: wireguard
   tags: [rede, vpn]
 
 - id: samba
@@ -404,6 +412,7 @@
   description: >-
     Samba. É a forma mais direta de jogar filme e música lá dentro sem passar
     pelo navegador.
+  apt: samba
   tags: [arquivos, rede, smb]
 
 - id: syncthing
@@ -415,6 +424,7 @@
   disk_mb: 60
   summary: Sincroniza pastas entre suas máquinas.
   description: Sem nuvem e sem conta. Bom pra levar as músicas do BirdTunes pro Pi.
+  apt: syncthing
   tags: [arquivos, backup]
 
 - id: uptime-kuma

@@ -36,6 +36,16 @@ router = APIRouter(prefix="/packages", tags=["packages"])
 _runner = packages.JobRunner()
 
 
+def runner() -> packages.JobRunner:
+    """O único runner deste processo.
+
+    A loja instala por aqui também: assim um "Instalar" na loja aparece na tela
+    de Programas, com o mesmo log ao vivo e o mesmo job id -- em vez de existir
+    uma segunda fila invisível.
+    """
+    return _runner
+
+
 class PackageRef(BaseModel):
     source: str = Field(..., min_length=1, description="apt or flatpak")
     package: str = Field(..., min_length=1)

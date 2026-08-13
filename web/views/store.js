@@ -33,6 +33,7 @@ import {t, setStrings} from '../lib/format.js';
 import * as api from '../lib/api.js';
 import {ApiError} from '../lib/api.js';
 import {toast, confirm} from '../lib/toast.js';
+import {navigate} from '../lib/router.js';
 
 setStrings('en', {
   'store.lead': 'project-os ships empty. Everything below is something you can add.',
@@ -57,6 +58,7 @@ setStrings('en', {
   'store.empty.text': 'Try a different search or category.',
   'store.error.load': 'Could not load the store.',
   'store.action.retry': 'Retry',
+  'store.action.started': 'Installing {name} with apt — follow it on the Packages screen.',
   'store.action.install': 'Install',
   'store.action.installing': 'Installing…',
   'store.action.remove': 'Remove',
@@ -185,6 +187,9 @@ function isInstallable(item) {
   // button whose only possible outcome was "No app called 'kasa'".
   if (item.kind === 'builtin') return item.installable !== false;
   if (item.kind === 'container') return item.installable === true;
+  // Serviço com pacote no Debian instala de verdade, pelo mesmo apt da tela de
+  // Programas; o resto do catálogo diz no cartão que ainda não instala daqui.
+  if (item.kind === 'service') return item.installable === true;
   return false;
 }
 
@@ -244,8 +249,14 @@ export default {
           accept_oversize: acceptOversize,
         });
         if (disposed) return;
+        if (result && result.started && result.job) {
+          // apt-get num Pi 3 leva minutos. Dizer "instalado" aqui seria a
+          // mentira mais fácil desta tela.
+          toast(t('store.action.started', {name: item.name}), {type: 'info'});
+          navigate('#/packages');
+          return;
+        }
         toast(t('store.action.installed', {name: item.name}), {type: 'success'});
-        void result;
         await load();
       } catch (err) {
         if (disposed) return;
