@@ -18,6 +18,14 @@ class NullProvider(Provider):
 
     def status(self) -> Dict[str, Any]:
         return {
+            "configured": False,
+            "connected": False,
+            "reason": "nenhum provedor configurado — ponha provider como cloud_api ou bridge",
+        }
+
+    async def probe(self) -> Dict[str, Any]:
+        """Aqui "não sei" não cabe: não há ninguém do outro lado para perguntar."""
+        return {
             "connected": False,
             "reason": "nenhum provedor configurado — ponha provider como cloud_api ou bridge",
         }

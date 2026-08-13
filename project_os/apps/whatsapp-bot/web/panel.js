@@ -18,6 +18,9 @@ export default {
       'wa.provider.bridge': 'Local bridge',
       'wa.status.connected': 'Connected',
       'wa.status.notconnected': 'Not connected',
+      'wa.status.unknown': 'Not checked yet',
+      'wa.status.checking': 'Checking...',
+      'wa.status.recheck': 'Check connection',
       'wa.status.reason': 'Reason',
       'wa.save': 'Save',
       'wa.section.connection': 'Connection',
@@ -37,6 +40,7 @@ export default {
       'wa.send.text': 'Message',
       'wa.send.button': 'Send',
       'wa.send.sent': 'Message sent',
+      'wa.send.logged': 'Nothing was sent: no provider is connected',
       'wa.send.failed': 'Could not send',
       'wa.cloud.phone_number_id': 'phone_number_id',
       'wa.cloud.access_token': 'access_token',
@@ -111,15 +115,39 @@ export default {
     function connectionCard() {
       const status = state.status || {};
       const provider = String(status.provider || 'null');
-      const connected = Boolean(status.connected);
+      // Três estados, não dois: sim, não, e "ainda não perguntei". O booleano
+      // de antes transformava "tem uma URL escrita no config" em Conectado.
+      const connected = status.connected === true
+        ? true
+        : (status.connected === false ? false : null);
+      const rotulo = connected === true
+        ? t2('wa.status.connected')
+        : (connected === false ? t2('wa.status.notconnected') : t2('wa.status.unknown'));
+      const ponto = connected === true ? 'open' : (connected === false ? 'closed' : 'unknown');
 
       return h('div', {class: 'card'},
         h('div', {class: 'card__header'},
           h('h3', {class: 'card__title'}, t2('wa.section.connection')),
           h('div', {class: 'card__tools'},
-            h('span', {class: 'conn', dataset: {state: connected ? 'open' : 'closed'}},
+            h('span', {class: 'conn', dataset: {state: state.probing ? 'connecting' : ponto}},
               h('span', {class: 'conn__dot'}),
-              connected ? t2('wa.status.connected') : t2('wa.status.notconnected')),
+              state.probing ? t2('wa.status.checking') : rotulo),
+            h('button', {
+              class: 'btn btn--ghost btn--sm',
+              disabled: Boolean(state.probing),
+              onClick: async () => {
+                state.probing = true;
+                render();
+                try {
+                  state.status = await appApi.get('/status');
+                } catch (err) {
+                  state.status = {provider: provider, connected: false, reason: String(err.message || err)};
+                } finally {
+                  state.probing = false;
+                  render();
+                }
+              },
+            }, t2('wa.status.recheck')),
           ),
         ),
         h('div', {class: 'card__body form'},
@@ -134,7 +162,7 @@ export default {
               h('option', {value: 'bridge'}, t2('wa.provider.bridge')),
             ),
           ),
-          !connected && status.reason
+          connected !== true && status.reason
             ? h('p', {class: 'field__hint'}, t2('wa.status.reason') + ': ' + status.reason)
             : null,
           provider === 'cloud_api' ? cloudApiFields() : null,
@@ -270,8 +298,17 @@ export default {
               const btn = event.currentTarget;
               btn.disabled = true;
               try {
-                await appApi.post('/send', {to, text});
-                toast(t2('wa.send.sent'), {type: 'success'});
+                const resposta = await appApi.post('/send', {to, text});
+                // 200 não quer dizer entregue: sem provedor, o app só escreve
+                // no registro e devolve delivered: false. Dizer "Message sent"
+                // em verde aí é a tela mentindo com o dado na mão.
+                if (resposta && resposta.delivered === false) {
+                  toast(resposta.note
+                    ? t2('wa.send.logged') + ' (' + resposta.note + ')'
+                    : t2('wa.send.logged'), {type: 'warning'});
+                } else {
+                  toast(t2('wa.send.sent'), {type: 'success'});
+                }
                 if (textRef) textRef.value = '';
                 await refreshMessages();
                 render();

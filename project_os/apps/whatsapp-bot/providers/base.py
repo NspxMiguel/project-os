@@ -50,7 +50,16 @@ class Provider(object):
 
     # -- reporting -----------------------------------------------------------
     def status(self) -> Dict[str, Any]:
-        return {"connected": False}
+        return {"configured": False, "connected": False}
+
+    async def probe(self) -> Dict[str, Any]:
+        """Pergunta ao outro lado se ele está mesmo lá.
+
+        Sem isto, "Conectado" queria dizer só "tem uma URL escrita no config" --
+        a tela dizia Conectado numa caixa que nunca tinha falado com nada. O
+        padrão é ``None``: não sei, que é diferente de sim e de não.
+        """
+        return {"connected": None, "reason": "este provedor não sabe se checar"}
 
     # -- outbound ------------------------------------------------------------
     async def send_text(self, to: str, text: str) -> Dict[str, Any]:

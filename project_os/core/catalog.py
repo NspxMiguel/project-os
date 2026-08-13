@@ -169,6 +169,57 @@ def get(app_id: str, board: Optional[Any] = None) -> Optional[Dict[str, Any]]:
     return None
 
 
+def builtin_written(app_id: str) -> bool:
+    """Um builtin do catálogo que existe como código, e não só como plano.
+
+    Cinco dos itens do catálogo são ``kind: builtin`` e dois foram escritos. A
+    diferença precisa ser visível *antes* do clique -- na loja e também na
+    receita, que oferecia "Instalar o app MQTT" com um botão que só podia
+    terminar em erro.
+    """
+    pasta = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps", app_id
+    )
+    return os.path.isfile(os.path.join(pasta, "app.py"))
+
+
+def install_block(entry: Dict[str, Any], builtin_available: Optional[bool] = None) -> Optional[str]:
+    """Por que este item **não** instala com um botão -- ou ``None`` se instala.
+
+    Uma resposta só, usada pela loja (no cartão) e pela receita (no passo), para
+    as duas não divergirem: era possível a loja dizer "ainda não instala daqui"
+    e a receita, do lado, oferecer o botão do mesmo app.
+    """
+    kind = entry.get("kind")
+    nome = entry.get("name", entry.get("id"))
+    if kind == "builtin":
+        disponivel = builtin_written(entry["id"]) if builtin_available is None else builtin_available
+        if not disponivel:
+            return "%s ainda não foi feito — está na lista." % nome
+        return None
+    if kind == "service":
+        if entry.get("apt"):
+            return None
+        return (
+            "%s ainda não instala pela loja: falta o instalador de serviço. "
+            "Dá para instalar na mão pelo Terminal ou pela tela de Programas." % nome
+        )
+    if kind == "recipe":
+        return (
+            "%s é uma receita: os passos ficam em Aparelhos, não num botão de "
+            "instalar." % nome
+        )
+    if kind == "container":
+        if entry.get("container"):
+            return None
+        return (
+            "%s precisa de mais de um contêiner (banco de dados e afins), e "
+            "este instalador roda um só. Está listado para você saber que "
+            "existe e quanto custa." % nome
+        )
+    return None
+
+
 def categories() -> List[str]:
     return sorted(set(entry["category"] for entry in all_entries()))
 
@@ -179,8 +230,10 @@ __all__ = [
     "all_entries",
     "annotate",
     "budget_mb",
+    "builtin_written",
     "categories",
     "entries",
     "get",
+    "install_block",
     "reload",
 ]

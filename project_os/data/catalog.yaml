@@ -471,12 +471,14 @@
   category: productivity
   ram_mb: 180
   disk_mb: 250
-  summary: Manda mensagem pra sua casa e ela responde.
+  summary: Você manda !status pelo WhatsApp e a placa responde.
   description: >-
-    Conecta pelo WhatsApp Web lendo um QR code, e daí em diante entende comandos
-    ("liga a luz da sala", "o que tá tocando?") e avisa quando algo acontece. A
-    sessão fica só aqui na placa. É um número seu, não uma conta de empresa:
-    use um número separado se puder.
+    Entende comandos curtos começados por "!" — hoje !help, !apps e !status
+    (CPU, memória, temperatura e disco) — e só de quem estiver na lista de
+    números liberados, que começa vazia. Não conecta sozinho: escolha a Cloud
+    API da Meta (token) ou aponte para uma ponte WhatsApp Web que você já
+    rode aqui — o QR é da ponte, não desta tela. Ainda não manda aviso
+    sozinho: ele responde, não avisa.
   tags: [mensagem, bot, avisos]
 
 - id: argos

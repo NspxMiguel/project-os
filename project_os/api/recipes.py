@@ -44,6 +44,17 @@ def installed_ids(plugins: Any) -> List[str]:
     return list(plugins.installed_ids())
 
 
+def _mapa(device: Any) -> Dict[str, Any]:
+    """O aparelho como dicionário -- que é como as receitas o leem.
+
+    O registro devolve um dataclass; ``recipes`` faz ``device.get(...)``. Sem
+    esta conversão, apertar qualquer botão de passo respondia 500 com um
+    AttributeError -- o mesmo tropeço que a página do aparelho já tinha levado
+    (ver ``devices.device_recipes``), do outro lado da mesma tela.
+    """
+    return device.to_dict() if hasattr(device, "to_dict") else device
+
+
 @router.get("")
 async def list_recipes(user: Dict[str, Any] = Depends(auth.require_auth)) -> Dict[str, Any]:
     """Every recipe, unrendered. The catalogue of what the box knows how to do."""
@@ -78,7 +89,7 @@ async def run_step(
     device = registry.get(body.device_id)
     if device is None:
         raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % body.device_id)
-    return await _run(body, device, plugins, config, None, user)
+    return await _run(body, _mapa(device), plugins, config, None, user)
 
 
 @router.post("/{recipe_id}/run")
@@ -93,7 +104,7 @@ async def run_step_of(
     device = registry.get(body.device_id)
     if device is None:
         raise ApiError(404, "device_not_found", "Não existe aparelho com id %r." % body.device_id)
-    return await _run(body, device, plugins, config, recipe_id, user)
+    return await _run(body, _mapa(device), plugins, config, recipe_id, user)
 
 
 async def _run(
@@ -139,10 +150,21 @@ async def _run(
         return {"ok": True, "kind": kind, "url": rendered["url"], "step": rendered}
 
     if kind == recipes_core.STEP_CONFIG:
-        config.set(step["key"], rendered["value"])
+        # Um passo pode gravar mais de uma chave -- "apontar o BirdTunes para
+        # esta caixa" é o tipo da saída *e* o id do aparelho, e separar isso em
+        # dois botões seria pedir dois cliques para uma decisão só.
+        valores = rendered.get("values") or {rendered["key"]: rendered["value"]}
+        for chave, valor in valores.items():
+            config.set(chave, valor)
         config.save()
-        log.info("recipe %s set %s for %s", recipe["id"], step["key"], device.get("id"))
-        return {"ok": True, "kind": kind, "key": step["key"], "value": rendered["value"]}
+        log.info(
+            "recipe %s set %s for %s",
+            recipe["id"], ", ".join(sorted(valores)), device.get("id"),
+        )
+        return {
+            "ok": True, "kind": kind, "key": rendered["key"],
+            "value": rendered["value"], "values": valores,
+        }
 
     # install
     from project_os.api import store
@@ -150,6 +172,10 @@ async def _run(
     app_id = step["app"]
     if app_id in installed_ids(plugins):
         return {"ok": True, "kind": kind, "app": app_id, "already_installed": True}
+    if rendered.get("blocked_reason"):
+        # A loja já diz isso no cartão; aqui é a mesma frase, para quem chegou
+        # pela receita não receber um erro genérico de instalador.
+        raise ApiError(501, "installer_pending", rendered["blocked_reason"])
     result = await store.install(
         app_id,
         store.InstallBody(accept_oversize=body.accept_oversize),

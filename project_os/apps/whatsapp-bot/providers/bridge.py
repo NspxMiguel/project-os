@@ -41,7 +41,10 @@ class BridgeProvider(Provider):
     def status(self) -> Dict[str, Any]:
         configured = bool(self.base_url)
         return {
-            "connected": configured,
+            "configured": configured,
+            # Ter uma URL escrita não é estar conectado. Quem responde isso é
+            # o probe(), que fala com a ponte de verdade.
+            "connected": None if configured else False,
             "mode": self.name,
             "base_url": self.base_url or None,
             "reason": None if configured else "missing bridge.base_url",
@@ -54,6 +57,49 @@ class BridgeProvider(Provider):
                 "with WhatsApp > Linked devices."
             ),
         }
+
+    async def probe(self) -> Dict[str, Any]:
+        """``GET {base_url}/status`` -- a única rota opcional do contrato.
+
+        Uma ponte que não a expõe ainda conta como alcançável: o que importa é
+        que alguém atendeu naquele endereço. Sem resposta nenhuma, a tela para
+        de dizer "conectado" e passa a dizer o que aconteceu.
+        """
+        if not self.base_url:
+            return {"connected": False, "reason": "falta o bridge.base_url"}
+        try:
+            import httpx
+        except ImportError:
+            return {"connected": None, "reason": "sem httpx não dá para checar a ponte"}
+        headers = {"Authorization": "Bearer %s" % self.token} if self.token else {}
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(self.base_url + "/status", headers=headers)
+        except Exception as exc:  # noqa: BLE001 -- vira recado, não traceback
+            return {
+                "connected": False,
+                "reason": "não consegui falar com a ponte em %s (%s)"
+                % (self.base_url, type(exc).__name__),
+            }
+        if response.status_code == 404:
+            return {
+                "connected": None,
+                "reason": "a ponte atendeu, mas não expõe /status -- não dá para "
+                          "saber se o WhatsApp está pareado",
+            }
+        if response.status_code >= 400:
+            return {
+                "connected": False,
+                "reason": "a ponte respondeu HTTP %s" % response.status_code,
+            }
+        try:
+            corpo = response.json()
+        except ValueError:
+            corpo = {}
+        if isinstance(corpo, dict) and "connected" in corpo:
+            return {"connected": bool(corpo["connected"]),
+                    "reason": corpo.get("reason") or None}
+        return {"connected": True, "reason": None}
 
     async def send_text(self, to: str, text: str) -> Dict[str, Any]:
         if not self.base_url:

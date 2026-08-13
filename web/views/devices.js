@@ -75,6 +75,7 @@ setStrings('en', {
   'devices.detail.recipes.title': 'What you can do with this device',
   'devices.detail.recipes.automatic': '{done} of {total} steps are one click',
   'devices.detail.recipes.manualOnly': 'Every step here is manual — nothing yet can be done for you.',
+  'devices.detail.step.blocked': 'not yet',
   'devices.detail.recipes.empty.title': 'No recipes for this device yet',
   'devices.detail.recipes.empty.text': 'project-os does not know a specific routine for this kind of device yet.',
   'devices.detail.recipes.error': 'Could not load recipes for this device.',
@@ -779,6 +780,20 @@ async function mountDetail(root, ctx, deviceId, {updateDevice, patchDevice, remo
           step.command ? h('code', {class: 'mono small'}, step.command) : null,
         ),
         h('span', {class: 'list__aside'}, h('span', {class: 'badge badge--plain'}, t('devices.detail.step.manual'))),
+      );
+    }
+
+    // Um passo que a caixa não consegue fazer mostra o motivo no lugar do
+    // botão: era um botão comum, e o motivo só aparecia depois do clique.
+    if (step.blocked_reason) {
+      return h('div', {class: 'list__row'},
+        icon('info', {size: 16}),
+        h('div', {class: 'list__main'},
+          h('span', {class: 'list__title'}, step.text),
+          h('span', {class: 'list__sub'}, step.blocked_reason),
+        ),
+        h('span', {class: 'list__aside'},
+          h('span', {class: 'badge badge--plain'}, t('devices.detail.step.blocked'))),
       );
     }
 

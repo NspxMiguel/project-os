@@ -135,8 +135,15 @@ def build_router(instance: "WhatsAppBotApp") -> APIRouter:
     router = APIRouter()
 
     @router.get("/status")
-    async def get_status(_: Any = Depends(auth.require_auth)) -> Dict[str, Any]:
-        return instance.status()
+    async def get_status(
+        probe: bool = True, _: Any = Depends(auth.require_auth)
+    ) -> Dict[str, Any]:
+        """O estado, e por padrão perguntando ao provedor se ele está mesmo lá.
+
+        Antes ``connected`` queria dizer "tem credencial escrita no config": a
+        tela dizia *Connected* numa caixa que nunca tinha falado com nada.
+        """
+        return await instance.status_async() if probe else instance.status()
 
     @router.get("/config")
     async def get_config(_: Any = Depends(auth.require_auth)) -> Dict[str, Any]:
@@ -247,19 +254,74 @@ class WhatsAppBotApp(AppInstance):
         # See the app-status convention at the top of web/views/dashboard.js: with
         # no summary/fields the card dumps every key, including the provider's own
         # "reason" sentence, which is a diagnostic and not a home-screen line.
-        connected = bool(base.get("connected"))
+        # `connected` tem três estados agora: sim, não, e None (ainda não
+        # perguntei / o provedor não sabe se checar). Um booleano só não dava
+        # para dizer "configurado, mas nunca falei com ele" -- que é o estado
+        # em que a tela mentia.
+        connected = base.get("connected")
+        configured = bool(base.get("configured", connected))
         if base["provider"] == "null":
-            base["summary"] = "No provider set up yet -- messages are only logged."
-        elif connected:
-            base["summary"] = "Connected through %s." % base["provider"]
+            base["summary"] = "Nenhum provedor configurado ainda — as mensagens só ficam no registro."
+        elif connected is True:
+            base["summary"] = "Conectado pelo %s." % base["provider"]
+        elif connected is False:
+            base["summary"] = str(base.get("reason") or "Sem conexão.")
+        elif configured:
+            base["summary"] = str(
+                base.get("reason")
+                or "Configurado, mas ainda não falei com o %s." % base["provider"]
+            )
         else:
-            base["summary"] = str(base.get("reason") or "Not connected.")
+            base["summary"] = str(base.get("reason") or "Sem conexão.")
         base["fields"] = [
-            {"label": "Provider", "value": base["provider"], "kind": "text"},
-            {"label": "Connected", "value": connected, "kind": "boolean"},
-            {"label": "Allowed contacts", "value": base["allowlist_size"], "kind": "number"},
-            {"label": "Commands", "value": base["commands"], "kind": "list"},
+            {"label": "Provedor", "value": base["provider"], "kind": "text"},
+            {"label": "Configurado", "value": configured, "kind": "boolean"},
+            {
+                "label": "Conectado",
+                "value": "sim" if connected is True else ("não" if connected is False else "não sei"),
+                "kind": "text",
+            },
+            {"label": "Contatos liberados", "value": base["allowlist_size"], "kind": "number"},
+            {"label": "Comandos", "value": base["commands"], "kind": "list"},
         ]
+        return base
+
+    async def status_async(self) -> Dict[str, Any]:
+        """O mesmo estado, depois de perguntar ao provedor se ele responde."""
+        base = self.status()
+        if self.provider is None:
+            return base
+        try:
+            resultado = await self.provider.probe()
+        except Exception as exc:  # noqa: BLE001 -- um provedor quebrado não derruba a tela
+            self.log.warning("probe do provedor falhou: %s", exc)
+            return base
+        if isinstance(resultado, dict):
+            base.update({k: v for k, v in resultado.items() if v is not None or k == "connected"})
+        # Recalcula o resumo com a resposta nova.
+        return self._resumir(base)
+
+    def _resumir(self, base: Dict[str, Any]) -> Dict[str, Any]:
+        connected = base.get("connected")
+        configured = bool(base.get("configured"))
+        if base.get("provider") == "null":
+            base["summary"] = "Nenhum provedor configurado ainda — as mensagens só ficam no registro."
+        elif connected is True:
+            base["summary"] = "Conectado pelo %s." % base.get("provider")
+        elif connected is False:
+            base["summary"] = str(base.get("reason") or "Sem conexão.")
+        elif configured:
+            base["summary"] = str(
+                base.get("reason")
+                or "Configurado, mas ainda não falei com o %s." % base.get("provider")
+            )
+        for campo in base.get("fields") or []:
+            if campo.get("label") == "Conectado":
+                campo["value"] = (
+                    "sim" if connected is True else ("não" if connected is False else "não sei")
+                )
+            elif campo.get("label") == "Configurado":
+                campo["value"] = configured
         return base
 
     async def _rebuild_provider(self) -> None:

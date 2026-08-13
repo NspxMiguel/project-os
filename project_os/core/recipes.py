@@ -120,7 +120,7 @@ def _clean_steps(recipe_id: str, steps: Sequence[Any]) -> List[Dict[str, Any]]:
         if kind == STEP_INSTALL and not step.get("app"):
             log.error("recipes: %r has an install step with no app", recipe_id)
             continue
-        if kind == STEP_CONFIG and not step.get("key"):
+        if kind == STEP_CONFIG and not (step.get("key") or step.get("values")):
             log.error("recipes: %r has a config step with no key", recipe_id)
             continue
         out.append(dict(step, kind=kind))
@@ -270,9 +270,27 @@ def render(
             rendered["app"] = app_id
             rendered["app_entry"] = _app_summary(app_id)
             rendered["done"] = app_id in already
+            # "4 de 5 passos são um botão" contava passos cujo botão só podia
+            # terminar em erro: 23 dos itens do catálogo são serviço sem
+            # instalador, e dois dos builtins ainda nem foram escritos. Um
+            # passo desses continua na lista -- ele diz o que falta -- mas
+            # deixa de se anunciar como automático.
+            motivo = _install_block(app_id)
+            if motivo and not rendered["done"]:
+                rendered["automatic"] = False
+                rendered["blocked_reason"] = motivo
         elif step["kind"] == STEP_CONFIG:
-            rendered["key"] = step["key"]
-            rendered["value"] = fill(str(step.get("value", "")), device)
+            valores = step.get("values")
+            if not valores:
+                valores = {step["key"]: step.get("value", "")}
+            rendered["values"] = dict(
+                (chave, fill(str(valor), device)) for chave, valor in valores.items()
+            )
+            # `key`/`value` continuam preenchidos: são o caso de uma chave só,
+            # que é a maioria, e o que a tela já lia.
+            primeira = list(rendered["values"].items())[0]
+            rendered["key"] = step.get("key") or primeira[0]
+            rendered["value"] = rendered["values"].get(rendered["key"], primeira[1])
         elif step["kind"] == STEP_OPEN:
             rendered["url"] = fill(step.get("url", "http://{address}"), device)
         elif step.get("command"):
@@ -282,6 +300,7 @@ def render(
         steps.append(rendered)
 
     automatic = sum(1 for step in steps if step["automatic"])
+    # Um passo já feito (o app instalado) conta como automático e não bloqueia.
     return {
         "id": recipe["id"],
         "title": fill(recipe["title"], device),
@@ -293,6 +312,22 @@ def render(
         "manual_only": automatic == 0,
         "device_id": device.get("id"),
     }
+
+
+def _install_block(app_id: str) -> Optional[str]:
+    """Por que instalar este app não é um botão -- ``None`` quando é.
+
+    A mesma resposta que a loja põe no cartão (``catalog.install_block``), para
+    a receita não oferecer um botão que a loja, ao lado, diz que não existe.
+    """
+    entry = None
+    for item in catalog.all_entries():
+        if item.get("id") == app_id:
+            entry = item
+            break
+    if entry is None:
+        return "%s não está no catálogo." % app_id
+    return catalog.install_block(entry)
 
 
 def _app_summary(app_id: str) -> Optional[Dict[str, Any]]:

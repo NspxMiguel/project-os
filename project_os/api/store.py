@@ -58,36 +58,18 @@ def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None,
               runtime: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     item = dict(entry)
     item["installed"] = entry["id"] in installed
-    if item["kind"] == "builtin":
-        # A few builtins in the catalog are planned, not written. Saying so on
-        # the card beats an Install button that answers "No app called 'kasa'".
-        item["installable"] = plugins is None or bool(plugins.has(entry["id"]))
-        if not item["installable"]:
-            item["install_reason"] = (
-                "%s ainda não foi feito — está na lista." % entry["name"]
-            )
-    if item["kind"] == "service":
-        # 23 dos 34 itens do catálogo são serviço, e nenhum instalador de
-        # serviço foi escrito: o botão Instalar deles terminava sempre em
-        # "installer_pending", depois do clique. Os que têm pacote no Debian
-        # instalam de verdade pelo mesmo apt da tela de Programas; o resto diz
-        # no cartão, antes do clique, que ainda não instala daqui.
-        item["installable"] = bool(entry.get("apt"))
-        if item["installable"]:
-            item["install_method"] = "apt"
-            item["install_package"] = entry["apt"]
-        else:
-            item["install_reason"] = (
-                "%s ainda não instala pela loja: falta o instalador de serviço. "
-                "Dá para instalar na mão pelo Terminal ou pela tela de Programas."
-                % entry["name"]
-            )
-    if item["kind"] == "recipe":
-        item["installable"] = False
-        item["install_reason"] = (
-            "%s é uma receita: os passos ficam em Aparelhos, não num botão de "
-            "instalar." % entry["name"]
-        )
+    # Por que instala ou não instala vive em catalog.install_block(), e não
+    # aqui, porque a receita faz a mesma pergunta do outro lado da tela: com
+    # duas cópias da regra dava para a loja dizer "ainda não instala daqui" e o
+    # passo da receita, ao lado, oferecer o botão do mesmo app.
+    disponivel = None if plugins is None else bool(plugins.has(entry["id"]))
+    motivo = catalog.install_block(entry, builtin_available=disponivel)
+    item["installable"] = motivo is None
+    if motivo is not None:
+        item["install_reason"] = motivo
+    if item["kind"] == "service" and item["installable"]:
+        item["install_method"] = "apt"
+        item["install_package"] = entry["apt"]
     if item["kind"] == "container":
         # Said up front, on the card, before the install button: a machine
         # with neither docker nor podman should not find that out mid-spinner.
@@ -95,17 +77,13 @@ def _decorate(entry: Dict[str, Any], installed: List[str], plugins: Any = None,
         # deixou de ser "o binário existe" e passou a ser "o motor responde",
         # cada pergunta é um "docker info". Um catálogo com trinta contêineres
         # faria trinta -- e cada um pode demorar até o timeout.
+        # Immich, Frigate e Paperless não são um contêiner: são pilhas (banco,
+        # fila, modelos), e o motivo disso está em catalog.install_block(). O
+        # que fica aqui é só o estado do motor, dito uma vez por página: desde
+        # que a resposta deixou de ser "o binário existe" e passou a ser "o
+        # motor responde", cada pergunta é um "docker info", e um catálogo com
+        # trinta contêineres faria trinta.
         item["container_runtime"] = runtime if runtime is not None else containers.runtime_status()
-        item["installable"] = bool(item.get("container"))
-        if not item["installable"]:
-            # Immich, Frigate e Paperless não são um contêiner: são pilhas
-            # (banco, fila, modelos). Um bloco `container:` de um só serviço
-            # aqui seria uma mentira diferente, não um conserto.
-            item["install_reason"] = (
-                "%s precisa de mais de um contêiner (banco de dados e afins), e "
-                "este instalador roda um só. Está listado para você saber que "
-                "existe e quanto custa." % entry["name"]
-            )
     return item
 
 
