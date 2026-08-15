@@ -66,6 +66,7 @@ setStrings('en', {
   'devices.detail.error.load': 'Could not load this device.',
   'devices.detail.info.title': 'Details',
   'devices.detail.info.address': 'Address',
+  'devices.detail.info.vendor': 'Maker',
   'devices.detail.info.kind': 'Kind',
   'devices.detail.info.firstSeen': 'First seen',
   'devices.detail.info.lastSeen': 'Last seen',
@@ -76,6 +77,9 @@ setStrings('en', {
   'devices.detail.recipes.automatic': '{done} of {total} steps are one click',
   'devices.detail.recipes.manualOnly': 'Every step here is manual — nothing yet can be done for you.',
   'devices.detail.step.blocked': 'not yet',
+  'devices.vendors.title': '{count} devices show no maker',
+  'devices.vendors.install': 'Install the IEEE database',
+  'devices.vendors.started': 'Installing ieee-data — it lands in Programs',
   'devices.detail.recipes.empty.title': 'No recipes for this device yet',
   'devices.detail.recipes.empty.text': 'project-os does not know a specific routine for this kind of device yet.',
   'devices.detail.recipes.error': 'Could not load recipes for this device.',
@@ -198,6 +202,18 @@ function deviceIcon(kind, size) {
 
 function deviceName(device) {
   return device.custom_name || device.name || device.id;
+}
+
+/** O fabricante do aparelho, quando a base OUI soube dizer.
+ *
+ *  No escopo do módulo de propósito: as duas telas leem isto -- a lista e a
+ *  ficha do aparelho --, e uma cópia dentro do closure da lista deixou a ficha
+ *  respondendo "vendorOf is not defined" em cima de um erro que nenhum teste
+ *  de sintaxe pega.
+ */
+function vendorOf(device) {
+  const props = (device && device.properties) || {};
+  return typeof props.vendor === 'string' ? props.vendor.trim() : '';
 }
 
 function statusBadges(device) {
@@ -328,17 +344,75 @@ async function mountList(root, ctx, {updateDevice, removeDevice}) {
 
   function renderNotice() {
     const s = state.summary;
+    const avisos = [];
     if (s && s.available === false) {
-      mount(noticeSlot, h('div', {class: 'notice notice--warn'},
+      avisos.push(h('div', {class: 'notice notice--warn'},
         icon('info', {size: 18}),
         h('div', {class: 'notice__body'},
           h('span', null, t('devices.unavailable.title') + (s.reason ? ' — ' + s.reason : '')),
           s.install_hint ? h('span', {class: 'small muted'}, s.install_hint) : null,
         ),
       ));
-    } else {
-      clear(noticeSlot);
     }
+    const fab = s && s.vendors;
+    if (fab && fab.available === false && fab.unnamed > 0) {
+      avisos.push(vendorNotice(fab));
+    }
+    if (avisos.length) mount(noticeSlot, avisos);
+    else clear(noticeSlot);
+  }
+
+  /** Por que o fabricante fica em branco -- e o botão que resolve.
+   *
+   *  A base OUI da IEEE não vem no sistema e não é nossa para inventar, então
+   *  um MAC sem ela vira uma linha chamada "10.0.0.117". O motivo já estava
+   *  escrito no backend (`lan.oui_available()`) e não chegava à tela: a coluna
+   *  aparecia vazia e calada, e quem quisesse resolver tinha que descobrir
+   *  sozinho que existe um pacote chamado ieee-data.
+   */
+  function vendorNotice(fab) {
+    // Numa máquina sem apt (ou com a instalação de programas desligada nos
+    // Ajustes) o botão só poderia falhar depois do clique: aí o que vale é a
+    // linha de comando, dita por escrito.
+    if (fab.can_install === false) {
+      return h('div', {class: 'notice notice--info'},
+        icon('info', {size: 18}),
+        h('div', {class: 'notice__body'},
+          h('span', null, t('devices.vendors.title', {count: fab.unnamed})),
+          h('span', {class: 'small muted'}, fab.reason || ''),
+          fab.install_reason ? h('span', {class: 'small muted'}, fab.install_reason) : null,
+          fab.install_hint ? h('code', {class: 'mono small'}, fab.install_hint) : null,
+        ),
+      );
+    }
+
+    let botao = null;
+    botao = h('button', {
+      class: 'btn btn--sm btn--outline',
+      type: 'button',
+      onClick: async () => {
+        botao.disabled = true;
+        try {
+          const job = await api.post('/packages/install', {
+            source: 'apt', package: fab.package || 'ieee-data',
+          });
+          toast(t('devices.vendors.started'), {type: 'success'});
+          if (job && job.job && job.job.id) navigate('#/packages');
+        } catch (err) {
+          toast((err && err.message) || t('devices.toast.error'), {type: 'error'});
+          botao.disabled = false;
+        }
+      },
+    }, icon('download', {size: 14}), t('devices.vendors.install'));
+
+    return h('div', {class: 'notice notice--info'},
+      icon('info', {size: 18}),
+      h('div', {class: 'notice__body'},
+        h('span', null, t('devices.vendors.title', {count: fab.unnamed})),
+        h('span', {class: 'small muted'}, fab.reason || ''),
+        h('div', {class: 'row'}, botao),
+      ),
+    );
   }
 
   function filteredDevices() {
@@ -437,7 +511,10 @@ async function mountList(root, ctx, {updateDevice, removeDevice}) {
           ? renameField(device)
           : h('a', {class: 'list__title', href: '#/devices/' + encodeURIComponent(device.id)}, deviceName(device)),
         h('span', {class: 'list__sub'},
-          [groupKinds(group).join(' · '), device.address || '',
+          // O fabricante entra aqui quando existe: numa lista de "10.0.0.117"
+          // é a única coisa que diferencia uma coisa da outra. Ele só existe
+          // com a base OUI instalada -- ver vendorNotice() acima.
+          [groupKinds(group).join(' · '), vendorOf(device), device.address || '',
            device.last_seen ? fmt.relativeTime(device.last_seen) : '']
             .filter(Boolean).join(' · ')),
       ),
@@ -699,6 +776,8 @@ async function mountDetail(root, ctx, deviceId, {updateDevice, patchDevice, remo
           h('span', {class: 'kv__value'}, fmt.humanize(device.kind || '')),
           h('span', {class: 'kv__key'}, t('devices.detail.info.address')),
           h('span', {class: 'kv__value mono'}, device.address ? device.address + (device.port ? ':' + device.port : '') : '—'),
+          vendorOf(device) ? h('span', {class: 'kv__key'}, t('devices.detail.info.vendor')) : null,
+          vendorOf(device) ? h('span', {class: 'kv__value'}, vendorOf(device)) : null,
           h('span', {class: 'kv__key'}, t('devices.detail.info.firstSeen')),
           h('span', {class: 'kv__value'}, device.first_seen ? fmt.relativeTime(device.first_seen) : '—'),
           h('span', {class: 'kv__key'}, t('devices.detail.info.lastSeen')),

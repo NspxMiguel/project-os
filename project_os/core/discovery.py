@@ -2046,10 +2046,43 @@ class DeviceRegistry(object):
             "ignored": sum(1 for d in devices if d.ignored),
             "pinned": sum(1 for d in devices if d.pinned),
             "by_kind": by_kind,
+            # Fabricante em branco tem motivo, e o motivo tem conserto: a base
+            # OUI da IEEE não vem no sistema e não é nossa para inventar. Isto
+            # estava escrito em lan.oui_available() desde o começo e não
+            # chegava a lugar nenhum -- a tela mostrava a coluna vazia e calada.
+            "vendors": self._estado_dos_fabricantes(devices),
         }
 
     #: The dashboard called this ``summary`` before ``status`` existed.
     summary = status
+
+    def _estado_dos_fabricantes(self, devices) -> Dict[str, Any]:
+        from project_os.core import lan
+
+        estado = dict(lan.oui_available())
+        sem_nome = 0
+        for device in devices:
+            props = device.properties or {}
+            if props.get("mac") and not props.get("vendor"):
+                sem_nome += 1
+        estado["unnamed"] = sem_nome
+        estado["package"] = "ieee-data"
+        # Antes do clique, como em todo o resto: numa máquina sem apt o botão
+        # de instalar só poderia falhar depois -- e o conselho certo ali é o
+        # texto, não um botão.
+        estado["can_install"] = False
+        estado["install_reason"] = ""
+        try:
+            from project_os.core import packages
+
+            for backend in packages.backends():
+                if backend.get("id") != "apt":
+                    continue
+                estado["can_install"] = bool(backend.get("can_install"))
+                estado["install_reason"] = backend.get("reason") or ""
+        except Exception:  # noqa: BLE001 -- a lista de aparelhos não cai por isto
+            log.debug("não consegui perguntar ao instalador de pacotes", exc_info=True)
+        return estado
 
     # -- mutations -------------------------------------------------------
     def update_flags(

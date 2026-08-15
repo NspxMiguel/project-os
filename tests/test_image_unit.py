@@ -41,6 +41,33 @@ def directives(text):
     return out
 
 
+PACOTES = os.path.join(
+    os.path.dirname(IMAGE_FILES), "00-packages"
+)
+
+
+def _pacotes_da_imagem():
+    with open(PACOTES, "r", encoding="utf-8") as handle:
+        return [linha.strip() for linha in handle if linha.strip()]
+
+
+@pytest.mark.parametrize(
+    "pacote,porque",
+    [
+        ("ffmpeg", "converter faixa para MP3 é um botão do BirdTunes"),
+        ("ieee-data", "sem ele todo aparelho de rede fica sem fabricante"),
+        ("avahi-daemon", "a descoberta por mDNS é metade da tela de Aparelhos"),
+    ],
+)
+def test_a_imagem_traz_o_que_as_telas_precisam(pacote, porque):
+    """Recurso que a tela oferece e o cartão SD não traz é promessa quebrada.
+
+    O ``ieee-data`` entrou por causa disto: numa rede de casa, 42 aparelhos
+    apareceram sem fabricante nenhum, e a base que resolve não vinha na imagem.
+    """
+    assert pacote in _pacotes_da_imagem(), "%s falta na imagem: %s" % (pacote, porque)
+
+
 def test_no_new_privileges_is_not_set(unit):
     """It blocks setuid, which means it blocks sudo, which means it blocks apt.
 

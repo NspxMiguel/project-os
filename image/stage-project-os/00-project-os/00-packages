@@ -9,3 +9,4 @@ avahi-utils
 ffmpeg
 libffi-dev
 libssl-dev
+ieee-data

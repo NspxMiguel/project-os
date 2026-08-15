@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import pathlib
+import re
 import shutil
 import subprocess
 
@@ -54,6 +55,45 @@ def test_module_parses(path: pathlib.Path) -> None:
     )
     assert result.returncode == 0, "%s: %s" % (
         path.relative_to(ROOT), result.stderr.decode("utf-8", "replace").strip()
+    )
+
+
+ESPECIFICADOR = re.compile(
+    r"""(?:import\s+[^'"]*?from\s*|import\s*\(\s*)['"]([^'"]+)['"]""",
+    re.S,
+)
+
+
+def _alvo(origem: pathlib.Path, spec: str):
+    """O arquivo que um import aponta, ou None quando não é um caminho nosso."""
+    if spec.startswith("./") or spec.startswith("../"):
+        return (origem.parent / spec).resolve()
+    if spec.startswith("/"):
+        # O shell serve web/ na raiz, e é assim que os painéis de app chegam em
+        # /lib/format.js: o caminho é absoluto na URL, não no disco.
+        return (ROOT / "web" / spec.lstrip("/")).resolve()
+    return None  # http(s), data:, bare specifier -- não é arquivo deste repo
+
+
+@pytest.mark.parametrize("path", _modules(), ids=lambda p: str(p.relative_to(ROOT)))
+def test_todo_import_aponta_para_um_arquivo_que_existe(path: pathlib.Path) -> None:
+    """Parsear não basta: um caminho errado só aparece na tela em branco.
+
+    O ``test_module_parses`` acima ignora imports de propósito (ele roda o
+    módulo sozinho, sem servidor). Só que o erro clássico aqui não é sintaxe, é
+    caminho -- inclusive nos ``import()`` dinâmicos, que nem o navegador
+    reclama até alguém abrir aquela tela.
+    """
+    fonte = path.read_text(encoding="utf-8")
+    faltando = []
+    for spec in ESPECIFICADOR.findall(fonte):
+        if "${" in spec or spec.startswith("data:"):
+            continue  # montado em tempo de execução
+        alvo = _alvo(path, spec)
+        if alvo is not None and not alvo.is_file():
+            faltando.append(spec)
+    assert not faltando, "%s importa o que não existe: %s" % (
+        path.relative_to(ROOT), ", ".join(faltando),
     )
 
 
