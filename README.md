@@ -66,11 +66,18 @@ logs, a real terminal, fan curves, CPU governor, temperature.
 out in the house.
 
 It is honest about what that is: a queue of whole tasks handed to another
-machine, not process migration. Nothing here pretends to be magic.
+machine, not process migration. Today the queue carries four job types -- ping,
+facts, transcode and download for a PC; read and relay for an ESP32 -- and the
+result of a download or a conversion stays on the machine that did it: there is
+no transport back, and the screen says so before you queue it. Nothing here
+pretends to be magic.
 
-**Hosts things.** Media servers, game servers, bots, whatever the store carries
-and whatever you add to it. On a small Pi some of that will be slow. That is
-your call to make, not the software's.
+**Hosts things.** The store lists 34 items and installs 9 of them today: two
+built-in apps, two container apps, and five Debian packages, through the same
+apt job the Programs screen uses. The other 25 are listed with what they cost
+and a line saying why they do not install yet -- on the card, before the click,
+not after it. On a small Pi some of that will be slow. That is your call to
+make, not the software's.
 
 **Updates itself, and survives a bad one.** The card carries two systems, A and
 B. An update writes the *other* one and reboots into it; the one that was

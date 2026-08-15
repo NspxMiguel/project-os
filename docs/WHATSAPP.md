@@ -26,7 +26,14 @@ não o pessoal.
 ## 2. Por isso o app é um encaixe de encaixe: provedores
 
 `project_os/apps/whatsapp-bot/providers/` define uma interface pequena (`connect`,
-`disconnect`, `status`, `send_text`, mais três ganchos de webhook) e três implementações:
+`disconnect`, `status`, `probe`, `send_text`, mais três ganchos de webhook) e três
+implementações:
+
+`status` responde o que está **configurado**; `probe` é quem sai na rede e pergunta ao outro
+lado se ele está mesmo lá. A separação existe porque o painel dizia *Connected* com base em
+"tem uma URL escrita no campo": digitar um endereço acendia a bolinha verde. Hoje
+`connected` tem três estados — sim, não e `None` (ainda não perguntei) — e a tela abre no
+estado barato, confere sozinha depois e mostra o motivo quando dá errado.
 
 - **`null`** — não fala com nada, só registra a mensagem. É o padrão. O app instala,
   inicia e é testável sem nenhuma credencial.

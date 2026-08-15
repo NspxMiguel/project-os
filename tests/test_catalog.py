@@ -29,6 +29,34 @@ def icon_names():
     return set(re.findall(r"^  '?([a-zA-Z0-9_-]+)'?:", body, re.M))
 
 
+def test_o_readme_conta_a_loja_certa():
+    """O número que o README promete tem que ser o número que a loja cumpre.
+
+    "whatever the store carries" virou uma conta explícita porque a loja lista
+    34 itens e instala 9: o resto diz no cartão por que não instala. Um README
+    que promete 34 é a mesma fachada, só que na porta de entrada.
+    """
+    import os
+    import re
+
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "README.md"), encoding="utf-8") as arquivo:
+        readme = arquivo.read()
+
+    achado = re.search(r"store lists (\d+) items and installs (\d+)", readme)
+    assert achado, "o README não conta mais a loja -- se mudou de texto, mude este teste junto"
+    prometidos, instalaveis = int(achado.group(1)), int(achado.group(2))
+
+    entradas = catalog.all_entries()
+    de_verdade = [e for e in entradas if catalog.install_block(e) is None]
+    assert prometidos == len(entradas), "README diz %d itens, a loja tem %d" % (
+        prometidos, len(entradas),
+    )
+    assert instalaveis == len(de_verdade), "README diz que instala %d, instalam %d" % (
+        instalaveis, len(de_verdade),
+    )
+
+
 def test_the_catalog_file_loads() -> None:
     entries = catalog.all_entries()
     assert entries, "the catalog file produced no entries at all"
