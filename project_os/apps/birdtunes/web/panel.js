@@ -71,6 +71,7 @@ export default {
       'bt.import.start': 'Add',
       'bt.import.found': 'Found: %s (%d items)',
       'bt.import.no_ytdlp': 'yt-dlp is not installed. YouTube import is unavailable.',
+      'bt.import.no_ytdlp.cast': 'Playing on the TV still works — it needs no download.',
       'bt.import.jobs.empty': 'No imports yet.',
       'bt.import.cast': 'Play on the TV (no download)',
       'bt.import.cast.hint': 'Plays through the television’s own YouTube app, so YouTube shows its own ads. To listen without ads, use Add instead: the audio is kept here and BirdTunes plays it.',
@@ -486,13 +487,23 @@ export default {
     function importCard() {
       let urlRef = null;
       const jobs = state.importJobs || [];
+      // Sem yt-dlp não há *download*: Prever e Adicionar ficam desligados e a
+      // razão aparece no cartão. A frase existia no dicionário desde sempre e
+      // nunca era mostrada -- quem colava o link descobria pelo erro 503,
+      // depois de clicar. O campo e o "tocar na TV" continuam de pé: mandar o
+      // vídeo para a televisão só precisa do id, que sai do próprio link.
+      const podeImportar = !state.compat || state.compat.ytdlp_available !== false;
       return h('div', {class: 'card'},
         h('div', {class: 'card__header'}, h('h3', {class: 'card__title'}, t2('bt.section.import'))),
         h('div', {class: 'card__body stack'},
+          podeImportar
+            ? null
+            : h('div', {class: 'notice notice--warning'},
+                t2('bt.import.no_ytdlp'), ' ', t2('bt.import.no_ytdlp.cast')),
           h('div', {class: 'input-group'},
             h('input', {type: 'text', placeholder: t2('bt.import.url'), 'data-import-url': '1',
               ref: (el) => { urlRef = el; }}),
-            h('button', {class: 'btn btn--outline', onClick: async () => {
+            h('button', {class: 'btn btn--outline', disabled: !podeImportar, onClick: async () => {
               const url = urlRef && urlRef.value ? urlRef.value.trim() : '';
               if (!url) return;
               try {
@@ -503,7 +514,7 @@ export default {
               }
               render();
             }}, t2('bt.import.preview')),
-            h('button', {class: 'btn btn--primary', onClick: () => {
+            h('button', {class: 'btn btn--primary', disabled: !podeImportar, onClick: () => {
               const url = urlRef && urlRef.value ? urlRef.value.trim() : '';
               if (!url) return;
               addFromYouTube(url);

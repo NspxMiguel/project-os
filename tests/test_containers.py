@@ -35,6 +35,23 @@ def _live_containers():
     return sys.modules.get("project_os.core.containers", containers)
 
 
+@pytest.fixture(autouse=True)
+def _sem_resposta_guardada():
+    """Esquece o estado do motor -- nas duas cópias do módulo.
+
+    ``runtime_status`` guarda a resposta por alguns segundos (a Loja fazia um
+    ``docker info`` por página). O ``home`` de conftest.py troca o módulo por
+    uma cópia nova no meio da suíte, e a fixture de lá só limpa a cópia viva:
+    a resposta velha continuava valendo *nesta*, e o motor de mentira deste
+    arquivo nem chegava a ser chamado.
+    """
+    for modulo in {containers, _live_containers()}:
+        modulo.forget_runtime_status()
+    yield
+    for modulo in {containers, _live_containers()}:
+        modulo.forget_runtime_status()
+
+
 # --------------------------------------------------------------------------- fakes
 
 
@@ -486,8 +503,10 @@ def test_a_loja_pergunta_ao_motor_uma_vez_por_pagina(auth_client, monkeypatch) -
 
     chamadas = []
 
-    def contar():
-        chamadas.append(1)
+    def contar(force=False, timeout=None):
+        # A tela pede um timeout curto: esperar o timeout cheio do install só
+        # para desenhar o cartão foi medido em dez segundos de página parada.
+        chamadas.append(timeout)
         return {"available": True, "engine": "docker", "reason": None}
 
     monkeypatch.setattr(api_store.containers, "runtime_status", contar)
@@ -500,3 +519,4 @@ def test_a_loja_pergunta_ao_motor_uma_vez_por_pagina(auth_client, monkeypatch) -
     assert len(chamadas) == 1, "perguntou %d vezes para %d contêineres" % (
         len(chamadas), len(conteineres),
     )
+    assert chamadas[0] == containers.PING_TIMEOUT_TELA

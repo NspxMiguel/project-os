@@ -41,6 +41,11 @@ setStrings('en', {
   'shell.viewCrashed': 'This screen crashed while rendering',
   'shell.appFailed': '{name} failed to start',
   'shell.appError': 'The app reported an error.',
+  'appsettings.title': 'App settings',
+  'appsettings.lead': 'From the app manifest — editable even while the app is down.',
+  'appsettings.save': 'Save and restart',
+  'appsettings.saved': 'Settings saved',
+  'appsettings.savedRestarted': 'Saved — the app was restarted',
 }, {activate: false});
 
 setStrings('pt-BR', PT_BR);
@@ -729,10 +734,22 @@ async function showAppPanel(routeCtx) {
 
   if (app && app.state === 'error') {
     const detail = app.error || dig(app, 'traceback', '');
-    mount(contentEl, h('div', {class: 'stack'},
+    // O painel do app é servido pelo próprio app: um app que não subiu não tem
+    // painel nenhum, e a tela terminava no traceback. Como o que precisa mudar
+    // costuma ser justamente a configuração dele, os ajustes vêm do manifesto,
+    // pelo shell, e gravar reinicia -- que é a tentativa seguinte.
+    const pilha = h('div', {class: 'stack'},
       errorCard(t('shell.appFailed', {name}), new Error(app.message || t('shell.appError')), () => router.reload()),
       detail ? h('pre', {class: 'code'}, String(detail)) : null,
-    ));
+    );
+    mount(contentEl, pilha);
+    try {
+      const {appSettingsCard} = await import('./lib/app-settings.js');
+      const cartao = await appSettingsCard(appId, {onSaved: () => router.reload()});
+      if (cartao && token === bootToken) pilha.appendChild(cartao);
+    } catch (err) {
+      console.error('[shell] app settings card failed', appId, err);
+    }
     return;
   }
 
@@ -749,12 +766,22 @@ async function showAppPanel(routeCtx) {
   } catch (err) {
     if (token !== bootToken) return;
     console.error('[shell] app panel failed to load', appId, err);
-    mount(contentEl, h('div', {class: 'stack'},
+    const pilha = h('div', {class: 'stack'},
       errorCard('The ' + name + ' panel could not be loaded', err, () => router.reload()),
       h('p', {class: 'small faint'},
         'The app is still running — only its browser panel failed. Check ',
         h('a', {href: '#/logs'}, 'the logs'), ' for details.'),
-    ));
+    );
+    mount(contentEl, pilha);
+    // Mesmo motivo do ramo de cima: sem painel, os ajustes do app vêm pelo
+    // shell, senão a tela não oferece nada além de um erro.
+    try {
+      const {appSettingsCard} = await import('./lib/app-settings.js');
+      const cartao = await appSettingsCard(appId, {onSaved: () => router.reload()});
+      if (cartao && token === bootToken) pilha.appendChild(cartao);
+    } catch (erroDoCartao) {
+      console.error('[shell] app settings card failed', appId, erroDoCartao);
+    }
     return;
   }
   if (token !== bootToken) return;

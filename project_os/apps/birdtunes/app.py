@@ -900,6 +900,9 @@ class BirdTunesApp(AppInstance):
             "incompatible": len(incompatible),
             "incompatible_tracks": [t["id"] for t in incompatible],
             "ffmpeg_available": sources.ffmpeg_available(),
+            # Dito antes do clique: sem yt-dlp o botão de importar só pode
+            # responder 503, e respondia -- depois de a pessoa colar o link.
+            "ytdlp_available": sources.available(),
         }
 
     # -- conversão ------------------------------------------------------

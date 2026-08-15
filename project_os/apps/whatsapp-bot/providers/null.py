@@ -31,12 +31,12 @@ class NullProvider(Provider):
         }
 
     async def send_text(self, to: str, text: str) -> Dict[str, Any]:
-        self.log.info("[null provider] would send to %s: %s", to, text)
+        self.log.info("[provedor nulo] mandaria para %s: %s", to, text)
         return {
             "ok": True,
             "provider": self.name,
             "delivered": False,
-            "note": "no provider configured; the message was only logged",
+            "note": "sem provedor configurado: a mensagem só foi para o registro",
         }
 
 

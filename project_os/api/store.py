@@ -98,7 +98,7 @@ async def browse(
     installed = _installed_ids(plugins)
     entradas = catalog.entries(board)
     # Só pergunta ao motor de contêiner se a página tem algum contêiner.
-    runtime = (containers.runtime_status()
+    runtime = (containers.runtime_status(timeout=containers.PING_TIMEOUT_TELA)
                if any(e.get("kind") == "container" for e in entradas) else None)
     items = [_decorate(entry, installed, plugins, runtime) for entry in entradas]
 

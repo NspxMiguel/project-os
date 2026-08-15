@@ -72,6 +72,16 @@ setStrings('en', {
   'helpers.codes.copied': 'Command copied',
   'helpers.jobs.submit': 'Submit test job',
   'helpers.act.read': 'Read now',
+  'helpers.act.download': 'Download here',
+  'helpers.act.download.prompt': 'Address of the file for {name} to fetch',
+  'helpers.act.download.confirm': 'Download',
+  'helpers.act.transcode': 'Convert a file',
+  'helpers.act.transcode.input': 'File on {name} to convert',
+  'helpers.act.transcode.output': 'Where to write the converted file',
+  'helpers.act.transcode.confirm': 'Convert',
+  'helpers.act.transcode.next': 'Next',
+  'helpers.act.transcode.detail': 'The path is on {name}, not on the Pi — a shared folder is the usual way.',
+  'helpers.act.staysThere': 'The file stays on {name}: project-os queues the job, it does not copy the result back.',
   'helpers.act.relayOn': 'Relay on',
   'helpers.act.relayOff': 'off',
   'helpers.act.queued': 'Sent to {name}. It runs on the next beat.',
@@ -258,8 +268,56 @@ export default {
           onClick: () => enviarTarefa(helper, 'relay', {on: false}, ['actuator']),
         }, t('helpers.act.relayOff')));
       }
+      // Um PC anuncia "baixar arquivos grandes" e "converter vídeo e áudio", e
+      // a tela mostrava esses rótulos sem nenhuma forma de pedir nem uma coisa
+      // nem outra: a única tarefa que dava para enfileirar era o ping. O
+      // arquivo fica na máquina do ajudante -- não há transporte de volta --,
+      // e a tela diz isso antes, no lugar de descobrir depois.
+      if (capacidades.indexOf('download') >= 0) {
+        botoes.push(h('button', {
+          class: 'btn btn--sm btn--ghost', type: 'button', disabled: !helper.online,
+          onClick: () => pedirDownload(helper),
+        }, icon('download', {size: 14}), t('helpers.act.download')));
+      }
+      if (capacidades.indexOf('transcode') >= 0) {
+        botoes.push(h('button', {
+          class: 'btn btn--sm btn--ghost', type: 'button', disabled: !helper.online,
+          onClick: () => pedirConversao(helper),
+        }, icon('film', {size: 14}), t('helpers.act.transcode')));
+      }
       if (!botoes.length) return null;
       return h('div', {class: 'row', style: {gap: 'var(--space-1)'}}, botoes);
+    }
+
+    async function pedirDownload(helper) {
+      const url = await promptText(t('helpers.act.download.prompt', {name: helper.name}), {
+        title: t('helpers.act.download'),
+        confirmLabel: t('helpers.act.download.confirm'),
+        placeholder: 'https://…',
+        detail: t('helpers.act.staysThere', {name: helper.name}),
+      });
+      if (!url || !url.trim()) return;
+      await enviarTarefa(helper, 'download', {url: url.trim()}, ['download']);
+    }
+
+    async function pedirConversao(helper) {
+      const entrada = await promptText(t('helpers.act.transcode.input', {name: helper.name}), {
+        title: t('helpers.act.transcode'),
+        confirmLabel: t('helpers.act.transcode.next'),
+        placeholder: '/mnt/midia/video.mkv',
+        detail: t('helpers.act.transcode.detail', {name: helper.name}),
+      });
+      if (!entrada || !entrada.trim()) return;
+      const saida = await promptText(t('helpers.act.transcode.output'), {
+        title: t('helpers.act.transcode'),
+        confirmLabel: t('helpers.act.transcode.confirm'),
+        placeholder: '/mnt/midia/video.mp4',
+        detail: t('helpers.act.staysThere', {name: helper.name}),
+      });
+      if (!saida || !saida.trim()) return;
+      await enviarTarefa(
+        helper, 'transcode', {input: entrada.trim(), output: saida.trim()}, ['transcode'],
+      );
     }
 
     async function enviarTarefa(helper, kind, payload, needs) {

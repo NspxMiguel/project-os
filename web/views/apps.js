@@ -52,7 +52,7 @@ setStrings('en', {
   'apps.state.starting': 'starting',
   'apps.state.error': 'error',
   'apps.state.disabled': 'disabled',
-  'apps.error.detail': 'This app failed to start. Check its logs from its own panel.',
+  'apps.error.detail': 'This app failed to start. Open it to see the error and edit its settings.',
   'detected.title': 'Also on this machine',
   'detected.lead': 'Software project-os found already installed, outside of its own apps — apt, Flatpak, Snap, systemd services and containers.',
   'detected.refresh': 'Check again',

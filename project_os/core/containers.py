@@ -26,6 +26,7 @@ import logging
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -74,8 +75,26 @@ def detect_runtime() -> Optional[str]:
 #: like a page. ``docker info`` on a Pi with nothing running answers instantly.
 PING_TIMEOUT = 8.0
 
+#: Por quanto tempo a resposta de :func:`runtime_status` vale sem perguntar de
+#: novo. Sem isto, abrir a Loja custava um ``docker info`` inteiro -- e com o
+#: daemon subindo (ou morto) isso é o timeout acima, com a tela parada até lá:
+#: medido em 10s numa máquina com o Docker ligando. O "não" vale menos tempo
+#: que o "sim" porque é o estado que a pessoa está tentando mudar: quem acabou
+#: de ligar o Docker não pode esperar meio minuto para a Loja perceber.
+STATUS_TTL_OK = 30.0
+STATUS_TTL_ERRO = 5.0
 
-def runtime_reachable(engine: str) -> Dict[str, Any]:
+#: O timeout de quando a pergunta é só para desenhar a tela. Esperar oito
+#: segundos por um cartão que diz "dá para instalar" é pior do que dizer
+#: "o docker não respondeu" e deixar o botão de instalar checar de novo, sem
+#: pressa, na hora que alguém clicar.
+PING_TIMEOUT_TELA = 3.0
+
+_status_cache = None  # type: Optional[Dict[str, Any]]
+_status_quando = 0.0
+
+
+def runtime_reachable(engine: str, timeout: Optional[float] = None) -> Dict[str, Any]:
     """Whether this engine will actually take orders, and why not.
 
     ``shutil.which`` only answers "the binary exists". On the image the service
@@ -85,7 +104,10 @@ def runtime_reachable(engine: str) -> Dict[str, Any]:
     let the refusal arrive mid-spinner, in docker's own words.
     """
     try:
-        resultado = _run([engine, "info", "--format", "{{.ServerVersion}}"], timeout=PING_TIMEOUT)
+        resultado = _run(
+            [engine, "info", "--format", "{{.ServerVersion}}"],
+            timeout=PING_TIMEOUT if timeout is None else timeout,
+        )
     except ContainerError as exc:
         return {"ok": False, "reason": str(exc), "hint": ""}
     if resultado.returncode == 0:
@@ -106,8 +128,35 @@ def runtime_reachable(engine: str) -> Dict[str, Any]:
     }
 
 
-def runtime_status() -> Dict[str, Any]:
-    """What the store shows before anyone clicks install."""
+def runtime_status(force: bool = False, timeout: Optional[float] = None) -> Dict[str, Any]:
+    """What the store shows before anyone clicks install.
+
+    A resposta fica guardada por alguns segundos (:data:`STATUS_TTL_OK` /
+    :data:`STATUS_TTL_ERRO`): a Loja pergunta uma vez por página, e cada
+    pergunta é um processo a mais. ``force=True`` ignora o guardado -- é o que
+    o botão "verificar de novo" precisa.
+    """
+    global _status_cache, _status_quando
+
+    agora = time.monotonic()
+    if not force and _status_cache is not None:
+        idade = agora - _status_quando
+        ttl = STATUS_TTL_OK if _status_cache.get("available") else STATUS_TTL_ERRO
+        if idade < ttl:
+            return dict(_status_cache)
+    resposta = _runtime_status_agora(timeout=timeout)
+    _status_cache = dict(resposta)
+    _status_quando = agora
+    return resposta
+
+
+def forget_runtime_status() -> None:
+    """Esquece o que foi guardado -- depois de instalar ou parar um motor."""
+    global _status_cache
+    _status_cache = None
+
+
+def _runtime_status_agora(timeout: Optional[float] = None) -> Dict[str, Any]:
     engine = detect_runtime()
     if engine is None:
         return {
@@ -115,7 +164,7 @@ def runtime_status() -> Dict[str, Any]:
             "engine": None,
             "reason": "No container runtime is installed (looked for %s)." % " or ".join(RUNTIMES),
         }
-    alcance = runtime_reachable(engine)
+    alcance = runtime_reachable(engine, timeout=timeout)
     if alcance["ok"]:
         return {"available": True, "engine": engine, "reason": None}
     return {
@@ -382,6 +431,7 @@ __all__ = [
     "pull",
     "remove",
     "require_runtime",
+    "forget_runtime_status",
     "runtime_status",
     "status_detail",
     "stop",

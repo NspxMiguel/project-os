@@ -65,16 +65,41 @@ export default {
       cfg: config.all() || {},
       messages: [],
       busy: false,
+      probing: false,
     };
 
     const view = h('div', {class: 'stack'});
     root.appendChild(view);
 
+    /** O estado barato: o que está configurado, sem sair na rede.
+     *
+     *  Perguntar ao provedor custa uma conexão com timeout -- abrir o painel
+     *  com uma ponte fora do ar ficava parado esperando, e o poll de 15s
+     *  repetia isso para sempre. Então a tela abre com "ainda não conferido" e
+     *  a checagem vem depois, por conta própria (ver `conferir`).
+     */
     async function refreshStatus() {
+      try {
+        state.status = await appApi.get('/status', {query: {probe: 'false'}});
+      } catch (err) {
+        state.status = {provider: 'null', connected: false, reason: String(err)};
+      }
+    }
+
+    /** A checagem de verdade: bate no provedor e diz sim, não, ou por quê. */
+    async function conferir() {
+      if (state.probing) return;
+      state.probing = true;
+      render();
       try {
         state.status = await appApi.get('/status');
       } catch (err) {
-        state.status = {provider: 'null', connected: false, reason: String(err)};
+        state.status = Object.assign({}, state.status, {
+          connected: false, reason: String((err && err.message) || err),
+        });
+      } finally {
+        state.probing = false;
+        render();
       }
     }
 
@@ -94,6 +119,7 @@ export default {
         state.cfg = await config.save(patch);
         toast(t2('wa.save.ok'), {type: 'success'});
         await refreshStatus();
+        conferir();
       } catch (err) {
         toast(t2('wa.save.failed') + ': ' + (err.message || err), {type: 'error'});
       } finally {
@@ -135,18 +161,7 @@ export default {
             h('button', {
               class: 'btn btn--ghost btn--sm',
               disabled: Boolean(state.probing),
-              onClick: async () => {
-                state.probing = true;
-                render();
-                try {
-                  state.status = await appApi.get('/status');
-                } catch (err) {
-                  state.status = {provider: provider, connected: false, reason: String(err.message || err)};
-                } finally {
-                  state.probing = false;
-                  render();
-                }
-              },
+              onClick: conferir,
             }, t2('wa.status.recheck')),
           ),
         ),
@@ -354,6 +369,10 @@ export default {
     await refreshStatus();
     await refreshMessages();
     render();
+    // A primeira checagem sai sozinha, depois da tela já estar de pé: quem
+    // abre o painel quer saber se está conectado, mas não à custa de esperar
+    // um timeout olhando para o nada.
+    conferir();
 
     let cancelled = false;
     const poll = setInterval(async () => {

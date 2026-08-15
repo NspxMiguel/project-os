@@ -24,6 +24,21 @@ if str(REPO_ROOT) not in sys.path:
 # --------------------------------------------------------------------------- home / config
 
 
+@pytest.fixture(autouse=True)
+def _sem_cache_de_motor():
+    """O estado do docker é guardado por alguns segundos em produção.
+
+    Isso é o certo para a Loja (era um ``docker info`` por página) e o errado
+    para os testes, onde o motor de mentira muda de resposta entre um teste e
+    outro. Cada teste começa sem nada guardado.
+    """
+    from project_os.core import containers
+
+    containers.forget_runtime_status()
+    yield
+    containers.forget_runtime_status()
+
+
 @pytest.fixture()
 def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """An isolated PROJECT_OS_HOME for one test."""

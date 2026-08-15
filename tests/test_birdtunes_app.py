@@ -605,6 +605,40 @@ def test_compat_route_reports_zero_tracks_on_a_fresh_install(auth_client):
     assert body["compatible"] == 0
 
 
+def test_compat_diz_se_da_pra_importar_do_youtube(auth_client, monkeypatch):
+    """Sem yt-dlp, o botão de importar só podia responder 503 -- depois do clique.
+
+    A tela desliga Prever e Adicionar a partir daqui, e mantém o "tocar na TV",
+    que não baixa nada e portanto não precisa do yt-dlp.
+    """
+    import importlib
+
+    fontes = importlib.import_module("project_os.apps.birdtunes.sources")
+
+    monkeypatch.setattr(fontes, "available", lambda: False)
+    corpo = auth_client.get("/api/apps/birdtunes/compat").json()
+    assert corpo["ytdlp_available"] is False
+
+    monkeypatch.setattr(fontes, "available", lambda: True)
+    assert auth_client.get("/api/apps/birdtunes/compat").json()["ytdlp_available"] is True
+
+
+def test_a_tela_desliga_o_importar_e_deixa_o_tocar_na_tv():
+    import io as _io
+    import os as _os
+
+    caminho = _os.path.join(
+        _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+        "project_os", "apps", "birdtunes", "web", "panel.js",
+    )
+    fonte = _io.open(caminho, encoding="utf-8").read()
+    assert "ytdlp_available !== false" in fonte
+    inicio = fonte.index("function importCard()")
+    trecho = fonte[inicio:fonte.index("function ", inicio + 10)]
+    assert trecho.count("disabled: !podeImportar") == 2, "prever e adicionar, e só eles"
+    assert "bt.import.no_ytdlp" in trecho
+
+
 def test_convert_route_returns_409_without_ffmpeg(auth_client, monkeypatch):
     from project_os.apps.birdtunes import sources
 
