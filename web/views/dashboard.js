@@ -852,7 +852,11 @@ export default {
 };
 
 function greeting(ctx) {
-  const name = ctx.user && ctx.user.username ? ctx.user.username : '';
+  // Sem login não há nome: o backend responde com o usuário sintético
+  // "anonymous", e cumprimentar alguém por esse nome é a tela lendo em voz
+  // alta um detalhe de implementação.
+  const anon = Boolean(ctx.user && ctx.user.anonymous);
+  const name = !anon && ctx.user && ctx.user.username ? ctx.user.username : '';
   const hour = new Date().getHours();
   const part = hour < 5 ? t('dash.greeting.night')
     : hour < 12 ? t('dash.greeting.morning')

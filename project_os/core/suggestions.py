@@ -80,6 +80,27 @@ class Context(object):
     def with_capability(self, capability: str) -> List[Dict[str, Any]]:
         return [d for d in self.devices if capability in (d.get("capabilities") or [])]
 
+    def speakers(self) -> List[Dict[str, Any]]:
+        """Tudo que o BirdTunes conseguiria tocar -- AirPlay ou Chromecast.
+
+        As duas regras que dependiam disto pediam ``"airplay"`` e ``"cast"``, e
+        a descoberta nunca produziu nenhum desses dois nomes: os de verdade são
+        ``airplay_audio`` e ``cast_media``. Com isso, "achei caixas na rede e o
+        BirdTunes não tem onde tocar" -- o cartão que faz o app existir -- não
+        podia aparecer nunca, nem numa casa com nove caixas.
+        """
+        from project_os.core import discovery
+
+        achados = []  # type: List[Dict[str, Any]]
+        vistos = set()
+        for capacidade in (discovery.AIRPLAY_AUDIO, discovery.CAST_MEDIA):
+            for device in self.with_capability(capacidade):
+                if device["id"] in vistos:
+                    continue
+                vistos.add(device["id"])
+                achados.append(device)
+        return achados
+
     def from_source(self, source: str) -> List[Dict[str, Any]]:
         return [d for d in self.devices if (d.get("properties") or {}).get("vendor") == source]
 
@@ -126,7 +147,7 @@ class Context(object):
 # ---------------------------------------------------------------------------
 def rule_birdtunes_output(ctx: Context) -> List[Dict[str, Any]]:
     """Speakers exist but BirdTunes has nowhere to play."""
-    targets = ctx.with_capability("airplay") + ctx.with_capability("cast")
+    targets = ctx.speakers()
     if not targets:
         return []
     configured = ctx.setting("apps.settings.birdtunes.output.device_id")
@@ -172,7 +193,7 @@ def rule_extra_speakers(ctx: Context) -> List[Dict[str, Any]]:
     chosen = ctx.setting("apps.settings.birdtunes.output.device_id")
     if not chosen:
         return []
-    targets = ctx.with_capability("airplay") + ctx.with_capability("cast")
+    targets = ctx.speakers()
     others = [d for d in targets if d["id"] != chosen]
     if len(others) < 1:
         return []
