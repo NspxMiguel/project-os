@@ -102,6 +102,12 @@ setStrings('en', {
   'settings.updates.version': 'Version',
   'settings.updates.about': 'project-os ships empty and grows from the Store — this box has no apps until you add them there.',
   'settings.updates.docs': 'API documentation',
+  'settings.updates.check': 'Check for updates',
+  'settings.updates.checking': 'Checking…',
+  'settings.updates.uptodate': 'This is the newest version.',
+  'settings.updates.found': 'Version {version} is available.',
+  'settings.updates.install': 'Install {version}',
+  'settings.updates.open': 'Updates screen',
   // developer
   'settings.developer.warning': 'These are for people comfortable with what they turn on. Nothing here is required to use project-os.',
   'settings.developer.terminal': 'Dock a terminal in the corner',
@@ -242,6 +248,9 @@ export default {
       haUrl: '',
       haToken: '',         // só sobe; nunca desce do servidor
       haEntities: null,    // null = ainda não pedi
+      updateCheck: null,   // resposta de POST /api/updates/check
+      updateChecking: false,
+      updateError: '',
     };
 
     async function load() {
@@ -578,16 +587,68 @@ export default {
       );
     }
 
+    async function procurarAtualizacao() {
+      state.updateChecking = true;
+      state.updateError = '';
+      render();
+      try {
+        state.updateCheck = await api.post('/updates/check', {});
+      } catch (err) {
+        state.updateCheck = null;
+        state.updateError = err instanceof ApiError ? err.message : String(err);
+      } finally {
+        state.updateChecking = false;
+        if (!disposed) render();
+      }
+    }
+
+    // A aba que se chama "Atualizações e sobre" mostrava a versão e mais nada: o
+    // procurar/instalar mora numa tela que só existe no menu do modo Avançado.
+    // No modo padrão, então, a caixa não tinha por onde ser atualizada -- e ficar
+    // parado numa versão antiga não é uma escolha que alguém fez.
+    //
+    // Procurar acontece aqui, que é onde a pessoa foi olhar. Instalar leva para a
+    // tela de Atualizações, que é quem sabe seguir o registro do trabalho,
+    // esperar o reinício e voltar versão -- duplicar isso aqui seria manter duas
+    // cópias de uma coisa que reinicia o serviço no meio.
     function updatesSection() {
       const version = (ctx.health && ctx.health.version) || dig(ctx.store.get('health'), 'version', '') || '—';
+      const achado = state.updateCheck;
+      const temNova = !!(achado && achado.update_available);
       return h('div', {class: 'stack stack--lg'},
         card({
-          title: t('settings.section.updates'), iconName: 'info',
+          title: t('settings.section.updates'), iconName: 'download',
           body: h('div', {class: 'stack stack--sm'},
             h('div', {class: 'kv'},
               h('div', {class: 'kv__key'}, t('settings.updates.version')),
               h('div', {class: 'kv__value mono'}, version)),
+            state.updateError
+              ? h('p', {class: 'field-row__error'}, state.updateError)
+              : null,
+            achado && !temNova
+              ? h('p', null, t('settings.updates.uptodate'))
+              : null,
+            temNova
+              ? h('div', {class: 'stack stack--sm'},
+                  h('p', null, t('settings.updates.found', {version: achado.latest})),
+                  achado.notes ? h('p', {class: 'muted small'}, achado.notes) : null)
+              : null,
             h('p', {class: 'muted small'}, t('settings.updates.about')),
+          ),
+          footer: h('div', {class: 'row'},
+            h('button', {
+              class: 'btn btn--outline btn--sm', type: 'button',
+              disabled: state.updateChecking,
+              onClick: () => procurarAtualizacao(),
+            }, icon('refresh', {size: 14}),
+               t(state.updateChecking ? 'settings.updates.checking' : 'settings.updates.check')),
+            h('a', {
+              class: temNova ? 'btn btn--primary btn--sm' : 'btn btn--outline btn--sm',
+              href: '#/updates',
+            }, icon('download', {size: 14}),
+               temNova
+                 ? t('settings.updates.install', {version: achado.latest})
+                 : t('settings.updates.open')),
             h('a', {class: 'btn btn--outline btn--sm', href: '/api/docs', target: '_blank', rel: 'noopener'},
               icon('link', {size: 14}), t('settings.developer.docsLink')),
           ),
