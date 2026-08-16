@@ -4,10 +4,10 @@
   "sha256": "7ce95faed7d031253c3d5b7475848ca6279aee284f5d34f3e0fe3a44541eb04b",
   "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.20",
   "system": {
-    "version": "0.4.14",
-    "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.14/project-os-rootfs-0.4.14.tar.gz",
-    "sha256": "1c152046092a9cd83c2ccf0bbe63bc8f7708c8e38468510f15010bc447c54482",
-    "size": 885098729,
-    "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.14"
+    "version": "0.4.15",
+    "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.15/project-os-rootfs-0.4.15.tar.gz",
+    "sha256": "429bfbc65c91c4483f7802a19b0380f47d7c36784653eac41d7e56983f8b577e",
+    "size": 885054064,
+    "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.15"
   }
 }
