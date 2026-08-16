@@ -270,6 +270,8 @@ export const PT_BR = {
   'devices.detail.recipes.error': 'Não deu para carregar as receitas deste aparelho.',
   'devices.detail.step.manual': 'Manual',
   'devices.detail.step.blocked': 'ainda não',
+  'devices.vendor.private': 'Endereço privado',
+  'devices.vendors.private': '{count} usam endereço privado, que base de dados nenhuma sabe nomear',
   'devices.vendors.title': '{count} aparelhos sem fabricante',
   'devices.vendors.install': 'Instalar a base da IEEE',
   'devices.vendors.started': 'Instalando o ieee-data — acompanha em Programas',

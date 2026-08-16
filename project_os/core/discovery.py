@@ -689,6 +689,15 @@ class Device(object):
         return capability in self.capabilities
 
     def to_dict(self) -> Dict[str, Any]:
+        from project_os.core import lan
+
+        props = dict(self.properties or {})
+        # Derivado do próprio MAC, então nunca fica desatualizado nem depende de
+        # base de dados nenhuma. A tela usa isto para dizer "endereço privado"
+        # em vez de deixar a coluna do fabricante muda.
+        mac = str(props.get("mac") or "")
+        if mac and not props.get("vendor"):
+            props["private_mac"] = lan.mac_privado(mac)
         return {
             "id": self.id,
             "kind": self.kind,
@@ -697,7 +706,7 @@ class Device(object):
             "display_name": self.display_name,
             "address": self.address,
             "port": int(self.port or 0),
-            "properties": dict(self.properties or {}),
+            "properties": props,
             "capabilities": list(self.capabilities or []),
             "first_seen": self.first_seen,
             "last_seen": self.last_seen,
@@ -2123,11 +2132,21 @@ class DeviceRegistry(object):
 
         estado = dict(lan.oui_available())
         sem_nome = 0
+        privados = 0
         for device in devices:
             props = device.properties or {}
-            if props.get("mac") and not props.get("vendor"):
-                sem_nome += 1
+            if not props.get("mac") or props.get("vendor"):
+                continue
+            # Um MAC sorteado pelo próprio aparelho não pertence a fabricante
+            # nenhum: instalar a base da IEEE não muda uma linha para ele.
+            # Contá-lo aqui era prometer um conserto que não acontece -- na rede
+            # dele, seis dos treze sem nome são exatamente isto.
+            if lan.mac_privado(props["mac"]):
+                privados += 1
+                continue
+            sem_nome += 1
         estado["unnamed"] = sem_nome
+        estado["private_macs"] = privados
         estado["package"] = "ieee-data"
         # Antes do clique, como em todo o resto: numa máquina sem apt o botão
         # de instalar só poderia falhar depois -- e o conselho certo ali é o

@@ -77,6 +77,8 @@ setStrings('en', {
   'devices.detail.recipes.automatic': '{done} of {total} steps are one click',
   'devices.detail.recipes.manualOnly': 'Every step here is manual — nothing yet can be done for you.',
   'devices.detail.step.blocked': 'not yet',
+  'devices.vendor.private': 'Private address',
+  'devices.vendors.private': '{count} use a private address, which no database can name',
   'devices.vendors.title': '{count} devices show no maker',
   'devices.vendors.install': 'Install the IEEE database',
   'devices.vendors.started': 'Installing ieee-data — it lands in Programs',
@@ -213,7 +215,12 @@ function deviceName(device) {
  */
 function vendorOf(device) {
   const props = (device && device.properties) || {};
-  return typeof props.vendor === 'string' ? props.vendor.trim() : '';
+  const nome = typeof props.vendor === 'string' ? props.vendor.trim() : '';
+  if (nome) return nome;
+  // Um MAC sorteado pelo próprio aparelho não pertence a fabricante nenhum, e
+  // nenhuma base de dados vai dizer o contrário. Dizer isso é informação; a
+  // coluna vazia deixava o dono achando que faltava instalar alguma coisa.
+  return props.private_mac ? t('devices.vendor.private') : '';
 }
 
 function statusBadges(device) {
@@ -357,6 +364,17 @@ async function mountList(root, ctx, {updateDevice, removeDevice}) {
     const fab = s && s.vendors;
     if (fab && fab.available === false && fab.unnamed > 0) {
       avisos.push(vendorNotice(fab));
+    }
+    // Instalar a base da IEEE não nomeia um endereço privado, então oferecer o
+    // botão por causa deles seria prometer o que não acontece. Quando *só*
+    // existem privados, o que cabe é explicar -- sem botão nenhum.
+    if (fab && fab.unnamed === 0 && fab.private_macs > 0) {
+      avisos.push(h('div', {class: 'notice notice--info'},
+        icon('info', {size: 18}),
+        h('div', {class: 'notice__body'},
+          h('span', null, t('devices.vendors.private', {count: fab.private_macs})),
+        ),
+      ));
     }
     if (avisos.length) mount(noticeSlot, avisos);
     else clear(noticeSlot);

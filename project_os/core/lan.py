@@ -442,6 +442,28 @@ def oui_available() -> Dict[str, Any]:
     }
 
 
+def mac_privado(mac: str) -> bool:
+    """Se este MAC é sorteado pelo aparelho em vez de vir de fábrica.
+
+    O segundo bit menos significativo do primeiro byte é o "locally
+    administered": ligado, o endereço não pertence a fabricante nenhum. É o que
+    todo celular e todo notebook moderno faz por padrão para não ser seguido de
+    rede em rede -- e a consequência aqui é direta: **nenhuma base de dados vai
+    dizer o fabricante desse aparelho, nem a da IEEE**.
+
+    Sem isto, seis dos treze aparelhos sem nome da casa dele apareciam com o
+    convite de instalar a base OUI, que para eles não muda nada.
+    """
+    digitos = re.sub(r"[^0-9a-f]", "", (mac or "").lower())
+    if len(digitos) < 2:
+        return False
+    try:
+        primeiro = int(digitos[:2], 16)
+    except ValueError:  # pragma: no cover - filtrado pelo regex acima
+        return False
+    return bool(primeiro & 0b10)
+
+
 def vendor_of(mac: str) -> Optional[str]:
     prefix = re.sub(r"[^0-9a-f]", "", (mac or "").lower())[:6]
     if len(prefix) < 6:
