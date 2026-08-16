@@ -1,21 +1,45 @@
-// panel.js -- control panel for the birdtunes app.
+// panel.js -- a tela do BirdTunes.
 //
-// Plain ES module, no build step, no framework: `h()` from project-os's own
-// dom.js, reuses web/style.css classes only. Talks to the routes defined in
-// ../app.py's build_router(): status/play/pause/stop, playlists CRUD,
-// /import/youtube + /import/preview, /schedule, /compat.
+// Módulo ES puro, sem build: `h()` do dom.js do project-os, os tokens do tema
+// do sistema e o panel.css ao lado deste arquivo. Fala com as rotas de
+// ../app.py (build_router): status/play/pause/next, /library com busca e
+// ordenação, playlists CRUD, /queue, /import/*, /schedule, /outputs, /stats.
 //
-// Sections, per docs/BIRDTUNES.md section 8: Playlists, Import from YouTube
-// (with an ffmpeg-missing warning), Schedule editor, Compatibility banner.
+// A organização é a de um app de streaming, e é uma reforma: a tela anterior
+// empilhava sete cartões abertos ao mesmo tempo -- tocar, compatibilidade,
+// acervo, playlists, importar, agenda e saída -- numa coluna só. Tudo pesava
+// igual, nada tinha dono, e achar uma faixa era rolar a página inteira.
+//
+// Agora:
+//   * navegação em cima (Início, Músicas, Playlists, Adicionar, Agenda);
+//   * uma seção por vez, com título e ferramentas próprias;
+//   * a barra do que está tocando fica fixa embaixo, em todas as seções;
+//   * a saída de som mora na barra, atrás do nome do aparelho, que é onde se
+//     procura por ela -- e não numa oitava caixa no fim da página;
+//   * playlist tem tela própria: abre, mostra as faixas, reordena, remove.
+//
+// A busca e a ordenação são as do servidor (`/library?search=&sort=`), que já
+// existiam e a tela antiga nunca usou: filtrar no navegador uma lista que o
+// SQLite já sabe filtrar é trabalho repetido e não sobrevive a uma biblioteca
+// grande.
 
 export default {
   async mount(root, ctx) {
-    const {h, t, appApi, config, toast} = ctx;
+    const {h, t, appApi, config, toast, confirm} = ctx;
     const fmtMod = await import('/lib/format.js');
+    const dialogs = await import('/lib/toast.js');
+
     fmtMod.setStrings('en', {
       'bt.title': 'BirdTunes',
+      'bt.tagline': 'Your music, on the speakers in the house',
+      'bt.nav.home': 'Home',
+      'bt.nav.library': 'Songs',
+      'bt.nav.playlists': 'Playlists',
+      'bt.nav.add': 'Add',
+      'bt.nav.schedule': 'Schedule',
       'bt.now_playing': 'Now playing',
       'bt.nothing_playing': 'Nothing playing',
+      'bt.nothing_playing.hint': 'Press play to start the whole library, or open a playlist.',
       'bt.play': 'Play',
       'bt.pause': 'Pause',
       'bt.resume': 'Resume',
@@ -23,6 +47,9 @@ export default {
       'bt.next': 'Next',
       'bt.quiet_hours': 'Quiet hours -- BirdTunes will not play right now.',
       'bt.next_change': 'Next',
+      'bt.queue': 'Up next',
+      'bt.queue.empty': 'Nothing queued.',
+      'bt.queue.more': 'and %d more',
       'bt.section.output': 'Where it plays',
       'bt.output.backend': 'Connection',
       'bt.output.device': 'Speaker',
@@ -33,33 +60,54 @@ export default {
       'bt.output.pin.send': 'Confirm PIN',
       'bt.output.paired': 'Paired.',
       'bt.output.volume': 'Volume',
-      'bt.section.library': 'Library',
-      'bt.library.empty': 'No tracks yet. Import from YouTube below, or drop files in the media folder and scan.',
-      'bt.library.scan': 'Scan for files',
+      'bt.output.silent': 'No speaker',
+      'bt.section.library': 'Songs',
+      'bt.library.empty': 'No tracks yet. Add from YouTube, or drop files in the media folder and scan.',
+      'bt.library.empty.search': 'Nothing matches "%s".',
+      'bt.library.scan': 'Scan folder',
       'bt.library.scanned': 'Scan done: %d added, %d already known.',
+      'bt.library.search': 'Search by title, artist or album',
+      'bt.library.sort': 'Sort',
+      'bt.library.sort.title': 'Title',
+      'bt.library.sort.artist': 'Artist',
+      'bt.library.sort.added': 'Recently added',
+      'bt.library.sort.duration': 'Longest',
+      'bt.library.count': '%d songs',
       'bt.library.like': 'Like',
       'bt.library.less': 'Recommend less',
       'bt.library.block': 'Never play',
       'bt.library.unblock': 'Allow again',
       'bt.library.play': 'Play this',
+      'bt.library.remove': 'Remove from library',
+      'bt.library.remove.confirm': 'Remove "%s" from the library? The file on disk is not deleted.',
+      'bt.library.removed': 'Removed from the library.',
       'bt.library.liked': 'Liked',
-      'bt.library.lessened': 'It will come up less often.',
-      'bt.library.blocked': 'Blocked',
+      'bt.library.lessened': 'less often',
+      'bt.library.blocked': 'blocked',
       'bt.library.missing': 'file missing',
       'bt.section.compat': 'Compatibility',
-      'bt.compat.ok': 'Todas as faixas funcionam na saída atual.',
       'bt.compat.warn': '%d of %d tracks cannot be played on this output.',
       'bt.compat.convert': 'Convert to MP3',
       'bt.compat.no_ffmpeg': 'Install ffmpeg to convert incompatible tracks.',
       'bt.section.playlists': 'Playlists',
-      'bt.playlists.empty': 'No playlists yet.',
-      'bt.playlists.new': 'New playlist',
+      'bt.playlists.empty': 'No playlists yet. Create one and add songs to it.',
       'bt.playlists.name': 'Playlist name',
-      'bt.playlists.create': 'Create',
-      'bt.playlists.play': 'Play now',
-      'bt.playlists.delete': 'Delete',
-      'bt.playlists.tracks': 'tracks',
-      'bt.playlists.track': 'track',
+      'bt.playlists.create': 'New playlist',
+      'bt.playlists.created': 'Playlist "%s" created.',
+      'bt.playlists.play': 'Play',
+      'bt.playlists.delete': 'Delete playlist',
+      'bt.playlists.delete.confirm': 'Delete the playlist "%s"? The songs stay in the library.',
+      'bt.playlists.rename': 'Rename',
+      'bt.playlists.tracks': '%d songs',
+      'bt.playlists.track': '1 song',
+      'bt.playlists.empty.detail': 'This playlist is empty. Add songs from Songs, or paste a YouTube link.',
+      'bt.playlists.back': 'All playlists',
+      'bt.playlists.remove': 'Remove from playlist',
+      'bt.playlists.up': 'Move up',
+      'bt.playlists.down': 'Move down',
+      'bt.playlists.add': 'Add to playlist',
+      'bt.playlists.added': 'Added to %s.',
+      'bt.playlists.add.youtube': 'Add from YouTube',
       'bt.state.idle': 'idle',
       'bt.state.playing': 'playing',
       'bt.state.paused': 'paused',
@@ -72,6 +120,7 @@ export default {
       'bt.import.found': 'Found: %s (%d items)',
       'bt.import.no_ytdlp': 'yt-dlp is not installed. YouTube import is unavailable.',
       'bt.import.no_ytdlp.cast': 'Playing on the TV still works — it needs no download.',
+      'bt.import.jobs': 'Recent imports',
       'bt.import.jobs.empty': 'No imports yet.',
       'bt.import.cast': 'Play on the TV (no download)',
       'bt.import.cast.hint': 'Plays through the television’s own YouTube app, so YouTube shows its own ads. To listen without ads, use Add instead: the audio is kept here and BirdTunes plays it.',
@@ -79,16 +128,17 @@ export default {
       'bt.import.dest.library': 'Library only',
       'bt.import.dest.new': 'New playlist from this link',
       'bt.import.queued': 'Downloading. It lands in the library when it finishes.',
-      'bt.library.add.url': 'YouTube link',
-      'bt.library.add': 'Add',
-      'bt.playlists.add.youtube': 'Add from YouTube',
       'bt.import.cast.ok': 'Playing on %s.',
-      'bt.playlists.add': 'Add to playlist',
-      'bt.playlists.added': 'Added to %s.',
+      'bt.stats.tracks': 'Songs',
+      'bt.stats.playlists': 'Playlists',
+      'bt.stats.plays': 'Plays',
+      'bt.stats.likes': 'Likes',
       'bt.section.schedule': 'Schedule',
+      'bt.schedule.lead': 'What plays while nobody is watching.',
       'bt.schedule.enabled': 'Schedule enabled',
-      'bt.schedule.quiet_start': 'Quiet hours start',
-      'bt.schedule.quiet_end': 'Quiet hours end',
+      'bt.schedule.quiet': 'Quiet hours',
+      'bt.schedule.quiet_start': 'From',
+      'bt.schedule.quiet_end': 'To',
       'bt.schedule.windows.empty': 'No windows yet -- add one or use a preset below.',
       'bt.schedule.windows': 'When it plays',
       'bt.schedule.presets': 'Start from a preset',
@@ -103,40 +153,73 @@ export default {
       'bt.schedule.window.off': 'Off',
       'bt.schedule.days.short': 'Mon Tue Wed Thu Fri Sat Sun',
       'bt.schedule.quiet.hint': 'BirdTunes never plays between these two times, whatever the windows say.',
-      'bt.schedule.save': 'Save schedule',
       'bt.save.ok': 'Saved',
       'bt.save.failed': 'Could not save',
       'bt.action.failed': 'Action failed',
     }, {activate: false});
-    const t2 = (key, ...args) => {
-      const value = fmtMod.t(key, args.length ? {n: args[0], total: args[1]} : undefined);
+
+    const t2 = (key) => {
+      const value = fmtMod.t(key);
       return value === key ? t(key) : value;
     };
+    // %d/%s à moda antiga: as frases já vinham assim do dicionário e trocar o
+    // formato quebraria as traduções que existem.
     const fmtStr = (key, ...args) => {
-      const raw = fmtMod.strings ? key : key; // strings resolved via t(); fall back to manual sprintf
-      let text = fmtMod.t(key);
-      if (text === key) text = key;
+      let text = t2(key);
       args.forEach((a) => { text = text.replace(/%d|%s/, String(a)); });
       return text;
     };
 
+    const icon = ctx.icon;
+    const clock = (seconds) => fmtMod.duration(Number(seconds) || 0);
+
     const state = {
-      importDest: '',   // '' = library only, 'new' = fresh playlist, else a playlist id
+      view: 'home',          // home | library | playlists | add | schedule
+      playlistId: '',        // aberta dentro de "playlists"
+      search: '',
+      sort: 'title',
       status: null,
+      queue: [],
+      library: [],
       playlists: [],
+      playlist: null,        // a aberta, com as faixas
       compat: null,
       schedule: null,
       presets: [],
       importJobs: [],
+      importDest: '',
       preview: null,
+      stats: null,
+      outputs: null,
+      outputOpen: false,
+      pairing: null,
       busy: false,
-      outputs: null,     // {backends, devices}
-      library: [],
-      pairing: null,     // {device_id, needs_pin, message} while pairing runs
     };
 
-    const view = h('div', {class: 'stack'});
-    root.appendChild(view);
+    // ---------------------------------------------------------------- layout
+
+    const nav = h('div', {class: 'bt-nav'});
+    const main = h('div', {class: 'bt-main'});
+    const playerBar = h('div', {class: 'bt-player'});
+    const sheet = h('div', {class: 'bt-sheet', hidden: true});
+    const shell = h('div', {class: 'bt'},
+      h('div', {class: 'bt-top'},
+        h('div', {class: 'bt-brand'},
+          h('div', {class: 'bt-brand__mark'}, icon('music', {size: 20})),
+          h('div', null,
+            h('div', {class: 'bt-brand__name'}, t2('bt.title')),
+            h('div', {class: 'bt-brand__sub'}, t2('bt.tagline')),
+          ),
+        ),
+        nav,
+      ),
+      main,
+      sheet,
+      playerBar,
+    );
+    root.appendChild(shell);
+
+    // ------------------------------------------------------------------ dados
 
     async function safeGet(path, query) {
       try {
@@ -146,202 +229,492 @@ export default {
       }
     }
 
-    async function refreshAll() {
-      const [status, playlistsRes, compat, schedule, presetsRes, importsRes, outputs, libraryRes] =
-        await Promise.all([
-          safeGet('/status'),
-          safeGet('/playlists'),
-          safeGet('/compat'),
-          safeGet('/schedule'),
-          safeGet('/schedule/presets'),
-          safeGet('/import'),
-          safeGet('/outputs'),
-          safeGet('/library'),
-        ]);
-      // The chosen speaker lives in the app's config, not in /status: it is set
-      // even when nothing is connected yet.
-      try { await config.reload(); } catch (err) { /* panel still renders */ }
-      state.outputs = outputs;
-      state.library = (libraryRes && libraryRes.tracks) || [];
+    async function loadCommon() {
+      const [status, playlists, outputs, queue] = await Promise.all([
+        safeGet('/status'), safeGet('/playlists'), safeGet('/outputs'), safeGet('/queue'),
+      ]);
+      try { await config.reload(); } catch (err) { /* a tela ainda desenha */ }
       state.status = status;
-      state.playlists = (playlistsRes && playlistsRes.playlists) || [];
+      state.playlists = (playlists && playlists.playlists) || [];
+      state.outputs = outputs;
+      state.queue = (queue && queue.queue) || [];
+    }
+
+    async function loadLibrary() {
+      const data = await safeGet('/library', {search: state.search, sort: state.sort});
+      state.library = (data && data.tracks) || [];
+      const compat = await safeGet('/compat');
       state.compat = compat;
+    }
+
+    async function loadPlaylist(id) {
+      const data = await safeGet('/playlists/' + encodeURIComponent(id));
+      state.playlist = (data && data.playlist) || null;
+    }
+
+    async function loadImports() {
+      const [jobs, compat] = await Promise.all([safeGet('/import'), safeGet('/compat')]);
+      state.importJobs = (jobs && jobs.jobs) || [];
+      state.compat = compat;
+    }
+
+    async function loadSchedule() {
+      const [schedule, presets] = await Promise.all([safeGet('/schedule'), safeGet('/schedule/presets')]);
       state.schedule = schedule;
-      state.presets = (presetsRes && presetsRes.presets) || [];
-      state.importJobs = (importsRes && importsRes.jobs) || [];
+      state.presets = (presets && presets.presets) || [];
+    }
+
+    async function loadHome() {
+      state.stats = await safeGet('/stats');
+    }
+
+    async function loadForView() {
+      if (state.view === 'library') await loadLibrary();
+      else if (state.view === 'playlists') {
+        if (state.playlistId) await loadPlaylist(state.playlistId);
+      } else if (state.view === 'add') await loadImports();
+      else if (state.view === 'schedule') await loadSchedule();
+      else await loadHome();
     }
 
     async function act(fn) {
       state.busy = true;
-      render();
+      renderPlayer();
       try {
         await fn();
       } catch (err) {
         toast(t2('bt.action.failed') + ': ' + (err.message || err), {type: 'error'});
       } finally {
         state.busy = false;
-        await refreshAll();
+        await loadCommon();
+        await loadForView();
         render();
       }
     }
 
-    // 300 is not a duration a person reads; 5:00 is.
-    function clock(seconds) {
-      const total = Math.round(Number(seconds) || 0);
-      const mins = Math.floor(total / 60);
-      const secs = total % 60;
-      return mins + ':' + (secs < 10 ? '0' : '') + secs;
+    // ------------------------------------------------------------------ peças
+
+    // A cor sai do nome, não de uma tabela de capas que não existe: dois nomes
+    // diferentes dão dois ladrilhos diferentes e o mesmo nome dá sempre o mesmo.
+    function hue(text) {
+      let total = 0;
+      String(text || '?').split('').forEach((ch) => { total = (total * 31 + ch.charCodeAt(0)) % 360; });
+      return total;
     }
 
-    function transportCard() {
+    function art(track, size) {
+      const label = String((track && (track.title || track.name)) || '?').trim().charAt(0).toUpperCase() || '?';
+      const node = h('div', {
+        class: 'bt-art bt-art--' + (size || 'sm'),
+        style: 'background: linear-gradient(150deg, hsl(' + hue(track && (track.title || track.name)) +
+          ' 32% 30%), hsl(' + ((hue(track && (track.title || track.name)) + 40) % 360) + ' 28% 20%))',
+      }, label);
+      // Miniatura de verdade quando o import trouxe uma; nunca uma capa
+      // genérica fingindo ser a do disco.
+      if (track && track.thumbnail) {
+        node.replaceChildren(h('img', {src: track.thumbnail, alt: '', loading: 'lazy'}));
+      }
+      return node;
+    }
+
+    function iconBtn(name, title, onClick, options) {
+      const opts = options || {};
+      return h('button', {
+        class: 'btn btn--icon btn--sm', type: 'button', title, 'aria-label': title,
+        disabled: Boolean(opts.disabled), dataset: opts.on ? {on: 'true'} : undefined,
+        onClick,
+      }, icon(name, {size: 16}));
+    }
+
+    // O conjunto de ícones tem uma seta só, apontando para a direita. Girar é
+    // trabalho do CSS -- desenhar mais três iguais não seria.
+    function chevBtn(direction, title, onClick, options) {
+      const opts = options || {};
+      return h('button', {
+        class: 'btn btn--icon btn--sm', type: 'button', title, 'aria-label': title,
+        disabled: Boolean(opts.disabled), onClick,
+      }, icon('chevron', {size: 16, class: 'bt-rot-' + (direction === 'up' ? '270' : '90')}));
+    }
+
+    function sectionHead(title, sub, tools) {
+      return h('div', {class: 'bt-section__head'},
+        h('h3', {class: 'bt-section__title'}, title),
+        sub ? (sub.nodeType ? sub : h('span', {class: 'bt-section__sub'}, sub)) : null,
+        tools ? h('div', {class: 'bt-section__tools'}, tools) : null,
+      );
+    }
+
+    function empty(text) {
+      return h('div', {class: 'empty empty--sm'}, h('p', {class: 'empty__text'}, text));
+    }
+
+    function playlistMenu(track) {
+      const usable = (state.playlists || []).filter((pl) => !pl.virtual);
+      if (!usable.length) return null;
+      return h('select', {
+        class: 'input input--sm select--compact', title: t2('bt.playlists.add'),
+        onChange: (event) => {
+          const target = event.target.value;
+          event.target.selectedIndex = 0;
+          if (!target) return;
+          const playlist = usable.filter((pl) => pl.id === target)[0];
+          act(async () => {
+            await appApi.post('/playlists/' + target + '/tracks', {track_ids: [track.id]});
+            toast(fmtStr('bt.playlists.added', (playlist && playlist.name) || ''), {type: 'success'});
+          });
+        },
+      }, [h('option', {value: ''}, '+')].concat(
+        usable.map((pl) => h('option', {value: pl.id}, pl.name))));
+    }
+
+    // Uma linha de faixa, igual em todo lugar: acervo, fila e playlist. O que
+    // muda é só o que vem na direita.
+    function trackRow(track, options) {
+      const opts = options || {};
+      const fb = track.feedback || {};
       const status = state.status || {};
-      const track = status.track;
-      const quiet = Boolean(status.quiet_hours_active);
-      const nextChange = status.next_change || {};
-      return h('div', {class: 'card'},
-        h('div', {class: 'card__header'},
-          h('h3', {class: 'card__title'}, t2('bt.title')),
-          h('div', {class: 'card__tools'},
-            // Idle is not a failure: a red dot next to "idle" reads as "this app
-            // is broken". Only a real error earns the danger colour.
-            h('span', {class: 'conn', dataset: {state:
-              status.state === 'playing' ? 'open'
-                : status.state === 'connecting' ? 'connecting'
-                : status.error ? 'closed' : 'neutral'}},
-              h('span', {class: 'conn__dot'}),
-              t2('bt.state.' + (status.state || 'idle'))),
-          ),
+      const current = status.track_id && status.track_id === track.id;
+      const marks = [
+        track.album || '',
+        fb.likes ? '♥ ' + fb.likes : '',
+        fb.less ? t2('bt.library.lessened') : '',
+        fb.blocked ? t2('bt.library.blocked') : '',
+        track.missing ? t2('bt.library.missing') : '',
+      ].filter(Boolean);
+      return h('div', {class: 'bt-track', dataset: {current: current ? 'true' : 'false'}},
+        opts.index !== undefined
+          ? h('span', {class: 'bt-track__index'}, String(opts.index))
+          : art(track, 'sm'),
+        h('div', {class: 'bt-track__body'},
+          h('div', {class: 'bt-track__title'}, track.title || track.path || track.id),
+          h('div', {class: 'bt-track__sub'},
+            [track.artist || ''].concat(marks).filter(Boolean).join(' · ')),
         ),
-        h('div', {class: 'card__body stack'},
-          quiet ? h('div', {class: 'notice notice--warning'}, t2('bt.quiet_hours')) : null,
-          h('div', {class: 'list__row'},
-            h('div', {class: 'list__main'},
-              h('div', {class: 'list__title'}, track ? track.title || track.path : t2('bt.nothing_playing')),
-              track ? h('div', {class: 'list__sub'}, track.artist || '') : null,
+        track.duration ? h('span', {class: 'bt-track__time'}, clock(track.duration)) : null,
+        h('div', {class: 'bt-track__actions'}, (opts.actions || defaultActions)(track, fb)),
+      );
+    }
+
+    function defaultActions(track, fb) {
+      return [
+        iconBtn('play', t2('bt.library.play'),
+          () => act(() => appApi.post('/play', {track_id: track.id})), {disabled: track.missing}),
+        iconBtn('heart', t2('bt.library.like'),
+          () => act(() => appApi.post('/tracks/' + track.id + '/feedback', {action: 'like'})),
+          {on: Boolean(fb.likes)}),
+        iconBtn('thumbs-down', t2('bt.library.less'),
+          () => act(() => appApi.post('/tracks/' + track.id + '/feedback', {action: 'less'})),
+          {on: Boolean(fb.less)}),
+        playlistMenu(track),
+        iconBtn(fb.blocked ? 'check' : 'x',
+          fb.blocked ? t2('bt.library.unblock') : t2('bt.library.block'),
+          () => act(() => appApi.post('/tracks/' + track.id + '/feedback',
+            {action: fb.blocked ? 'unblock' : 'block'})), {on: Boolean(fb.blocked)}),
+        iconBtn('trash', t2('bt.library.remove'), async () => {
+          const ok = await confirm(fmtStr('bt.library.remove.confirm', track.title || track.id));
+          if (!ok) return;
+          act(async () => {
+            await appApi.del('/library/' + track.id);
+            toast(t2('bt.library.removed'), {type: 'success'});
+          });
+        }),
+      ];
+    }
+
+    // ------------------------------------------------------------------ início
+
+    function progress() {
+      const status = state.status || {};
+      const total = Number(status.duration) || 0;
+      // Sem duração não há barra: desenhar uma vazia é inventar um dado que o
+      // player não deu.
+      if (!total) return null;
+      const done = Math.min(Number(status.position) || 0, total);
+      return h('div', {class: 'bt-progress'},
+        h('span', null, clock(done)),
+        h('div', {class: 'bt-progress__track'},
+          h('div', {class: 'bt-progress__fill', style: 'width: ' + ((done / total) * 100).toFixed(1) + '%'})),
+        h('span', null, clock(total)),
+      );
+    }
+
+    function homeView() {
+      const status = state.status || {};
+      const track = status.track || null;
+      const nextChange = status.next_change || {};
+      const stats = state.stats || {};
+      const quick = (state.playlists || []).filter((pl) => !pl.virtual).slice(0, 6);
+
+      return [
+        status.quiet_hours_active
+          ? h('div', {class: 'notice notice--warning'}, t2('bt.quiet_hours'))
+          : null,
+        h('div', {class: 'bt-hero'},
+          art(track || {title: 'BirdTunes'}, 'lg'),
+          h('div', {class: 'bt-hero__body'},
+            h('div', {class: 'bt-hero__eyebrow'},
+              track ? t2('bt.now_playing') : t2('bt.state.' + (status.state || 'idle'))),
+            h('h2', {class: 'bt-hero__title'}, track ? (track.title || track.path) : t2('bt.nothing_playing')),
+            h('div', {class: 'bt-hero__artist'},
+              track ? (track.artist || '') : t2('bt.nothing_playing.hint')),
+            progress(),
+            nextChange.message ? h('div', {class: 'bt-hero__artist'},
+              t2('bt.next_change') + ': ' + nextChange.message) : null,
+            h('div', {class: 'bt-hero__actions'},
+              h('button', {class: 'btn btn--primary', disabled: state.busy,
+                onClick: () => act(() => appApi.post('/play', {}))},
+                icon('play', {size: 16}), ' ', t2('bt.play')),
+              h('button', {class: 'btn btn--outline', disabled: state.busy,
+                onClick: () => act(() => appApi.post('/next', {}))},
+                icon('next', {size: 16}), ' ', t2('bt.next')),
+              h('button', {class: 'btn btn--outline', disabled: state.busy,
+                onClick: () => act(() => appApi.post('/stop', {}))}, t2('bt.stop')),
             ),
           ),
-          h('p', {class: 'field__hint'}, t2('bt.next_change') + ': ' + (nextChange.message || '')),
-          h('div', {class: 'input-group'},
-            h('button', {class: 'btn btn--primary', disabled: state.busy,
-              onClick: () => act(() => appApi.post('/play', {}))}, t2('bt.play')),
-            h('button', {class: 'btn btn--outline', disabled: state.busy,
-              onClick: () => act(() => appApi.post(status.state === 'paused' ? '/resume' : '/pause', {}))},
-              status.state === 'paused' ? t2('bt.resume') : t2('bt.pause')),
-            h('button', {class: 'btn btn--outline', disabled: state.busy,
-              onClick: () => act(() => appApi.post('/stop', {}))}, t2('bt.stop')),
-            h('button', {class: 'btn btn--outline', disabled: state.busy,
-              onClick: () => act(() => appApi.post('/next', {}))}, t2('bt.next')),
-          ),
         ),
+        h('div', {class: 'bt-section'},
+          sectionHead(t2('bt.queue'), state.queue.length
+            ? fmtStr('bt.library.count', state.queue.length) : ''),
+          state.queue.length === 0
+            ? empty(t2('bt.queue.empty'))
+            : h('div', {class: 'bt-tracks'}, state.queue.slice(0, 8).map((track, index) =>
+                trackRow(track, {
+                  index: index + 1,
+                  actions: (item) => [
+                    iconBtn('play', t2('bt.library.play'),
+                      () => act(() => appApi.post('/play', {track_id: item.id}))),
+                  ],
+                }))),
+          state.queue.length > 8
+            ? h('p', {class: 'field__hint'}, fmtStr('bt.queue.more', state.queue.length - 8))
+            : null,
+        ),
+        quick.length ? h('div', {class: 'bt-section'},
+          sectionHead(t2('bt.section.playlists'), '',
+            h('button', {class: 'btn btn--ghost btn--sm',
+              onClick: () => go('playlists')}, t2('bt.playlists.back'))),
+          h('div', {class: 'bt-grid'}, quick.map(playlistTile)),
+        ) : null,
+        h('div', {class: 'bt-stats'},
+          statTile(stats.tracks, t2('bt.stats.tracks')),
+          statTile(stats.playlists, t2('bt.stats.playlists')),
+          statTile(stats.total_plays, t2('bt.stats.plays')),
+          statTile(stats.total_likes, t2('bt.stats.likes')),
+        ),
+      ];
+    }
+
+    function statTile(value, label) {
+      return h('div', {class: 'bt-stat'},
+        h('div', {class: 'bt-stat__value'}, value === undefined || value === null ? '—' : String(value)),
+        h('div', {class: 'bt-stat__label'}, label),
       );
     }
 
-    // Only when something is wrong. A card that permanently says "all fine" is
-    // one more thing to read past every time you open the app.
-    function compatCard() {
-      const compat = state.compat;
-      if (!compat) return null;
-      const bad = compat.incompatible || 0;
-      if (bad === 0) return null;
-      return h('div', {class: 'card'},
-        h('div', {class: 'card__header'}, h('h3', {class: 'card__title'}, t2('bt.section.compat'))),
-        h('div', {class: 'card__body stack'},
-          h('div', {class: 'notice notice--warning'}, fmtStr('bt.compat.warn', bad, compat.total)),
-          bad > 0 && compat.ffmpeg_available
-            ? h('button', {class: 'btn btn--outline btn--sm', onClick: () => act(() => appApi.post('/convert', {track_ids: compat.incompatible_tracks}))},
-                t2('bt.compat.convert'))
-            : null,
-          bad > 0 && !compat.ffmpeg_available
-            ? h('p', {class: 'field__hint'}, t2('bt.compat.no_ffmpeg'))
-            : null,
+    // ------------------------------------------------------------------ acervo
+
+    let searchTimer = null;
+
+    function libraryView() {
+      const tracks = state.library || [];
+      const compat = state.compat || {};
+      const incompatible = compat.incompatible || 0;
+
+      const search = h('input', {
+        class: 'input bt-search', type: 'search', value: state.search,
+        placeholder: t2('bt.library.search'), 'data-bt-search': '1',
+        onInput: (event) => {
+          state.search = event.target.value;
+          if (searchTimer) clearTimeout(searchTimer);
+          // Uma consulta por pausa de digitação, e não uma por tecla.
+          searchTimer = setTimeout(async () => {
+            await loadLibrary();
+            renderList();
+          }, 220);
+        },
+      });
+
+      const sort = h('select', {
+        class: 'input input--sm bt-pick', title: t2('bt.library.sort'),
+        onChange: async (event) => {
+          state.sort = event.target.value;
+          await loadLibrary();
+          renderList();
+        },
+      }, ['title', 'artist', 'added', 'duration'].map((key) =>
+        h('option', {value: key, selected: state.sort === key}, t2('bt.library.sort.' + key))));
+
+      listHost = h('div', {class: 'bt-section'});
+      // O contador fica junto do título e muda com a busca: dizer "8 músicas"
+      // enquanto a lista mostra uma é a tela contando outra história.
+      countNode = h('span', {class: 'bt-section__sub'}, fmtStr('bt.library.count', tracks.length));
+
+      const node = [
+        h('div', {class: 'bt-section'},
+          sectionHead(t2('bt.section.library'), countNode,
+            [
+              h('button', {class: 'btn btn--ghost btn--sm', onClick: () => act(async () => {
+                const result = await appApi.post('/library/scan', {});
+                toast(fmtStr('bt.library.scanned', result.added || 0, result.updated || 0),
+                  {type: 'success'});
+              })}, icon('refresh', {size: 14}), ' ', t2('bt.library.scan')),
+              h('button', {class: 'btn btn--outline btn--sm', onClick: () => go('add')},
+                icon('plus', {size: 14}), ' ', t2('bt.playlists.add.youtube')),
+            ]),
+          h('div', {class: 'bt-toolbar'}, search, sort),
+          incompatible > 0 ? h('div', {class: 'notice notice--warning'},
+            h('div', {class: 'notice__body'},
+              h('span', null, fmtStr('bt.compat.warn', incompatible, compat.total || 0)),
+              compat.ffmpeg_available
+                ? h('button', {class: 'btn btn--outline btn--sm', onClick: () => act(() =>
+                    appApi.post('/convert', {track_ids: compat.incompatible_tracks || []}))},
+                    t2('bt.compat.convert'))
+                : h('span', {class: 'small muted'}, ' ' + t2('bt.compat.no_ffmpeg')),
+            )) : null,
         ),
+        listHost,
+      ];
+      renderList();
+      return node;
+    }
+
+    let listHost = null;
+    let countNode = null;
+
+    // Só a lista se redesenha na busca: refazer a seção inteira tirava o foco
+    // do campo no meio da digitação.
+    function renderList() {
+      if (!listHost) return;
+      const tracks = state.library || [];
+      if (countNode) countNode.textContent = fmtStr('bt.library.count', tracks.length);
+      listHost.replaceChildren(tracks.length === 0
+        ? empty(state.search
+            ? fmtStr('bt.library.empty.search', state.search)
+            : t2('bt.library.empty'))
+        : h('div', {class: 'bt-tracks'}, tracks.map((track) => trackRow(track))));
+    }
+
+    // --------------------------------------------------------------- playlists
+
+    function playlistTile(pl) {
+      return h('button', {class: 'bt-tile', type: 'button', onClick: () => openPlaylist(pl.id)},
+        h('div', {class: 'bt-tile__cover',
+          style: 'background: linear-gradient(150deg, hsl(' + hue(pl.name) + ' 38% 34%), hsl(' +
+            ((hue(pl.name) + 50) % 360) + ' 30% 22%))'},
+          String(pl.name || '?').trim().charAt(0).toUpperCase()),
+        h('div', null,
+          h('div', {class: 'bt-tile__name'}, pl.name),
+          h('div', {class: 'bt-tile__meta'}, pl.track_count === 1
+            ? t2('bt.playlists.track') : fmtStr('bt.playlists.tracks', pl.track_count || 0)),
+        ),
+        h('span', {class: 'bt-tile__play'},
+          h('span', {class: 'btn btn--icon btn--sm', title: t2('bt.playlists.play'),
+            onClick: (event) => {
+              event.stopPropagation();
+              act(() => appApi.post('/playlists/' + pl.id + '/play', {}));
+            }}, icon('play', {size: 16}))),
       );
     }
 
-    // Where it plays. The whole app is "conecta no meu apple tv ... ou
-    // chromecast (configuravel)", so this is not a settings detail -- it is the
-    // first thing you set, and until it is set the transport plays to nothing.
-    function outputCard() {
-      const outputs = state.outputs || {};
-      const backends = outputs.backends || [];
-      const devices = outputs.devices || [];
-      const status = state.status || {};
-      const currentBackend = status.output || 'null';
-      const currentDevice = (config && config.get && config.get('output.device_id', '')) || '';
-
-      // Only devices the chosen backend can actually drive: offering a
-      // Chromecast to the AirPlay backend produces a failure the person cannot
-      // do anything about.
-      const backend = backends.filter((b) => b.kind === currentBackend)[0];
-      const kinds = (backend && backend.device_kinds) || [];
-      const usable = kinds.length ? devices.filter((d) => kinds.indexOf(d.kind) !== -1) : devices;
-      let pinRef = null;
-
-      return h('div', {class: 'card'},
-        h('div', {class: 'card__header'}, h('h3', {class: 'card__title'}, t2('bt.section.output'))),
-        h('div', {class: 'card__body stack'},
-          h('div', {class: 'field'},
-            h('label', {class: 'field__label'}, t2('bt.output.backend')),
-            h('select', {
-              onChange: (event) => act(() => appApi.put('/output', {type: event.target.value, device_id: ''})),
-            }, backends.map((b) => h('option', {
-              value: b.kind, selected: b.kind === currentBackend, disabled: !b.available,
-            }, b.name + (b.available ? '' : ' — ' + (b.hint || 'unavailable'))))),
-          ),
-          currentBackend === 'null' ? null : h('div', {class: 'field'},
-            h('label', {class: 'field__label'}, t2('bt.output.device')),
-            usable.length === 0
-              ? h('p', {class: 'field__hint'}, t2('bt.output.empty'))
-              : h('select', {
-                  onChange: (event) => act(() => appApi.put('/output', {
-                    type: currentBackend, device_id: event.target.value,
-                  })),
-                },
-                [h('option', {value: '', selected: !currentDevice}, t2('bt.output.none'))].concat(
-                  usable.map((d) => h('option', {value: d.id, selected: d.id === currentDevice},
-                    d.name + (d.online ? '' : ' (offline)'))),
-                )),
-          ),
-          // Pairing exists because an Apple TV refuses audio until it has been
-          // paired, and the PIN is shown on the TV itself.
-          currentBackend === 'airplay' && currentDevice ? h('div', {class: 'input-group'},
+    function playlistsView() {
+      if (state.playlistId && state.playlist) return playlistDetail(state.playlist);
+      const list = state.playlists || [];
+      return [
+        h('div', {class: 'bt-section'},
+          sectionHead(t2('bt.section.playlists'), '',
             h('button', {class: 'btn btn--outline btn--sm', onClick: async () => {
-              try {
-                state.pairing = await appApi.post('/outputs/' + encodeURIComponent(currentDevice) + '/pair', {});
-                toast(state.pairing.message || '', {type: 'info'});
-              } catch (err) {
-                toast(String(err.message || err), {type: 'error'});
-              }
-              render();
-            }}, t2('bt.output.pair')),
-            state.pairing ? h('input', {type: 'text', inputmode: 'numeric',
-              placeholder: t2('bt.output.pin'), ref: (el) => { pinRef = el; }}) : null,
-            state.pairing ? h('button', {class: 'btn btn--primary btn--sm', onClick: () => {
-              const pin = pinRef && pinRef.value ? pinRef.value.trim() : '';
-              if (!pin) return;
+              const name = await dialogs.promptText(t2('bt.playlists.name'), {confirmLabel: t2('bt.playlists.create')});
+              if (!name || !String(name).trim()) return;
               act(async () => {
-                await appApi.post('/outputs/' + encodeURIComponent(currentDevice) + '/pair', {pin});
-                state.pairing = null;
-                toast(t2('bt.output.paired'), {type: 'success'});
+                await appApi.post('/playlists', {name: String(name).trim()});
+                toast(fmtStr('bt.playlists.created', String(name).trim()), {type: 'success'});
               });
-            }}, t2('bt.output.pin.send')) : null,
-          ) : null,
-          h('div', {class: 'field'},
-            h('label', {class: 'field__label'},
-              t2('bt.output.volume') + ' — ' + Math.round((status.volume || 0) * 100) + '%'),
-            h('input', {
-              type: 'range', min: '0', max: '100', step: '5',
-              value: String(Math.round((status.volume || 0) * 100)),
-              onChange: (event) => act(() => appApi.post('/volume', {value: Number(event.target.value) / 100})),
-            }),
-          ),
+            }}, icon('plus', {size: 14}), ' ', t2('bt.playlists.create'))),
+          list.length === 0
+            ? empty(t2('bt.playlists.empty'))
+            : h('div', {class: 'bt-grid'}, list.map(playlistTile)),
         ),
-      );
+      ];
     }
 
-    // "coloca pra adicionar musicas direto do youtube em library playlist e etc tbm"
-    // One path for every entry point: the library row, the playlist row and the
-    // import card all end up here, so "add" means the same thing everywhere.
+    function playlistDetail(pl) {
+      const tracks = pl.tracks || [];
+      const totalTime = tracks.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
+      const move = (index, delta) => {
+        const ids = tracks.map((item) => item.id);
+        const target = index + delta;
+        if (target < 0 || target >= ids.length) return;
+        const swap = ids[index];
+        ids[index] = ids[target];
+        ids[target] = swap;
+        act(() => appApi.post('/playlists/' + pl.id + '/reorder', {track_ids: ids}));
+      };
+      return [
+        h('button', {class: 'bt-back', type: 'button', onClick: () => openPlaylist('')},
+          icon('chevron', {size: 16, class: 'bt-rot-180'}), t2('bt.playlists.back')),
+        h('div', {class: 'bt-hero'},
+          h('div', {class: 'bt-art bt-art--lg',
+            style: 'background: linear-gradient(150deg, hsl(' + hue(pl.name) + ' 38% 34%), hsl(' +
+              ((hue(pl.name) + 50) % 360) + ' 30% 22%))'},
+            String(pl.name || '?').trim().charAt(0).toUpperCase()),
+          h('div', {class: 'bt-hero__body'},
+            h('div', {class: 'bt-hero__eyebrow'}, t2('bt.section.playlists')),
+            h('h2', {class: 'bt-hero__title'}, pl.name),
+            h('div', {class: 'bt-hero__artist'},
+              [tracks.length === 1 ? t2('bt.playlists.track') : fmtStr('bt.playlists.tracks', tracks.length),
+                totalTime ? clock(totalTime) : ''].filter(Boolean).join(' · ')),
+            h('div', {class: 'bt-hero__actions'},
+              h('button', {class: 'btn btn--primary', disabled: !tracks.length,
+                onClick: () => act(() => appApi.post('/playlists/' + pl.id + '/play', {}))},
+                icon('play', {size: 16}), ' ', t2('bt.playlists.play')),
+              h('button', {class: 'btn btn--outline', onClick: () => {
+                state.importDest = pl.id;
+                go('add');
+              }}, icon('plus', {size: 16}), ' ', t2('bt.playlists.add.youtube')),
+              pl.virtual ? null : h('button', {class: 'btn btn--outline', onClick: async () => {
+                const name = await dialogs.promptText(t2('bt.playlists.rename'), {value: pl.name});
+                if (!name || !String(name).trim()) return;
+                act(() => appApi.patch('/playlists/' + pl.id, {name: String(name).trim()}));
+              }}, t2('bt.playlists.rename')),
+              pl.virtual ? null : h('button', {class: 'btn btn--danger', onClick: async () => {
+                const ok = await confirm(fmtStr('bt.playlists.delete.confirm', pl.name));
+                if (!ok) return;
+                await appApi.del('/playlists/' + pl.id);
+                state.playlistId = '';
+                state.playlist = null;
+                await loadCommon();
+                render();
+              }}, t2('bt.playlists.delete')),
+            ),
+          ),
+        ),
+        tracks.length === 0
+          ? empty(t2('bt.playlists.empty.detail'))
+          : h('div', {class: 'bt-tracks'}, tracks.map((track, index) => trackRow(track, {
+              index: index + 1,
+              actions: (item) => [
+                iconBtn('play', t2('bt.library.play'),
+                  () => act(() => appApi.post('/play', {track_id: item.id}))),
+                chevBtn('up', t2('bt.playlists.up'), () => move(index, -1),
+                  {disabled: index === 0 || pl.virtual}),
+                chevBtn('down', t2('bt.playlists.down'), () => move(index, 1),
+                  {disabled: index === tracks.length - 1 || pl.virtual}),
+                pl.virtual ? null : iconBtn('x', t2('bt.playlists.remove'), () => act(() =>
+                  appApi.del('/playlists/' + pl.id + '/tracks', {track_ids: [item.id]}))),
+              ].filter(Boolean),
+            }))),
+      ];
+    }
+
+    async function openPlaylist(id) {
+      state.playlistId = id;
+      state.playlist = null;
+      if (id) await loadPlaylist(id);
+      render();
+    }
+
+    // ---------------------------------------------------------------- adicionar
+
     function addFromYouTube(url, dest) {
       const target = dest === undefined ? state.importDest : dest;
       const body = {url: url};
@@ -350,161 +723,31 @@ export default {
       else body.as_playlist = Boolean(state.preview && state.preview.kind === 'playlist');
       return act(async () => {
         await appApi.post('/import/youtube', body);
+        state.preview = null;
         toast(t2('bt.import.queued'), {type: 'success'});
       });
     }
 
-    // "botao de curtir musicas, recomendar menos e etc" -- the buttons live on
-    // the track, next to the track, because that is the only place the judgement
-    // makes sense.
-    function libraryCard() {
-      let libraryUrlRef = null;
-      const tracks = state.library || [];
-      return h('div', {class: 'card'},
-        h('div', {class: 'card__header'},
-          h('h3', {class: 'card__title'}, t2('bt.section.library')),
-          h('div', {class: 'card__tools'},
-            h('button', {class: 'btn btn--ghost btn--sm', onClick: () => act(async () => {
-              const result = await appApi.post('/library/scan', {});
-              toast(fmtStr('bt.library.scanned', result.added || 0, result.updated || 0), {type: 'success'});
-            })}, t2('bt.library.scan')),
-          ),
-        ),
-        h('div', {class: 'card__body stack'},
-          tracks.length === 0
-            ? h('div', {class: 'empty empty--sm'}, h('p', {class: 'empty__text'}, t2('bt.library.empty')))
-            : h('div', {class: 'list'}, tracks.map((track) => {
-                const fb = track.feedback || {};
-                const blocked = Boolean(fb.blocked);
-                return h('div', {class: 'list__row'},
-                  h('div', {class: 'list__main'},
-                    h('div', {class: 'list__title'}, track.title || track.path),
-                    h('div', {class: 'list__sub'}, [
-                      track.artist || '',
-                      track.duration ? clock(track.duration) : '',
-                      fb.likes ? '♥ ' + fb.likes : '',
-                      fb.less ? t2('bt.library.lessened') : '',
-                      blocked ? t2('bt.library.blocked') : '',
-                      track.missing ? t2('bt.library.missing') : '',
-                    ].filter(Boolean).join(' · ')),
-                  ),
-                  h('div', {class: 'list__aside'},
-                    h('button', {class: 'btn btn--icon btn--sm', title: t2('bt.library.play'),
-                      onClick: () => act(() => appApi.post('/play', {track_id: track.id}))},
-                      ctx.icon('play', {size: 16})),
-                    h('button', {class: 'btn btn--icon btn--sm', title: t2('bt.library.like'),
-                      onClick: () => act(() => appApi.post('/tracks/' + track.id + '/feedback', {action: 'like'}))},
-                      ctx.icon('heart', {size: 16})),
-                    h('button', {class: 'btn btn--icon btn--sm', title: t2('bt.library.less'),
-                      onClick: () => act(() => appApi.post('/tracks/' + track.id + '/feedback', {action: 'less'}))},
-                      ctx.icon('thumbs-down', {size: 16})),
-                    state.playlists.filter((pl) => !pl.virtual).length
-                      ? h('select', {
-                          class: 'input input--sm select--compact',
-                          title: t2('bt.playlists.add'),
-                          onChange: (event) => {
-                            const target = event.target.value;
-                            event.target.selectedIndex = 0;
-                            if (!target) return;
-                            const playlist = state.playlists.filter((pl) => pl.id === target)[0];
-                            act(async () => {
-                              await appApi.post('/playlists/' + target + '/tracks', {track_ids: [track.id]});
-                              toast(fmtStr('bt.playlists.added', (playlist && playlist.name) || ''), {type: 'success'});
-                            });
-                          },
-                        },
-                        [h('option', {value: ''}, '+')].concat(
-                          state.playlists.filter((pl) => !pl.virtual).map(
-                            (pl) => h('option', {value: pl.id}, pl.name)),
-                        ))
-                      : null,
-                    h('button', {class: 'btn btn--icon btn--sm',
-                      title: blocked ? t2('bt.library.unblock') : t2('bt.library.block'),
-                      onClick: () => act(() => appApi.post('/tracks/' + track.id + '/feedback',
-                        {action: blocked ? 'unblock' : 'block'}))},
-                      ctx.icon(blocked ? 'check' : 'x', {size: 16})),
-                  ),
-                );
-              })),
-          h('div', {class: 'input-group'},
-            h('input', {type: 'text', placeholder: t2('bt.library.add.url'),
-              ref: (el) => { libraryUrlRef = el; }}),
-            h('button', {class: 'btn btn--outline', onClick: () => {
-              const url = libraryUrlRef && libraryUrlRef.value ? libraryUrlRef.value.trim() : '';
-              if (!url) return;
-              if (libraryUrlRef) libraryUrlRef.value = '';
-              addFromYouTube(url, '');
-            }}, t2('bt.library.add')),
-          ),
-        ),
-      );
-    }
-
-    function playlistsCard() {
-      let nameRef = null;
-      const list = state.playlists || [];
-      return h('div', {class: 'card'},
-        h('div', {class: 'card__header'}, h('h3', {class: 'card__title'}, t2('bt.section.playlists'))),
-        h('div', {class: 'card__body stack'},
-          list.length === 0
-            ? h('div', {class: 'empty empty--sm'}, h('p', {class: 'empty__text'}, t2('bt.playlists.empty')))
-            : h('div', {class: 'list'}, list.map((pl) => h('div', {class: 'list__row'},
-                h('div', {class: 'list__main'},
-                  h('div', {class: 'list__title'}, pl.name),
-                  h('div', {class: 'list__sub'}, (pl.track_count || 0) + ' ' +
-                    t2(pl.track_count === 1 ? 'bt.playlists.track' : 'bt.playlists.tracks')),
-                ),
-                h('div', {class: 'list__aside'},
-                  h('button', {class: 'btn btn--ghost btn--sm',
-                    onClick: () => act(() => appApi.post('/playlists/' + pl.id + '/play', {}))}, t2('bt.playlists.play')),
-                  pl.virtual ? null : h('button', {class: 'btn btn--ghost btn--sm',
-                    title: t2('bt.playlists.add.youtube'),
-                    onClick: () => {
-                      // Sends you to the one input that already exists, aimed at
-                      // this playlist -- rather than a second field per row.
-                      state.importDest = pl.id;
-                      render();
-                      const field = root.querySelector('[data-import-url]');
-                      if (field) { field.scrollIntoView({block: 'center'}); field.focus(); }
-                    }}, t2('bt.playlists.add.youtube')),
-                  pl.virtual ? null : h('button', {class: 'btn btn--icon btn--sm', title: t2('bt.playlists.delete'),
-                    onClick: () => act(() => appApi.delete('/playlists/' + pl.id))}, ctx.icon('trash', {size: 16})),
-                ),
-              ))),
-          h('div', {class: 'input-group'},
-            h('input', {type: 'text', placeholder: t2('bt.playlists.name'), ref: (el) => { nameRef = el; }}),
-            h('button', {class: 'btn btn--outline', onClick: () => {
-              const name = nameRef && nameRef.value ? nameRef.value.trim() : '';
-              if (!name) return;
-              if (nameRef) nameRef.value = '';
-              act(() => appApi.post('/playlists', {name}));
-            }}, t2('bt.playlists.create')),
-          ),
-        ),
-      );
-    }
-
-    function importCard() {
+    function addView() {
       let urlRef = null;
       const jobs = state.importJobs || [];
       // Sem yt-dlp não há *download*: Prever e Adicionar ficam desligados e a
-      // razão aparece no cartão. A frase existia no dicionário desde sempre e
-      // nunca era mostrada -- quem colava o link descobria pelo erro 503,
-      // depois de clicar. O campo e o "tocar na TV" continuam de pé: mandar o
-      // vídeo para a televisão só precisa do id, que sai do próprio link.
+      // razão aparece antes do clique. Mandar o vídeo para a televisão continua
+      // de pé -- isso só precisa do id, que sai do próprio link.
       const podeImportar = !state.compat || state.compat.ytdlp_available !== false;
-      return h('div', {class: 'card'},
-        h('div', {class: 'card__header'}, h('h3', {class: 'card__title'}, t2('bt.section.import'))),
-        h('div', {class: 'card__body stack'},
-          podeImportar
-            ? null
-            : h('div', {class: 'notice notice--warning'},
-                t2('bt.import.no_ytdlp'), ' ', t2('bt.import.no_ytdlp.cast')),
-          h('div', {class: 'input-group'},
-            h('input', {type: 'text', placeholder: t2('bt.import.url'), 'data-import-url': '1',
-              ref: (el) => { urlRef = el; }}),
+      const readUrl = () => (urlRef && urlRef.value ? urlRef.value.trim() : '');
+
+      return [
+        h('div', {class: 'bt-section'},
+          sectionHead(t2('bt.section.import')),
+          podeImportar ? null : h('div', {class: 'notice notice--warning'},
+            h('div', {class: 'notice__body'},
+              h('span', null, t2('bt.import.no_ytdlp') + ' ' + t2('bt.import.no_ytdlp.cast')))),
+          h('div', {class: 'bt-toolbar'},
+            h('input', {class: 'input bt-search', type: 'text', 'data-import-url': '1',
+              placeholder: t2('bt.import.url'), ref: (el) => { urlRef = el; }}),
             h('button', {class: 'btn btn--outline', disabled: !podeImportar, onClick: async () => {
-              const url = urlRef && urlRef.value ? urlRef.value.trim() : '';
+              const url = readUrl();
               if (!url) return;
               try {
                 state.preview = await appApi.get('/import/preview', {query: {url}});
@@ -515,9 +758,8 @@ export default {
               render();
             }}, t2('bt.import.preview')),
             h('button', {class: 'btn btn--primary', disabled: !podeImportar, onClick: () => {
-              const url = urlRef && urlRef.value ? urlRef.value.trim() : '';
-              if (!url) return;
-              addFromYouTube(url);
+              const url = readUrl();
+              if (url) addFromYouTube(url);
             }}, t2('bt.import.start')),
           ),
           h('label', {class: 'field'},
@@ -531,43 +773,44 @@ export default {
                 (pl) => h('option', {value: pl.id, selected: pl.id === state.importDest}, pl.name))),
             ),
           ),
-          // Two different things, side by side on purpose: Import keeps a copy
-          // on the Pi; this one just tells the television to play it.
-          h('div', {class: 'input-group'},
+          state.preview
+            ? h('p', {class: 'field__hint'},
+                fmtStr('bt.import.found', state.preview.title, state.preview.count))
+            : null,
+          // Duas coisas diferentes, lado a lado de propósito: Adicionar guarda o
+          // áudio aqui; este manda a televisão tocar.
+          h('div', {class: 'bt-toolbar'},
             h('button', {class: 'btn btn--outline', onClick: () => {
-              const url = urlRef && urlRef.value ? urlRef.value.trim() : '';
+              const url = readUrl();
               if (!url) return;
               act(async () => {
                 const result = await appApi.post('/play/youtube', {url});
                 toast(fmtStr('bt.import.cast.ok', result.device || ''), {type: 'success'});
               });
-            }}, t2('bt.import.cast')),
+            }}, icon('cast', {size: 16}), ' ', t2('bt.import.cast')),
           ),
           h('p', {class: 'field__hint'}, t2('bt.import.cast.hint')),
-          state.preview
-            ? h('p', {class: 'field__hint'}, fmtStr('bt.import.found', state.preview.title, state.preview.count))
-            : null,
-          // The last few only. A full history of every link ever pasted is not
-          // something anyone reads, and it buried the controls above it.
+        ),
+        h('div', {class: 'bt-section'},
+          sectionHead(t2('bt.import.jobs')),
           jobs.length === 0
-            ? h('div', {class: 'empty empty--sm'}, h('p', {class: 'empty__text'}, t2('bt.import.jobs.empty')))
-            : h('div', {class: 'list'}, jobs.slice(0, 4).map((job) => h('div', {class: 'list__row'},
-                h('div', {class: 'list__main'},
-                  h('div', {class: 'list__title'}, job.title || job.url),
-                  h('div', {class: 'list__sub'},
-                    job.state === 'running'
-                      ? Math.round((job.progress || 0) * 100) + '%'
-                      : (job.message || job.state)),
-                ),
+            ? empty(t2('bt.import.jobs.empty'))
+            : h('div', {class: 'bt-jobs'}, jobs.slice(0, 6).map((job) => h('div', {class: 'bt-job'},
+                h('div', {class: 'bt-track__title'}, job.title || job.url),
+                job.state === 'running'
+                  ? h('div', {class: 'bt-progress'},
+                      h('div', {class: 'bt-progress__track'},
+                        h('div', {class: 'bt-progress__fill',
+                          style: 'width: ' + Math.round((job.progress || 0) * 100) + '%'})),
+                      h('span', null, Math.round((job.progress || 0) * 100) + '%'))
+                  : h('div', {class: 'bt-track__sub'}, job.message || job.state),
               ))),
         ),
-      );
+      ];
     }
 
-    // The schedule is the part that acts while nobody is watching, so the screen
-    // has to show exactly what will happen: every window readable, editable and
-    // removable in place. It used to be a read-only list that presets appended
-    // to, which is how "While I'm out" ended up in there twice with no way out.
+    // ------------------------------------------------------------------ agenda
+
     const DAY_LABELS = () => t2('bt.schedule.days.short').split(' ');
 
     function windowRow(sched, windows, index) {
@@ -578,105 +821,103 @@ export default {
         next[index] = Object.assign({}, w, changes);
         saveSchedule(Object.assign({}, sched, {windows: next}));
       };
-      const playlists = (state.playlists || []);
-      return h('div', {class: 'list__row list__row--stack'},
-        h('div', {class: 'input-group'},
-          h('input', {type: 'text', value: w.name || '', placeholder: t2('bt.schedule.window.name'),
+      return h('div', {class: 'bt-window'},
+        h('div', {class: 'bt-toolbar'},
+          h('input', {class: 'input', type: 'text', value: w.name || '',
+            placeholder: t2('bt.schedule.window.name'),
             onChange: (event) => patch({name: event.target.value})}),
-          h('input', {type: 'time', value: w.start || '08:00', title: t2('bt.schedule.window.from'),
+          h('input', {class: 'input input--sm', type: 'time', value: w.start || '08:00',
+            title: t2('bt.schedule.window.from'),
             onChange: (event) => patch({start: event.target.value})}),
-          h('input', {type: 'time', value: w.end || '09:00', title: t2('bt.schedule.window.to'),
+          h('input', {class: 'input input--sm', type: 'time', value: w.end || '09:00',
+            title: t2('bt.schedule.window.to'),
             onChange: (event) => patch({end: event.target.value})}),
-          h('button', {class: 'btn btn--icon btn--sm', title: t2('bt.schedule.remove'),
-            onClick: () => saveSchedule(Object.assign({}, sched, {
-              windows: windows.filter((_, i) => i !== index),
-            }))}, ctx.icon('trash', {size: 16})),
-        ),
-        h('div', {class: 'input-group'},
-          DAY_LABELS().map((label, day) => h('button', {
-            class: 'btn btn--sm ' + (days.indexOf(day) === -1 ? 'btn--ghost' : 'btn--outline'),
-            title: t2('bt.schedule.window.days'),
-            onClick: () => patch({
-              days: days.indexOf(day) === -1
-                ? days.concat([day]).sort((a, b) => a - b)
-                : days.filter((d) => d !== day),
-            }),
-          }, label)),
-        ),
-        h('div', {class: 'input-group'},
-          h('select', {title: t2('bt.schedule.window.playlist'),
-            onChange: (event) => patch({playlist_id: event.target.value})},
-            playlists.map((pl) => h('option', {
-              value: pl.id, selected: pl.id === (w.playlist_id || 'all'),
-            }, pl.name))),
           h('label', {class: 'row row--tight'},
             h('input', {type: 'checkbox', checked: w.enabled !== false,
               onChange: (event) => patch({enabled: event.target.checked})}),
-            // Says what the window *is*, not what the click would do -- a ticked
-            // box next to the word "Off" reads as if it were off.
+            // Diz o que a janela *é*, não o que o clique faria.
             h('span', {class: 'small muted'},
               w.enabled !== false ? t2('bt.schedule.window.on') : t2('bt.schedule.window.off')),
           ),
+          iconBtn('trash', t2('bt.schedule.remove'), () => saveSchedule(
+            Object.assign({}, sched, {windows: windows.filter((_, i) => i !== index)}))),
+        ),
+        h('div', {class: 'bt-days'}, DAY_LABELS().map((label, day) => h('button', {
+          class: 'bt-day', type: 'button', dataset: {on: days.indexOf(day) === -1 ? 'false' : 'true'},
+          title: t2('bt.schedule.window.days'),
+          onClick: () => patch({
+            days: days.indexOf(day) === -1
+              ? days.concat([day]).sort((a, b) => a - b)
+              : days.filter((d) => d !== day),
+          }),
+        }, label))),
+        h('label', {class: 'field'},
+          h('span', {class: 'field__label'}, t2('bt.schedule.window.playlist')),
+          h('select', {class: 'input',
+            onChange: (event) => patch({playlist_id: event.target.value})},
+            (state.playlists || []).map((pl) => h('option', {
+              value: pl.id, selected: pl.id === (w.playlist_id || 'all'),
+            }, pl.name))),
         ),
       );
     }
 
-    function scheduleCard() {
+    function scheduleView() {
       const sched = (state.schedule && state.schedule.schedule) || {};
       const quiet = sched.quiet_hours || {};
       const windows = sched.windows || [];
-      return h('div', {class: 'card'},
-        h('div', {class: 'card__header'},
-          h('h3', {class: 'card__title'}, t2('bt.section.schedule')),
-          h('div', {class: 'card__tools'},
+      return [
+        h('div', {class: 'bt-section'},
+          sectionHead(t2('bt.section.schedule'), t2('bt.schedule.lead'),
             h('label', {class: 'row row--tight'},
               h('input', {type: 'checkbox', checked: sched.enabled !== false,
-                onChange: (event) => saveSchedule(Object.assign({}, sched, {enabled: event.target.checked}))}),
+                onChange: (event) => saveSchedule(
+                  Object.assign({}, sched, {enabled: event.target.checked}))}),
               h('span', {class: 'small muted'}, t2('bt.schedule.enabled')),
-            ),
-          ),
-        ),
-        h('div', {class: 'card__body stack'},
-          h('div', {class: 'field'},
-            h('span', {class: 'field__label'}, t2('bt.schedule.windows')),
-            windows.length === 0
-              ? h('p', {class: 'field__hint'}, t2('bt.schedule.windows.empty'))
-              : h('div', {class: 'list'}, windows.map((_, index) => windowRow(sched, windows, index))),
+            )),
+          windows.length === 0
+            ? empty(t2('bt.schedule.windows.empty'))
+            : h('div', {class: 'bt-jobs'}, windows.map((_, index) => windowRow(sched, windows, index))),
+          h('div', {class: 'bt-toolbar'},
             h('button', {class: 'btn btn--outline btn--sm', onClick: () => saveSchedule(
               Object.assign({}, sched, {windows: windows.concat([{
                 id: 'window-' + (windows.length + 1),
                 name: '', start: '08:00', end: '09:00',
                 days: [0, 1, 2, 3, 4, 5, 6], playlist_id: 'all', enabled: true,
-              }])}))}, t2('bt.schedule.add')),
-          ),
-          h('div', {class: 'field'},
-            h('span', {class: 'field__label'}, t2('bt.schedule.presets')),
-            h('div', {class: 'input-group'}, (state.presets || []).map((preset) =>
-              h('button', {class: 'btn btn--ghost btn--sm', onClick: () => {
-                // Replaces the window with the same id instead of stacking a
-                // second identical one on top of it.
+              }])}))}, icon('plus', {size: 14}), ' ', t2('bt.schedule.add')),
+            (state.presets || []).map((preset) => h('button', {
+              class: 'btn btn--ghost btn--sm', onClick: () => {
+                // Substitui a janela de mesmo id em vez de empilhar uma segunda
+                // idêntica em cima.
                 const win = {
                   id: preset.id, name: preset.name, start: preset.start, end: preset.end,
                   days: preset.days, playlist_id: 'all', enabled: true,
                 };
                 const kept = windows.filter((w) => w.id !== preset.id);
                 saveSchedule(Object.assign({}, sched, {windows: kept.concat([win])}));
-              }}, preset.name),
-            )),
+              },
+            }, preset.name)),
           ),
-          h('div', {class: 'field'},
-            h('label', {class: 'field__label'}, t2('bt.schedule.quiet_start')),
-            h('input', {type: 'time', value: quiet.start || '20:00',
-              onChange: (event) => saveSchedule(Object.assign({}, sched, {quiet_hours: Object.assign({}, quiet, {start: event.target.value})}))}),
-          ),
-          h('div', {class: 'field'},
-            h('label', {class: 'field__label'}, t2('bt.schedule.quiet_end')),
-            h('input', {type: 'time', value: quiet.end || '07:00',
-              onChange: (event) => saveSchedule(Object.assign({}, sched, {quiet_hours: Object.assign({}, quiet, {end: event.target.value})}))}),
+        ),
+        h('div', {class: 'bt-section'},
+          sectionHead(t2('bt.schedule.quiet')),
+          h('div', {class: 'bt-toolbar'},
+            h('label', {class: 'field'},
+              h('span', {class: 'field__label'}, t2('bt.schedule.quiet_start')),
+              h('input', {class: 'input input--sm', type: 'time', value: quiet.start || '20:00',
+                onChange: (event) => saveSchedule(Object.assign({}, sched, {
+                  quiet_hours: Object.assign({}, quiet, {start: event.target.value})}))}),
+            ),
+            h('label', {class: 'field'},
+              h('span', {class: 'field__label'}, t2('bt.schedule.quiet_end')),
+              h('input', {class: 'input input--sm', type: 'time', value: quiet.end || '07:00',
+                onChange: (event) => saveSchedule(Object.assign({}, sched, {
+                  quiet_hours: Object.assign({}, quiet, {end: event.target.value})}))}),
+            ),
           ),
           h('p', {class: 'field__hint'}, t2('bt.schedule.quiet.hint')),
         ),
-      );
+      ];
     }
 
     async function saveSchedule(next) {
@@ -689,27 +930,240 @@ export default {
       render();
     }
 
-    function render() {
-      // Ordered by how often you touch it: what is playing, what it can play,
-      // when it plays, and only then the setup you touch once.
-      const nodes = [transportCard(), compatCard(), libraryCard(), playlistsCard(),
-        importCard(), scheduleCard(), outputCard()];
-      view.replaceChildren(...nodes.filter(Boolean));
+    // ------------------------------------------------------------------- saída
+
+    function deviceName() {
+      const status = state.status || {};
+      if (status.device) return status.device;
+      const outputs = state.outputs || {};
+      const chosen = (config && config.get && config.get('output.device_id', '')) || '';
+      const device = (outputs.devices || []).filter((d) => d.id === chosen)[0];
+      if (device) return device.name;
+      return t2('bt.output.silent');
     }
 
-    await refreshAll();
+    function renderSheet() {
+      if (!state.outputOpen) {
+        sheet.hidden = true;
+        sheet.replaceChildren();
+        return;
+      }
+      sheet.hidden = false;
+      const outputs = state.outputs || {};
+      const backends = outputs.backends || [];
+      const devices = outputs.devices || [];
+      const status = state.status || {};
+      const currentBackend = status.output || 'null';
+      const currentDevice = (config && config.get && config.get('output.device_id', '')) || '';
+      // Só os aparelhos que a conexão escolhida sabe tocar: oferecer um
+      // Chromecast ao AirPlay produz um erro que ninguém em casa resolve.
+      const backend = backends.filter((b) => b.kind === currentBackend)[0];
+      const kinds = (backend && backend.device_kinds) || [];
+      const usable = kinds.length ? devices.filter((d) => kinds.indexOf(d.kind) !== -1) : devices;
+      let pinRef = null;
+
+      // replaceChildren não é o h(): um `null` na lista vira o *texto* "null"
+      // na tela. Era o que aparecia embaixo do seletor de conexão.
+      sheet.replaceChildren(...[
+        sectionHead(t2('bt.section.output'), '',
+          iconBtn('x', t2('bt.stop'), () => { state.outputOpen = false; renderSheet(); })),
+        h('label', {class: 'field'},
+          h('span', {class: 'field__label'}, t2('bt.output.backend')),
+          h('select', {class: 'input',
+            onChange: (event) => act(() => appApi.put('/output', {type: event.target.value, device_id: ''})),
+          }, backends.map((b) => h('option', {
+            value: b.kind, selected: b.kind === currentBackend, disabled: !b.available,
+          }, b.name + (b.available ? '' : ' — ' + (b.hint || 'indisponível'))))),
+        ),
+        currentBackend === 'null' ? null : h('label', {class: 'field'},
+          h('span', {class: 'field__label'}, t2('bt.output.device')),
+          usable.length === 0
+            ? h('p', {class: 'field__hint'}, t2('bt.output.empty'))
+            : h('select', {class: 'input',
+                onChange: (event) => act(() => appApi.put('/output', {
+                  type: currentBackend, device_id: event.target.value,
+                })),
+              }, [h('option', {value: '', selected: !currentDevice}, t2('bt.output.none'))].concat(
+                usable.map((d) => h('option', {value: d.id, selected: d.id === currentDevice},
+                  d.name + (d.online ? '' : ' (offline)'))))),
+        ),
+        // Uma Apple TV recusa áudio até ser pareada, e o PIN aparece na própria TV.
+        currentBackend === 'airplay' && currentDevice ? h('div', {class: 'bt-toolbar'},
+          h('button', {class: 'btn btn--outline btn--sm', onClick: async () => {
+            try {
+              state.pairing = await appApi.post('/outputs/' + encodeURIComponent(currentDevice) + '/pair', {});
+              toast(state.pairing.message || '', {type: 'info'});
+            } catch (err) {
+              toast(String(err.message || err), {type: 'error'});
+            }
+            renderSheet();
+          }}, t2('bt.output.pair')),
+          state.pairing ? h('input', {class: 'input input--sm', type: 'text', inputmode: 'numeric',
+            placeholder: t2('bt.output.pin'), ref: (el) => { pinRef = el; }}) : null,
+          state.pairing ? h('button', {class: 'btn btn--primary btn--sm', onClick: () => {
+            const pin = pinRef && pinRef.value ? pinRef.value.trim() : '';
+            if (!pin) return;
+            act(async () => {
+              await appApi.post('/outputs/' + encodeURIComponent(currentDevice) + '/pair', {pin});
+              state.pairing = null;
+              toast(t2('bt.output.paired'), {type: 'success'});
+            });
+          }}, t2('bt.output.pin.send')) : null,
+        ) : null,
+      ].filter(Boolean));
+    }
+
+    // -------------------------------------------------------------------- barra
+
+    function renderPlayer() {
+      const status = state.status || {};
+      const track = status.track || null;
+      const playing = status.state === 'playing';
+      const volume = Math.round((status.volume || 0) * 100);
+
+      playerBar.replaceChildren(
+        h('div', {class: 'bt-player__now'},
+          art(track || {title: 'BirdTunes'}, 'md'),
+          h('div', {class: 'bt-player__text'},
+            h('div', {class: 'bt-player__title'},
+              track ? (track.title || track.path) : t2('bt.nothing_playing')),
+            h('div', {class: 'bt-player__sub'}, track
+              ? [track.artist || '', status.position && status.duration
+                  ? clock(status.position) + ' / ' + clock(status.duration) : ''].filter(Boolean).join(' · ')
+              : t2('bt.state.' + (status.state || 'idle'))),
+          ),
+        ),
+        h('div', {class: 'bt-player__controls'},
+          h('button', {
+            class: 'bt-play', type: 'button', disabled: state.busy,
+            title: playing ? t2('bt.pause') : t2('bt.play'),
+            'aria-label': playing ? t2('bt.pause') : t2('bt.play'),
+            onClick: () => act(() => appApi.post(
+              playing ? '/pause' : (status.state === 'paused' ? '/resume' : '/play'), {})),
+          }, icon(playing ? 'pause' : 'play', {size: 20})),
+          iconBtn('next', t2('bt.next'), () => act(() => appApi.post('/next', {})),
+            {disabled: state.busy}),
+          iconBtn('stop', t2('bt.stop'), () => act(() => appApi.post('/stop', {})),
+            {disabled: state.busy}),
+        ),
+        h('div', {class: 'bt-player__side'},
+          h('div', {class: 'bt-volume'},
+            icon('volume', {size: 16}),
+            h('input', {type: 'range', min: '0', max: '100', step: '5', value: String(volume),
+              title: t2('bt.output.volume') + ' ' + volume + '%',
+              onChange: (event) => act(() => appApi.post('/volume',
+                {value: Number(event.target.value) / 100})),
+            }),
+          ),
+          h('button', {class: 'bt-chip', type: 'button',
+            dataset: {live: status.connected ? 'true' : 'false'},
+            title: t2('bt.section.output'),
+            onClick: () => {
+              state.outputOpen = !state.outputOpen;
+              renderSheet();
+              // O painel abre acima da barra: numa tela longa ele nasceria fora
+              // do campo de visão e o clique pareceria não ter feito nada.
+              if (state.outputOpen) sheet.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+            }},
+            icon('cast', {size: 14}),
+            h('span', {class: 'bt-chip__text'}, deviceName()),
+          ),
+        ),
+      );
+    }
+
+    // ----------------------------------------------------------------- navegação
+
+    const TABS = [
+      {id: 'home', icon: 'home', label: 'bt.nav.home'},
+      {id: 'library', icon: 'music', label: 'bt.nav.library'},
+      {id: 'playlists', icon: 'menu', label: 'bt.nav.playlists'},
+      {id: 'add', icon: 'plus', label: 'bt.nav.add'},
+      {id: 'schedule', icon: 'clock', label: 'bt.nav.schedule'},
+    ];
+
+    function renderNav() {
+      nav.replaceChildren(...TABS.map((tab) => h('button', {
+        class: 'bt-nav__item', type: 'button', dataset: {active: state.view === tab.id ? 'true' : 'false'},
+        onClick: () => go(tab.id),
+      }, icon(tab.icon, {size: 15}), t2(tab.label))));
+    }
+
+    async function go(view) {
+      if (view === 'playlists' && state.view === 'playlists') state.playlistId = '';
+      state.view = view;
+      if (view !== 'playlists') { state.playlistId = ''; state.playlist = null; }
+      renderNav();
+      main.replaceChildren(h('div', {class: 'card'},
+        h('div', {class: 'card__body'}, h('div', {class: 'skeleton skeleton--text'}))));
+      await loadForView();
+      render();
+    }
+
+    function render() {
+      renderNav();
+      listHost = null;
+      const nodes =
+        state.view === 'library' ? libraryView()
+          : state.view === 'playlists' ? playlistsView()
+          : state.view === 'add' ? addView()
+          : state.view === 'schedule' ? scheduleView()
+          : homeView();
+      main.replaceChildren(...nodes.filter(Boolean));
+      renderPlayer();
+      renderSheet();
+    }
+
+    // -------------------------------------------------------------------- vida
+
+    await loadCommon();
+    await loadForView();
     render();
 
     let cancelled = false;
+    // A barra é o que muda sozinho; o resto só muda quando alguém mexe. Menos
+    // pedidos que a tela antiga, que recarregava as sete seções a cada quinze
+    // segundos.
     const poll = setInterval(async () => {
       if (cancelled) return;
-      state.status = await safeGet('/status');
-      if (!cancelled) render();
-    }, 15000);
+      const status = await safeGet('/status');
+      if (cancelled || !status) return;
+      state.status = status;
+      renderPlayer();
+      if (state.view === 'home') {
+        const queue = await safeGet('/queue');
+        state.queue = (queue && queue.queue) || [];
+        if (!cancelled) render();
+      }
+    }, 8000);
+
+    // O app publica o que acontece; ouvir é mais barato e mais rápido que
+    // perguntar de novo.
+    const offState = ctx.ws && ctx.ws.on
+      ? ctx.ws.on('app.birdtunes.state', async () => {
+          state.status = await safeGet('/status');
+          if (cancelled) return;
+          // O Início mostra a mesma faixa que a barra, em letra grande: atualizar
+          // só a barra deixava as duas anunciando músicas diferentes na mesma tela.
+          if (state.view === 'home') render();
+          else renderPlayer();
+        })
+      : null;
+    const offLibrary = ctx.ws && ctx.ws.on
+      ? ctx.ws.on('app.birdtunes.library', async () => {
+          if (cancelled) return;
+          await loadCommon();
+          await loadForView();
+          if (!cancelled) render();
+        })
+      : null;
 
     return () => {
       cancelled = true;
       clearInterval(poll);
+      if (searchTimer) clearTimeout(searchTimer);
+      if (typeof offState === 'function') offState();
+      if (typeof offLibrary === 'function') offLibrary();
     };
   },
 };

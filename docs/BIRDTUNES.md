@@ -219,20 +219,40 @@ POST   /convert                          {track_ids: []} -> transcode to MP3 (40
 
 Event topics: `app.birdtunes.state`, `app.birdtunes.import`, `app.birdtunes.library`.
 
-## 8. UI additions (panel.js)
+## 8. The panel (panel.js + panel.css)
 
-- **Playlists** section: cards with name, track count, duration, colour; create, rename,
-  delete, drag tracks in, reorder, "Play now".
-- **Import from YouTube**: a URL field that previews what it found (title, item count,
-  thumbnails) before downloading; a target selector (new playlist / existing playlist);
-  a live progress list with per-item state and a cancel button; and, when ffmpeg is
-  missing, a plain-language warning that imports will not play on AirPlay outputs plus
-  the exact command to install it.
-- **Schedule editor**: the 24-hour strip from §11 of the architecture, now showing which
-  playlist owns each band, overlap highlighting, weekday toggles, preset buttons, and a
-  permanent "what happens next" line.
-- **Compatibility banner** on the library when the current output cannot play part of it,
-  with a one-click "Convert N tracks to MP3" when ffmpeg is available.
+Laid out like a streaming app, because that is the shape of the job: a library,
+playlists, and one thing playing. It replaced a single column of seven cards —
+transport, compatibility, library, playlists, import, schedule, output — all open at
+once, where nothing had a home and finding a track meant scrolling past everything
+else.
+
+- **Five sections, one at a time**, behind a pill nav: Home, Songs, Playlists, Add,
+  Schedule. Each owns its title and its own tools.
+- **A player bar fixed to the bottom of the panel**, in every section: cover, title,
+  transport, volume, and the current speaker. Selecting the output lives behind that
+  speaker chip — where a person looks for it — instead of in an eighth card at the end
+  of the page.
+- **Home** is what is playing (large, with the progress the player actually reports),
+  what is up next from `/queue`, the playlists as tiles, and the four counters from
+  `/stats`.
+- **Songs** uses the server's own search and sort (`/library?search=&sort=`), debounced,
+  redrawing the list only — not the section, which used to steal focus mid-word. Every
+  row carries play, like, recommend-less, add-to-playlist, block and remove.
+- **Playlists** are tiles that open a screen of their own: header with the count and
+  total time, Play, add from YouTube, rename, delete, and a numbered track list that
+  reorders in place.
+- **Add** is the YouTube field with preview, destination (library / new playlist /
+  existing playlist), the jobs list with progress, and — separately, because it is a
+  different thing — "play on the TV", which downloads nothing.
+- **Schedule** keeps the window editor: weekday toggles, presets that replace rather
+  than stack, and quiet hours.
+- **Compatibility** is a banner on Songs when the current output cannot play part of the
+  library, with a one-click convert when ffmpeg is there and the reason when it is not.
+
+Covers are the track's own thumbnail when the import brought one, and otherwise a tile
+built from the title's first letter over a colour derived from the name — decoration,
+never a stand-in for data the app does not have.
 
 ## 9. Tests this adds
 

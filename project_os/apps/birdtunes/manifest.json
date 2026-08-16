@@ -1,7 +1,7 @@
 {
   "id": "birdtunes",
   "name": "BirdTunes",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Música pros passarinhos na hora certa: arquivos da casa ou do YouTube, tocando numa caixa AirPlay ou Chromecast, nos horários que você escolher.",
   "author": "project-os",
   "icon": "music",
@@ -9,7 +9,8 @@
   "entrypoint": "app:setup",
   "min_project_os": "0.0.0",
   "ui": {
-    "panel": "panel.js"
+    "panel": "panel.js",
+    "styles": "panel.css"
   },
   "permissions": ["network", "media"],
   "config_schema": [

@@ -339,13 +339,22 @@ def scan(
 
 
 def add_url_track(db: Any, url: str, title: str = "") -> Dict[str, Any]:
-    """A direct internet-radio stream: played without downloading, never shuffled."""
+    """A direct internet-radio stream: played without downloading, never shuffled.
+
+    ``path`` fica NULL, e não ``''``. A coluna é UNIQUE: com string vazia, a
+    *primeira* rádio adicionada ocupava o valor e todas as seguintes batiam no
+    ``ON CONFLICT(path) DO NOTHING`` -- respondendo 200, sem inserir nada e sem
+    dizer uma palavra. Quem colava o segundo link via a tela não mudar. O
+    conflito que importa aqui é o do id, que sai do próprio endereço: o mesmo
+    link duas vezes continua sendo uma faixa só, e o SQLite aceita quantos NULL
+    quiser numa coluna UNIQUE.
+    """
     track_id = _track_id_for(url)
     db.execute(
         "INSERT INTO app_birdtunes_tracks "
         "(id, path, source, source_url, title, added_at, missing) "
-        "VALUES (?, '', 'url', ?, ?, ?, 0) "
-        "ON CONFLICT(path) DO NOTHING",
+        "VALUES (?, NULL, 'url', ?, ?, ?, 0) "
+        "ON CONFLICT(id) DO NOTHING",
         (track_id, url, title or url, utcnow_iso()),
     )
     db.execute("INSERT OR IGNORE INTO app_birdtunes_feedback (track_id) VALUES (?)", (track_id,))
@@ -364,6 +373,10 @@ _DEFAULT_FEEDBACK = {
 def _shape_track(row: Any) -> Dict[str, Any]:
     data = row_to_dict(row) or {}
     data["missing"] = bool(data.get("missing"))
+    # Faixa de rádio não tem arquivo, e agora guarda NULL em vez de string
+    # vazia. Quem lê espera texto ("" quando não há arquivo), então a diferença
+    # morre aqui e não vira um None atravessando o player.
+    data["path"] = data.get("path") or ""
     return data
 
 

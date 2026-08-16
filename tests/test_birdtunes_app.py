@@ -633,10 +633,11 @@ def test_a_tela_desliga_o_importar_e_deixa_o_tocar_na_tv():
     )
     fonte = _io.open(caminho, encoding="utf-8").read()
     assert "ytdlp_available !== false" in fonte
-    inicio = fonte.index("function importCard()")
-    trecho = fonte[inicio:fonte.index("function ", inicio + 10)]
+    inicio = fonte.index("function addView()")
+    trecho = fonte[inicio:fonte.index("\n    function ", inicio + 10)]
     assert trecho.count("disabled: !podeImportar") == 2, "prever e adicionar, e só eles"
     assert "bt.import.no_ytdlp" in trecho
+    assert "/play/youtube" in trecho, "tocar na TV não depende do yt-dlp e continua clicável"
 
 
 def test_convert_route_returns_409_without_ffmpeg(auth_client, monkeypatch):
