@@ -269,15 +269,22 @@ export default {
         }, t('apps.action.open'), icon('link', {size: 14})));
       }
 
+      // Com o app parado não há resumo de estado, e o subtítulo cai na descrição
+      // -- que o corpo também mostrava. O cartão repetia a mesma frase duas
+      // vezes, uma cortada e outra inteira, e parado é justamente o estado em
+      // que a maioria dos apps fica.
+      const sub = status.summary || app.description || null;
       return card({
         title: app.name || app.id,
-        sub: status.summary || app.description || null,
+        sub,
         mark: appIcon(app.icon, {fallback: 'apps', size: 18}),
         tools: stateBadge(app),
         variant: state_ === 'error' ? 'danger' : '',
         body: state_ === 'error'
           ? h('p', {class: 'small muted'}, app.error || t('apps.error.detail'))
-          : (app.description ? h('p', {class: 'small muted'}, app.description) : null),
+          : (app.description && app.description !== sub
+              ? h('p', {class: 'small muted'}, app.description)
+              : null),
         footer,
       });
     }

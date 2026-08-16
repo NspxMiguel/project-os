@@ -179,11 +179,21 @@ export function createRouter({base = '#/'} = {}) {
       if (started) return this;
       started = true;
       window.addEventListener('hashchange', onHashChange);
+      // Sem hash nenhum -- ou seja, quem digitou o endereço da caixa e nada
+      // mais -- a barra ganha o "#/" aqui mesmo, com replaceState, e não por
+      // navigate(): um endereço vazio já normaliza para "/", então navigate
+      // enxerga a mesma rota, não dispara hashchange (replaceState também não
+      // dispara sozinho) e volta sem ter chamado ninguém. O resultado era a
+      // tela de carregamento para sempre em quem abria project-os.local --
+      // funcionava só quando o navegador completava o endereço com o "#/algo"
+      // de uma visita anterior.
+      //
+      // Escrever a barra e despachar são coisas separadas, e as duas
+      // acontecem: dispatch() é chamado uma vez, com hash ou sem.
       if (!window.location.hash) {
-        navigate(base, {replace: true});
-      } else {
-        dispatch();
+        window.history.replaceState(null, '', window.location.href.split('#')[0] + base);
       }
+      dispatch();
       return this;
     },
     stop() {

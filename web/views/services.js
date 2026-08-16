@@ -27,6 +27,14 @@ import {toast, confirm} from '../lib/toast.js';
 import {navigate} from '../lib/router.js';
 
 setStrings('en', {
+  // As mesmas chaves da tela de Aplicativos, declaradas aqui também: as telas
+  // são carregadas sob demanda, e depender de a outra ter sido aberta antes é
+  // depender de uma coincidência para a etiqueta sair na língua certa.
+  'apps.state.running': 'running',
+  'apps.state.stopped': 'stopped',
+  'apps.state.starting': 'starting',
+  'apps.state.error': 'error',
+  'apps.state.disabled': 'disabled',
   'services.title': 'Services',
   'services.lead': 'Everything project-os can start, stop and restart on this machine.',
   'services.units.title': 'Managed services',
@@ -113,7 +121,13 @@ function appBadge(app) {
   const state = app.state || 'unknown';
   const level = state === 'error' ? 'danger' : state === 'running' || state === 'started' ? 'ok'
     : state === 'disabled' ? '' : 'info';
-  return h('span', {class: 'badge' + (level ? ' badge--' + level : '')}, state);
+  // O mesmo dado que a tela de Aplicativos mostra, e com as mesmas palavras: aqui
+  // ele saía cru do servidor, então numa interface em português a etiqueta dizia
+  // "disabled". t() devolve a chave quando não conhece o estado, e uma chave na
+  // tela é pior que a palavra do servidor -- daí o teste do que voltou.
+  const rotulo = t('apps.state.' + state);
+  return h('span', {class: 'badge' + (level ? ' badge--' + level : '')},
+    rotulo === 'apps.state.' + state ? state : rotulo);
 }
 
 /* ------------------------------------------------------------------ view */

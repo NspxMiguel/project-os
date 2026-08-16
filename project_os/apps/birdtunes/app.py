@@ -479,31 +479,31 @@ class BirdTunesApp(AppInstance):
         track = snapshot.get("track") or {}
         title = (track.get("title") if isinstance(track, dict) else "") or ""
         if snapshot.get("state") == "playing" and title:
-            return "Playing %s" % title
+            return "Tocando %s" % title
         if snapshot.get("error"):
             return str(snapshot["error"])
         if quiet:
-            return "Quiet hours -- nothing plays until they end."
+            return "Horário de silêncio: nada toca até ele acabar."
         if snapshot.get("output", "null") == "null":
-            return "No speaker chosen yet. Pick one in the app to start playing."
-        return "Idle. Waiting for the next scheduled session."
+            return "Nenhuma caixa de som escolhida. Escolha uma no app para começar."
+        return "Parado, esperando o próximo horário da agenda."
 
     def _status_fields(self, snapshot):
         # type: (Dict[str, Any]) -> List[Dict[str, Any]]
         track = snapshot.get("track") or {}
         title = (track.get("title") if isinstance(track, dict) else "") or "--"
         fields = [
-            {"label": "Speaker",
-             "value": snapshot.get("device") or snapshot.get("name") or "Not chosen",
+            {"label": "Caixa de som",
+             "value": snapshot.get("device") or snapshot.get("name") or "Nenhuma escolhida",
              "kind": "text"},
-            {"label": "Now playing", "value": title, "kind": "text"},
+            {"label": "Tocando agora", "value": title, "kind": "text"},
             {"label": "Volume", "value": float(snapshot.get("volume") or 0.0) * 100.0,
              "kind": "percent"},
         ]
         if snapshot.get("queue_len"):
             fields.append({"label": "Na fila", "value": snapshot["queue_len"], "kind": "number"})
         if snapshot.get("next_change"):
-            fields.append({"label": "Next change", "value": snapshot["next_change"], "kind": "relative"})
+            fields.append({"label": "Próxima mudança", "value": snapshot["next_change"], "kind": "relative"})
         return fields
 
     # -- config helpers ------------------------------------------------
