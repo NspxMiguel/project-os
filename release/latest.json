@@ -1,8 +1,8 @@
 {
-  "version": "0.4.10",
-  "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.10/project-os-0.4.10.tar.gz",
-  "sha256": "4532efe58bec8ca140aabc0500d89ddbb3a80a3f62dcf774dec76e598e6cf86b",
-  "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.10",
+  "version": "0.4.11",
+  "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.11/project-os-0.4.11.tar.gz",
+  "sha256": "9d9ac4dc76682a3fda324fdf99f06a563addf74c3e7af5c3b65c6ea4338f1a6d",
+  "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.11",
   "system": {
     "version": "0.4.8",
     "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.8/project-os-rootfs-0.4.8.tar.gz",
