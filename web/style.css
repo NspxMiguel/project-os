@@ -396,26 +396,30 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--space-4) 0; }
 .btn.is-busy { pointer-events: none; opacity: 0.75; }
 
 /* Segmented control (Simple | Advanced). */
+/* Uma tira de abas que não cabe rola dentro de si mesma. Em grade, um item com
+   overflow próprio tem tamanho mínimo automático zero -- é isso que impede a
+   tira de definir a largura da coluna e, por tabela, a da página.
+
+   Isto vale para toda tira, não só para a que tinha seis abas: medido num
+   celular de 375px, a tira de "Apps" empurrava a página para 402px e a da Loja
+   ajudava a levá-la a 826px. Uma tira que não cabe é sempre erro; não existe
+   caso em que valha a pena esticar a página inteira por causa dela. */
 .segmented {
-  display: inline-flex;
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
   padding: 3px;
   gap: 2px;
   border-radius: var(--radius-full);
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
-/* Uma tira de abas que não cabe rola dentro de si mesma. Em grade, um item com
-   overflow próprio tem tamanho mínimo automático zero -- é isso que impede a
-   tira de definir a largura da coluna e, por tabela, a da página. */
-.segmented--scroll {
-  display: flex;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-}
-.segmented--scroll::-webkit-scrollbar { display: none; }
-.segmented--scroll > * { flex: none; }
+.segmented::-webkit-scrollbar { display: none; }
+.segmented > * { flex: none; }
+/* Mantido: telas antigas ainda pedem o modificador pelo nome. */
+.segmented--scroll { display: flex; }
 
 .segmented__btn {
   appearance: none; border: 0; background: transparent;

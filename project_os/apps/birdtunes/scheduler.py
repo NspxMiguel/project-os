@@ -318,10 +318,17 @@ class SchedulerLoop(object):
         on_should_stop: Optional[Callable[[], Any]] = None,
         interval: float = 15.0,
         clock: Optional[Callable[[], dt.datetime]] = None,
+        on_still_open: Optional[Callable[[Dict[str, Any]], Any]] = None,
     ) -> None:
         self._get_schedule = get_schedule
         self._on_should_play = on_should_play
         self._on_should_stop = on_should_stop
+        # Chamado a cada volta em que a janela já estava aberta. Sem isto, uma
+        # janela só era olhada no instante em que abria: se a música parasse no
+        # meio -- TV desligada, conexão caída, erro no meio do caminho -- o
+        # silêncio durava até o fim da janela, e para quem marcou o horário isso
+        # é indistinguível de "não tocou".
+        self._on_still_open = on_still_open
         self._interval = float(interval)
         self._clock = clock or dt.datetime.now
         self._task = None  # type: Optional[asyncio.Future]
@@ -340,6 +347,8 @@ class SchedulerLoop(object):
         if playing and window_id != self._active_window_id:
             self._active_window_id = window_id
             await _maybe_call(self._on_should_play, window)
+        elif playing and self._on_still_open is not None:
+            await _maybe_call(self._on_still_open, window)
         elif not playing and self._active_window_id is not None:
             self._active_window_id = None
             await _maybe_call(self._on_should_stop)

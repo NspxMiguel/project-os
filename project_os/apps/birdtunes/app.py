@@ -113,7 +113,9 @@ def build_router(instance: "BirdTunesApp") -> APIRouter:
 
     @router.post("/stop")
     async def post_stop(_: Any = auth_dep) -> Dict[str, Any]:
-        return await instance.stop_playback()
+        # Parar pelo botão é uma ordem, não um defeito: dentro de uma janela da
+        # agenda, ela não deve ressuscitar a música por cima da vontade dele.
+        return await instance.stop_playback(a_pedido=True)
 
     @router.post("/next")
     async def post_next(_: Any = auth_dep) -> Dict[str, Any]:
@@ -407,6 +409,10 @@ class BirdTunesApp(AppInstance):
         self._import_tasks = set()  # type: set
         #: A fila: um download por vez. Ver _run_import.
         self._fila_de_downloads = asyncio.Semaphore(1)
+        #: Ele apertou parar dentro de uma janela da agenda? Então o silêncio é
+        #: ordem dele, e a janela não insiste. Ver _on_schedule_still_open.
+        self._silencio_pedido = False
+        self._ultima_retomada = 0.0
         self._rng = random.Random()
 
     # -- lifecycle ---------------------------------------------------------
@@ -419,6 +425,7 @@ class BirdTunesApp(AppInstance):
             get_schedule=lambda: self.ctx.config.get("schedule", {}) or {},
             on_should_play=self._on_schedule_play,
             on_should_stop=self._on_schedule_stop,
+            on_still_open=self._on_schedule_still_open,
         )
         self._scheduler.start()
 
@@ -777,7 +784,9 @@ class BirdTunesApp(AppInstance):
         await self._player.resume()
         return self.status()
 
-    async def stop_playback(self) -> Dict[str, Any]:
+    async def stop_playback(self, a_pedido: bool = False) -> Dict[str, Any]:
+        if a_pedido:
+            self._silencio_pedido = True
         self._cancel_session_timer()
         if self._player is not None:
             await self._player.stop()
@@ -874,6 +883,9 @@ class BirdTunesApp(AppInstance):
         self.ctx.emit("schedule", {"last_attempt": self._last_schedule_attempt})
 
     async def _on_schedule_play(self, window: Dict[str, Any]) -> None:
+        # Uma janela nova começa limpa: o "parar" da janela anterior não manda
+        # nesta. Sem isto, um stop às 08:10 calaria também o horário das 17:00.
+        self._silencio_pedido = False
         playlist_id = window.get("playlist_id") or library.ALL_PLAYLIST_ID
         volume_override = window.get("volume")
         if volume_override is not None:
@@ -897,7 +909,61 @@ class BirdTunesApp(AppInstance):
             return
         self._anotar_tentativa(window, "", "")
 
+    #: De quanto em quanto tempo se tenta de novo dentro de uma janela já
+    #: aberta. O laço bate a cada 15s; insistir a cada volta encheria o log e
+    #: castigaria uma TV que está mesmo desligada.
+    RETENTAR_A_CADA_S = 90.0
+
+    async def _on_schedule_still_open(self, window: Dict[str, Any]) -> None:
+        """A janela continua aberta -- e a música devia continuar tocando.
+
+        Uma janela só era olhada no instante em que abria. Se a música parasse
+        no meio (a TV desligada, a conexão caída, um erro no meio do caminho), o
+        silêncio durava até o fim da janela. Quem marcou o horário não tem como
+        distinguir isso de "não tocou".
+        """
+        if self._silencio_pedido:
+            return  # ele apertou parar; isso é ordem, não defeito
+        estado = self.status().get("state")
+        if estado in ("playing", "buffering"):
+            return
+        agora = time.time()
+        if agora - self._ultima_retomada < self.RETENTAR_A_CADA_S:
+            return
+        # Se ele pegou a TV para outra coisa, a janela não a toma de volta. No
+        # começo da janela, tomar é o que ele pediu ao marcar o horário; no
+        # meio, a TV ocupada quer dizer que ele foi lá e mudou -- insistir seria
+        # cortar o vídeo dele de 90 em 90 segundos.
+        ocupada = self._quem_esta_na_saida()
+        if ocupada:
+            self._ultima_retomada = agora
+            self.log.info("scheduled window %r paused: %s has the device", window.get("id"), ocupada)
+            self._anotar_tentativa(window, "device_busy", "%s está usando a saída agora." % ocupada)
+            return
+        self._ultima_retomada = agora
+        self.log.info("scheduled window %r fell silent; trying again", window.get("id"))
+        await self._on_schedule_play(window)
+
+    def _quem_esta_na_saida(self) -> str:
+        """O nome do app que tomou a saída, ou "" se ela está livre.
+
+        Só o Chromecast sabe responder isso; nas outras saídas a pergunta não
+        existe e a resposta certa é "livre".
+        """
+        player = self._player
+        pergunta = getattr(player, "_app_na_tela", None)
+        if pergunta is None:
+            return ""
+        try:
+            nome = pergunta() or ""
+        except Exception:  # pragma: no cover - aparelho fora de alcance
+            return ""
+        # O nosso próprio receptor não conta como ocupação.
+        return "" if nome in ("", "Default Media Receiver") else str(nome)
+
     async def _on_schedule_stop(self) -> None:
+        self._silencio_pedido = False
+        self._ultima_retomada = 0.0
         await self.stop_playback()
 
     # -- import ----------------------------------------------------------

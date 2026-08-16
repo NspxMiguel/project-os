@@ -194,10 +194,15 @@ def test_a_tira_de_abas_rola_dentro_de_si():
     saíam pela direita e a página inteira rolava de lado. Medido no navegador
     antes: página de 491px numa janela de 375, com o cartão terminando fora da
     tela. Depois: 375 exatos, e a tira rolando 522px dentro de 349.
+
+    A regra saiu do modificador e passou a valer para toda tira: medido depois,
+    a tira de "Apps" também empurrava a página (402px) e a da Loja ajudava a
+    levá-la a 826px, e as duas usavam `.segmented` puro. Ver
+    ``test_nada_estoura_no_celular``.
     """
     assert "segmented segmented--scroll" in _ler(SETTINGS)
     css = _ler(CSS)
-    trecho = css[css.index(".segmented--scroll {"):]
+    trecho = css[css.index(".segmented {"):]
     trecho = trecho[:trecho.index("}")]
     assert "overflow-x: auto" in trecho
     assert "max-width: 100%" in trecho

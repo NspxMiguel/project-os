@@ -16,6 +16,12 @@
   flex-direction: column;
   gap: var(--space-4);
   min-height: 100%;
+  /* Sem isto o painel inteiro fica do tamanho do seu conteúdo mais largo: a
+     tira de navegação tem seis abas que não quebram linha, e o mínimo
+     automático de um item de flex/grade é o conteúdo, não zero. Medido num
+     celular de 375px: a página ia a 604px e rolava para o lado. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* --------------------------------------------------------------- navegação */
@@ -63,7 +69,11 @@
   background: var(--surface);
   border: 1px solid var(--border);
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  /* A tira rola dentro de si mesma; sem o mínimo zero ela empurra a linha. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .bt-nav::-webkit-scrollbar { display: none; }

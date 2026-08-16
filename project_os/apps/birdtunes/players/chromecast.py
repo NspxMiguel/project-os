@@ -47,6 +47,18 @@ CONNECT_TIMEOUT = 20.0
 #: How often to poll media status for end-of-track, in seconds.
 POLL_INTERVAL = 1.0
 
+#: Quantas voltas seguidas sem sessão até dar a transmissão por encerrada. Uma
+#: só seria cedo demais: entre uma faixa e outra o estado pisca. Três voltas de
+#: 1s é rápido para quem está olhando e folgado para o aparelho.
+SUMICOS_ATE_DESISTIR = 3
+
+
+def _fim_por_fora(app_atual: Optional[str]) -> str:
+    """Por que a música parou, na língua de quem está olhando a tela."""
+    if app_atual:
+        return "%s assumiu a TV, e a música parou." % app_atual
+    return "A transmissão foi encerrada no aparelho."
+
 
 def _pychromecast() -> Any:
     try:
@@ -335,6 +347,8 @@ class ChromecastPlayer(Player):
     async def _watch(self, media_controller: Any) -> None:
         """Poll for the receiver reaching IDLE/FINISHED -- pychromecast has no future to await."""
         loop = asyncio.get_event_loop()
+        viu_tocar = False
+        sumido = 0
         try:
             while True:
                 await asyncio.sleep(POLL_INTERVAL)
@@ -345,13 +359,40 @@ class ChromecastPlayer(Player):
                     idle_reason = await loop.run_in_executor(
                         None, lambda: media_controller.status.idle_reason
                     )
+                    app_atual = await loop.run_in_executor(None, self._app_na_tela)
                 except Exception:  # pragma: no cover - device vanished mid-poll
                     return
+                if state in ("PLAYING", "BUFFERING"):
+                    viu_tocar = True
+                    sumido = 0
                 if state == "IDLE" and idle_reason == "FINISHED":
                     self._finish_playback(REASON_FINISHED)
                     return
+                # A sessão pode acabar sem passar por IDLE: a TV é desligada, ou
+                # alguém abre o YouTube nela. Sem isto, o laço ficava girando
+                # para sempre e a tela seguia dizendo "tocando" com a posição
+                # subindo -- medido: a TV sem aplicativo nenhum e o app em
+                # "playing", posição 255s. Uma tela que mente é pior que uma
+                # tela parada, porque nem a agenda percebe que precisa tentar
+                # de novo.
+                if viu_tocar and (app_atual is None or state in ("UNKNOWN", "", None)):
+                    sumido += 1
+                    if sumido >= SUMICOS_ATE_DESISTIR:
+                        self.log.info("Chromecast session ended outside the app (%s)", app_atual)
+                        self._finish_playback(REASON_ERROR, _fim_por_fora(app_atual))
+                        self._set_state(PlaybackState.STOPPED)
+                        return
+                else:
+                    sumido = 0
         except asyncio.CancelledError:
             raise
+
+    def _app_na_tela(self) -> Optional[str]:
+        """Que aplicativo está na frente na TV, ou None se nenhum."""
+        cast = self._cast
+        status = getattr(cast, "status", None) if cast is not None else None
+        nome = getattr(status, "display_name", None) if status is not None else None
+        return nome or None
 
     async def _cancel_watch(self) -> None:
         task, self._watch_task = self._watch_task, None
