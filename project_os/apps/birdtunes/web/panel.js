@@ -294,6 +294,10 @@ export default {
 
     async function loadHome() {
       state.stats = await safeGet('/stats');
+      // A agenda também: um horário que chegou e não tocou só aparecia dentro
+      // da aba Agenda, ou seja, só para quem já desconfiava dela. Quem marcou
+      // 12:30, não ouviu nada e abriu o app via esta tela e mais nada.
+      state.schedule = await safeGet('/schedule');
     }
 
     async function loadForView() {
@@ -487,6 +491,7 @@ export default {
       const quick = (state.playlists || []).filter((pl) => !pl.virtual).slice(0, 6);
 
       return [
+        scheduleWarnings(),
         status.quiet_hours_active
           ? h('div', {class: 'notice notice--warning'}, t2('bt.quiet_hours'))
           : null,
