@@ -400,6 +400,8 @@ class BirdTunesApp(AppInstance):
         self._current_history_id = None  # type: Optional[int]
         self._current_playlist_id = None  # type: Optional[str]
         self._last_empty_reason = None  # type: Optional[str]
+        #: O que aconteceu da última vez que um horário da agenda chegou.
+        self._last_schedule_attempt = None  # type: Optional[Dict[str, Any]]
         self._scheduler = None  # type: Optional[scheduler.SchedulerLoop]
         self._session_task = None  # type: Optional[asyncio.Task]
         self._import_tasks = set()  # type: set
@@ -821,23 +823,77 @@ class BirdTunesApp(AppInstance):
         self._queue = [by_id[t] for t in track_ids if t in by_id]
 
     # -- schedule ----------------------------------------------------------
+    def schedule_blocked(self) -> Optional[Dict[str, str]]:
+        """O que já dá para saber, agora, que vai impedir o próximo horário de tocar.
+
+        A agenda toca sozinha, sem ninguém olhando -- então o único momento útil
+        de contar que ela não vai conseguir é **antes** da hora. Sem isto a tela
+        mostra "Toca às 08:00", às 08:00 não sai som nenhum, e não há onde
+        perguntar por quê: o app sabia desde o começo e não disse.
+        """
+        if str(self.ctx.config.get("output.type", "null") or "null") == "null":
+            return {
+                "code": "no_output",
+                "message": "Nenhuma caixa de som escolhida: na hora marcada não vai sair som.",
+            }
+        candidatos, motivo = library.candidate_set(
+            self.ctx.db,
+            self._current_playlist_id or library.ALL_PLAYLIST_ID,
+            self.ctx.config.get("output.type", "null"),
+        )
+        if not candidatos:
+            return {"code": motivo or "no_tracks", "message": _empty_reason_message(motivo)}
+        return None
+
     def schedule_status(self) -> Dict[str, Any]:
         cfg = self.ctx.config.get("schedule", {}) or {}
         return {
             "schedule": cfg,
             "next_change": scheduler.next_change(_now(self.ctx.config), cfg),
             "active_window": scheduler.active_window(_now(self.ctx.config), cfg),
+            "blocked": self.schedule_blocked(),
+            "last_attempt": self._last_schedule_attempt,
         }
+
+    def _anotar_tentativa(self, window: Dict[str, Any], code: str, message: str) -> None:
+        """Guarda o que aconteceu na última vez que um horário chegou.
+
+        Fica na memória de propósito: é sobre esta execução do serviço, e um
+        motivo velho de duas semanas atrás confundiria mais do que ajuda.
+        """
+        self._last_schedule_attempt = {
+            "at": _now(self.ctx.config).isoformat(),
+            "window_id": window.get("id", ""),
+            "window_name": window.get("name", ""),
+            "ok": code == "",
+            "code": code,
+            "message": message,
+        }
+        self.ctx.emit("schedule", {"last_attempt": self._last_schedule_attempt})
 
     async def _on_schedule_play(self, window: Dict[str, Any]) -> None:
         playlist_id = window.get("playlist_id") or library.ALL_PLAYLIST_ID
         volume_override = window.get("volume")
         if volume_override is not None:
             self.ctx.config.set("output.volume", safety.clamp_volume(volume_override, self.ctx.config.raw_dict()))
+        # Um horário que chega e não toca é a única coisa que este app faz sozinho
+        # dando errado -- e ele errava em silêncio de três jeitos: exceção engolida
+        # num log que ninguém lê, nenhuma faixa escolhível (que nem exceção
+        # levanta) e faixa que a saída não sabe tocar. Nos três, quem marcou o
+        # horário via a tela dizer "Toca às 08:00" e não ouvia nada.
         try:
-            await self.play(playlist_id=playlist_id)
-        except ApiError:
-            self.log.info("scheduled window %r had nothing to play", window.get("id"))
+            resultado = await self.play(playlist_id=playlist_id)
+        except ApiError as exc:
+            self.log.info("scheduled window %r could not play: %s", window.get("id"), exc.message)
+            self._anotar_tentativa(window, exc.code or "error", exc.message)
+            return
+        if not resultado.get("playing"):
+            motivo = str(resultado.get("reason") or "no_tracks")
+            self.log.info("scheduled window %r had nothing to play (%s)", window.get("id"), motivo)
+            self._anotar_tentativa(window, motivo, str(
+                resultado.get("message") or _empty_reason_message(motivo)))
+            return
+        self._anotar_tentativa(window, "", "")
 
     async def _on_schedule_stop(self) -> None:
         await self.stop_playback()

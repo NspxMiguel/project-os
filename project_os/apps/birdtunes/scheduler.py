@@ -22,27 +22,30 @@ log = logging.getLogger(__name__)
 
 _DEFAULT_TIME = "00:00"
 _WEEKDAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+#: Os mesmos dias como a tela fala. Os de cima continuam existindo porque
+#: são apelidos aceitos na entrada ("monday", "mon"), e não texto de tela.
+_DIAS = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
 
 #: One-click presets the UI offers; they only prefill the editor (section 5).
 PRESETS = [
     {
         "id": "while_out",
-        "name": "While I'm out",
+        "name": "Enquanto eu não estou",
         "start": "09:00", "end": "17:00", "days": [0, 1, 2, 3, 4],
     },
     {
         "id": "mornings",
-        "name": "Mornings",
+        "name": "De manhã",
         "start": "07:00", "end": "10:00", "days": [0, 1, 2, 3, 4, 5, 6],
     },
     {
         "id": "afternoons",
-        "name": "Afternoons",
+        "name": "De tarde",
         "start": "14:00", "end": "18:00", "days": [0, 1, 2, 3, 4, 5, 6],
     },
     {
         "id": "weekends",
-        "name": "Weekends only",
+        "name": "Só no fim de semana",
         "start": "10:00", "end": "16:00", "days": [5, 6],
     },
 ]
@@ -253,8 +256,8 @@ def _describe_moment(moment: dt.datetime, reference: dt.datetime) -> str:
     if moment.date() == reference.date():
         return time_text
     if (moment.date() - reference.date()).days == 1:
-        return "%s tomorrow" % time_text
-    return "%s on %s" % (time_text, _WEEKDAY_NAMES[moment.weekday()])
+        return "%s de amanhã" % time_text
+    return "%s de %s" % (time_text, _DIAS[moment.weekday()])
 
 
 def next_change(moment: dt.datetime, schedule_cfg: Dict[str, Any]) -> Dict[str, Any]:

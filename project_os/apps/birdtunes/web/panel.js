@@ -140,6 +140,9 @@ export default {
       'bt.stats.likes': 'Likes',
       'bt.section.schedule': 'Schedule',
       'bt.schedule.lead': 'What plays while nobody is watching.',
+      'bt.schedule.blocked': 'This schedule will not play',
+      'bt.schedule.pick_output': 'Choose a speaker',
+      'bt.schedule.last_failed': 'The last window did not play',
       'bt.schedule.enabled': 'Schedule enabled',
       'bt.schedule.quiet': 'Quiet hours',
       'bt.schedule.quiet_start': 'From',
@@ -898,11 +901,48 @@ export default {
       );
     }
 
+    // O aviso que faltava: a agenda toca sozinha, então o único momento útil de
+    // dizer que ela não vai conseguir é antes da hora. O servidor confere agora
+    // (tem caixa de som escolhida? tem faixa que dê para tocar nela?) e conta o
+    // que aconteceu da última vez que um horário chegou.
+    function scheduleWarnings() {
+      const info = state.schedule || {};
+      const blocked = info.blocked;
+      const last = info.last_attempt;
+      const avisos = [];
+      if (blocked) {
+        avisos.push(h('div', {class: 'bt-warn'},
+          icon('warning', {size: 16}),
+          h('div', {class: 'grow'},
+            h('div', {class: 'bt-warn__title'}, t2('bt.schedule.blocked')),
+            h('div', {class: 'small muted'}, blocked.message || ''),
+          ),
+          blocked.code === 'no_output'
+            ? h('button', {
+                class: 'btn btn--sm',
+                onClick: () => { state.outputOpen = true; renderSheet(); },
+              }, t2('bt.schedule.pick_output'))
+            : null,
+        ));
+      }
+      if (last && !last.ok && (!blocked || blocked.code !== last.code)) {
+        avisos.push(h('div', {class: 'bt-warn'},
+          icon('warning', {size: 16}),
+          h('div', {class: 'grow'},
+            h('div', {class: 'bt-warn__title'}, t2('bt.schedule.last_failed')),
+            h('div', {class: 'small muted'}, last.message || ''),
+          ),
+        ));
+      }
+      return avisos.length ? h('div', {class: 'stack stack--sm'}, avisos) : null;
+    }
+
     function scheduleView() {
       const sched = (state.schedule && state.schedule.schedule) || {};
       const quiet = sched.quiet_hours || {};
       const windows = sched.windows || [];
       return [
+        scheduleWarnings(),
         h('div', {class: 'bt-section'},
           sectionHead(t2('bt.section.schedule'), t2('bt.schedule.lead'),
             h('label', {class: 'row row--tight'},
