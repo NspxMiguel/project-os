@@ -4,11 +4,11 @@
   "sha256": "6222038f8a33d998d2b5236c4c299c25eec103aaf665257af33952c5e2531bb7",
   "notes": "0.4.22: o que mudou aparece antes de instalar\n\nO manifesto gravava a URL do release no campo `notes`, e as telas imprimiam esse\nendere\u00e7o embaixo do r\u00f3tulo \"O que mudou\". Quem estava decidindo se instalava\nagora via um link, e para ler o que muda precisava sair da caixa.\n\nAgora s\u00e3o dois campos: `notes` \u00e9 o texto (a mensagem do commit da tag, que \u00e9 o\nchangelog j\u00e1 escrito a cada vers\u00e3o) e `notes_url` \u00e9 o endere\u00e7o. release.yml e\nimage.yml colhem a mensagem com `git log -1 --format=%B` -- no image.yml antes\ndo checkout trocar de branch, sen\u00e3o a mensagem seria a do commit errado.\n\nO texto aparece em Configura\u00e7\u00f5es, no cart\u00e3o de atualiza\u00e7\u00e3o, e na tela\nAtualiza\u00e7\u00f5es nos cart\u00f5es do app e do sistema, num <pre> que preserva as quebras\nde linha e rola dentro de si. Instala\u00e7\u00e3o por git passa a usar o corpo do commit\nem vez do assunto.\n\nManifesto antigo continua v\u00e1lido: uma URL sozinha em `notes` sai do campo de\ntexto e reaparece como link -- uma caixa sem atualizar h\u00e1 meses l\u00ea manifesto\nantigo, e o campo n\u00e3o pode fingir que um endere\u00e7o \u00e9 changelog.\n\nJunto, um defeito de layout achado ao testar no celular: a tira das seis abas\ndas Configura\u00e7\u00f5es soma 479px, n\u00e3o quebrava nem rolava, e por ser item de grade\ndefinia a largura da coluna -- os cart\u00f5es terminavam fora da tela e a p\u00e1gina\nrolava de lado (491px de conte\u00fado numa janela de 375). Ela passa a rolar dentro\nde si mesma.\n\n16 testes novos em tests/test_o_que_mudou_antes_de_instalar.py.",
   "system": {
-    "version": "0.4.20",
-    "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.20/project-os-rootfs-0.4.20.tar.gz",
-    "sha256": "0020db6edbfd287879c63cafc3ce78b5ac6ac6db35ec2d8bef2a679176a668e0",
-    "size": 885141790,
-    "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.20"
+    "version": "0.4.21",
+    "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.21/project-os-rootfs-0.4.21.tar.gz",
+    "sha256": "ae4ea7d3e7311ffa96bb3b5bce785a89e34fe7a6e5f360f58a92d07ab5d228f7",
+    "size": 885065531,
+    "notes": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.21"
   },
   "notes_url": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.22"
 }
