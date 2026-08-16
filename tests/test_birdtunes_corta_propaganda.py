@@ -35,7 +35,11 @@ PAINEL = os.path.join(RAIZ, "project_os", "apps", "birdtunes", "web", "panel.js"
 def test_o_corte_entra_nos_pos_processadores_na_ordem_certa(monkeypatch):
     from project_os.apps.birdtunes import sources
 
+    # As duas metades do portão, e não só o ffmpeg: numa máquina sem yt-dlp --
+    # o CI é uma delas -- forçar só o ffmpeg deixa o corte desligado pela outra
+    # metade, e o teste reprova por um motivo que não é o dele.
     monkeypatch.setattr(sources, "ffmpeg_available", lambda: True)
+    monkeypatch.setattr(sources, "sponsorblock_available", lambda: (True, ""))
     opts = sources._base_options("/tmp/x", "192", True, skip_sponsors=True)
     chaves = [p["key"] for p in opts["postprocessors"]]
     assert chaves == ["SponsorBlock", "ModifyChapters", "FFmpegExtractAudio"], (
@@ -52,6 +56,7 @@ def test_desligado_nao_sobra_nada_do_sponsorblock(monkeypatch):
     from project_os.apps.birdtunes import sources
 
     monkeypatch.setattr(sources, "ffmpeg_available", lambda: True)
+    monkeypatch.setattr(sources, "sponsorblock_available", lambda: (True, ""))
     opts = sources._base_options("/tmp/x", "192", True, skip_sponsors=False)
     assert [p["key"] for p in opts["postprocessors"]] == ["FFmpegExtractAudio"]
 
@@ -59,12 +64,27 @@ def test_desligado_nao_sobra_nada_do_sponsorblock(monkeypatch):
 def test_sem_ffmpeg_o_corte_nao_e_prometido(monkeypatch):
     from project_os.apps.birdtunes import sources
 
+    pytest.importorskip("yt_dlp.postprocessor")
     monkeypatch.setattr(sources, "ffmpeg_available", lambda: False)
     pode, motivo = sources.sponsorblock_available()
     assert pode is False
     assert "ffmpeg" in motivo
+
+
+def test_com_o_portao_fechado_nao_sobra_pos_processador_de_corte(monkeypatch):
+    """Interruptor ligado sem efeito é pior que interruptor nenhum.
+
+    Vale por qualquer das duas metades do portão -- sem ffmpeg ou sem yt-dlp --,
+    e é por isso que o que se força aqui é a resposta do portão inteiro.
+    """
+    from project_os.apps.birdtunes import sources
+
+    monkeypatch.setattr(sources, "sponsorblock_available", lambda: (False, "sem ffmpeg"))
     opts = sources._base_options("/tmp/x", "192", True, skip_sponsors=True)
-    assert opts["postprocessors"] == [], "sem ffmpeg o corte não acontece, e não é anunciado"
+    chaves = [p["key"] for p in opts["postprocessors"]]
+    assert "SponsorBlock" not in chaves and "ModifyChapters" not in chaves
+    # A extração de áudio é assunto do ffmpeg desta máquina, e não do corte.
+    assert chaves in ([], ["FFmpegExtractAudio"])
 
 
 def test_as_categorias_sao_de_propaganda_e_nao_de_musica():
