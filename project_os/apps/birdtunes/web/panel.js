@@ -137,6 +137,10 @@ export default {
       'bt.import.dest.library': 'Library only',
       'bt.import.dest.new': 'New playlist from this link',
       'bt.import.queued': 'Downloading. It lands in the library when it finishes.',
+      'bt.import.working': 'Working…',
+      'bt.import.cancel': 'Cancel',
+      'bt.import.of': '%d of %d',
+      'bt.import.queued.wait': 'In line — starting shortly.',
       'bt.import.cast.ok': 'Playing on %s.',
       'bt.stats.tracks': 'Songs',
       'bt.stats.playlists': 'Playlists',
@@ -258,6 +262,7 @@ export default {
       ]);
       try { await config.reload(); } catch (err) { /* a tela ainda desenha */ }
       state.status = status;
+      state.statusEm = Date.now();
       state.playlists = (playlists && playlists.playlists) || [];
       state.outputs = outputs;
       state.queue = (queue && queue.queue) || [];
@@ -446,13 +451,26 @@ export default {
 
     // ------------------------------------------------------------------ início
 
+    // Onde a música está agora, contando o tempo que passou desde a última
+    // resposta do servidor. Sem isto, a posição só mudava de 8 em 8 segundos,
+    // que na tela é uma barra parada: o número certo, na hora errada, é o que
+    // faz o tocador parecer travado.
+    function posicaoAgora() {
+      const status = state.status || {};
+      const base = Number(status.position) || 0;
+      const total = Number(status.duration) || 0;
+      if (status.state !== 'playing' || !state.statusEm) return base;
+      const andou = (Date.now() - state.statusEm) / 1000;
+      return total ? Math.min(base + andou, total) : base + andou;
+    }
+
     function progress() {
       const status = state.status || {};
       const total = Number(status.duration) || 0;
       // Sem duração não há barra: desenhar uma vazia é inventar um dado que o
       // player não deu.
       if (!total) return null;
-      const done = Math.min(Number(status.position) || 0, total);
+      const done = Math.min(posicaoAgora(), total);
       return h('div', {class: 'bt-progress'},
         h('span', null, clock(done)),
         h('div', {class: 'bt-progress__track'},
@@ -849,14 +867,33 @@ export default {
           sectionHead(t2('bt.import.jobs')),
           jobs.length === 0
             ? empty(t2('bt.import.jobs.empty'))
+            // A barra sozinha não conta o que está acontecendo. Num Pi, um vídeo
+            // leva minutos e boa parte deles é depois do download -- separar o
+            // áudio, cortar a propaganda. Sem a frase da fase, "0%" e "travado"
+            // são a mesma tela.
             : h('div', {class: 'bt-jobs'}, jobs.slice(0, 6).map((job) => h('div', {class: 'bt-job'},
                 h('div', {class: 'bt-track__title'}, job.title || job.url),
-                job.state === 'running'
-                  ? h('div', {class: 'bt-progress'},
-                      h('div', {class: 'bt-progress__track'},
-                        h('div', {class: 'bt-progress__fill',
-                          style: 'width: ' + Math.round((job.progress || 0) * 100) + '%'})),
-                      h('span', null, Math.round((job.progress || 0) * 100) + '%'))
+                job.state === 'running' || job.state === 'queued'
+                  ? h('div', {class: 'stack stack--sm'},
+                      // A porcentagem é a do que está baixando agora. A do
+                      // trabalho inteiro só faz sentido quando são vários, e aí
+                      // ela vira "3 de 12" ao lado -- que é uma pergunta
+                      // diferente de "quanto falta desta música".
+                      h('div', {class: 'bt-progress'},
+                        h('div', {class: 'bt-progress__track'},
+                          h('div', {class: 'bt-progress__fill',
+                            style: 'width: ' + Math.round((job.item_progress || 0) * 100) + '%'})),
+                        h('span', null, Math.round((job.item_progress || 0) * 100) + '%')),
+                      h('div', {class: 'bt-track__sub'},
+                        (job.total > 1
+                          ? fmtStr('bt.import.of', Math.min((job.completed || 0) + 1, job.total), job.total) + ' — '
+                          : '')
+                        + (job.message || t2(job.state === 'queued' ? 'bt.import.queued.wait' : 'bt.import.working'))),
+                      h('div', {class: 'bt-toolbar'},
+                        h('button', {class: 'btn btn--outline btn--sm', onClick: () => act(async () => {
+                          await appApi.del('/import/' + encodeURIComponent(job.id));
+                          await loadImports();
+                        })}, t2('bt.import.cancel'))))
                   : h('div', {class: 'bt-track__sub'}, job.message || job.state),
               ))),
         ),
@@ -1142,8 +1179,8 @@ export default {
             h('div', {class: 'bt-player__title'},
               track ? (track.title || track.path) : t2('bt.nothing_playing')),
             h('div', {class: 'bt-player__sub'}, track
-              ? [track.artist || '', status.position && status.duration
-                  ? clock(status.position) + ' / ' + clock(status.duration) : ''].filter(Boolean).join(' · ')
+              ? [track.artist || '', status.duration
+                  ? clock(posicaoAgora()) + ' / ' + clock(status.duration) : ''].filter(Boolean).join(' · ')
               : t2('bt.state.' + (status.state || 'idle'))),
           ),
         ),
@@ -1260,19 +1297,44 @@ export default {
       const status = await safeGet('/status');
       if (cancelled || !status) return;
       state.status = status;
+      state.statusEm = Date.now();
       renderPlayer();
       if (state.view === 'home') {
         const queue = await safeGet('/queue');
         state.queue = (queue && queue.queue) || [];
         if (!cancelled) render();
       }
+      // Rede de segurança do evento: numa caixa sem websocket, ou se ele cair no
+      // meio de um download de meia hora, a barra voltaria a congelar -- e a
+      // tela ficaria dizendo 30% de uma coisa que já acabou.
+      if (state.view === 'add' && (state.importJobs || []).some(
+            (j) => j.state === 'running' || j.state === 'queued')) {
+        await loadImports();
+        if (!cancelled) render();
+      }
     }, 8000);
+
+    // Um quadro por segundo enquanto toca. Só a barra e o relógio são
+    // redesenhados; um render() inteiro por segundo brigaria com quem estiver
+    // digitando na busca ou mexendo num campo.
+    const relogio = setInterval(() => {
+      if (cancelled) return;
+      const status = state.status || {};
+      if (status.state !== 'playing' || !Number(status.duration)) return;
+      renderPlayer();
+      if (state.view === 'home') {
+        const alvo = main.querySelector('.bt-hero .bt-progress');
+        const nova = progress();
+        if (alvo && nova) alvo.replaceWith(nova);
+      }
+    }, 1000);
 
     // O app publica o que acontece; ouvir é mais barato e mais rápido que
     // perguntar de novo.
     const offState = ctx.ws && ctx.ws.on
       ? ctx.ws.on('app.birdtunes.state', async () => {
           state.status = await safeGet('/status');
+          state.statusEm = Date.now();
           if (cancelled) return;
           // O Início mostra a mesma faixa que a barra, em letra grande: atualizar
           // só a barra deixava as duas anunciando músicas diferentes na mesma tela.
@@ -1289,12 +1351,35 @@ export default {
         })
       : null;
 
+    // O servidor já publicava o andamento do download desde sempre, e esta tela
+    // nunca ouviu: a lista de "Trazidos recentemente" só era buscada ao entrar
+    // na aba. Quem ficava olhando via a barra parada no valor de quando abriu --
+    // que, num vídeo só, era 0% do começo ao fim.
+    const offImport = ctx.ws && ctx.ws.on
+      ? ctx.ws.on('app.birdtunes.import', (payload) => {
+          if (cancelled || state.view !== 'add') return;
+          const jobs = state.importJobs || [];
+          const alvo = jobs.filter((j) => j.id === (payload && payload.job_id))[0];
+          if (alvo && payload.progress !== undefined) {
+            // O evento já traz o que mudou; buscar a lista inteira a cada 1% de
+            // um download seria um pedido por segundo para redesenhar uma barra.
+            alvo.progress = payload.progress;
+            if (payload.message !== undefined) alvo.message = payload.message;
+            render();
+            return;
+          }
+          void loadImports().then(() => { if (!cancelled) render(); });
+        })
+      : null;
+
     return () => {
       cancelled = true;
       clearInterval(poll);
+      clearInterval(relogio);
       if (searchTimer) clearTimeout(searchTimer);
       if (typeof offState === 'function') offState();
       if (typeof offLibrary === 'function') offLibrary();
+      if (typeof offImport === 'function') offImport();
     };
   },
 };

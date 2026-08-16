@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import types
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
@@ -204,15 +205,43 @@ class FakeYoutubeDL:
 
     def extract_info(self, url: str, download: bool = True) -> Dict[str, Any]:
         info = dict(FakeYoutubeDL.result or _default_video_info(url))
-        if download:
-            entries = info.get("entries") or [info]
-            for entry in entries:
-                if not entry:
-                    continue
-                if entry.get("id") in FakeYoutubeDL.fail_ids:
-                    continue
-                FakeYoutubeDL.downloaded.append(entry.get("id", ""))
-        return info
+        if not download:
+            return info
+        # Um download é um arquivo no disco, e o código confere isso: com
+        # ``ignoreerrors`` o yt-dlp devolve ``info`` mesmo depois de um 403, e
+        # foi assim que faixas apontando para arquivo nenhum entraram no acervo.
+        # Um fake que diz "baixei" sem escrever nada não exercita esse caminho.
+        entries = [e for e in (info.get("entries") or [info]) if e]
+        alvo = None
+        for entry in entries:
+            if entry.get("webpage_url") == url:
+                alvo = entry
+                break
+        if alvo is None and len(entries) == 1:
+            alvo = entries[0]
+        if alvo is None:
+            return info
+        if alvo.get("id") in FakeYoutubeDL.fail_ids:
+            # Recusado: devolve o que o yt-dlp devolveria, sem arquivo nenhum.
+            return dict(alvo)
+        FakeYoutubeDL.downloaded.append(alvo.get("id", ""))
+        saida = dict(alvo)
+        saida["requested_downloads"] = [{"filepath": self._escrever(alvo)}]
+        return saida
+
+    def _escrever(self, info: Dict[str, Any]) -> str:
+        modelo = self.params.get("outtmpl") or ""
+        if isinstance(modelo, dict):
+            modelo = modelo.get("default") or ""
+        pasta = os.path.dirname(str(modelo))
+        if not pasta:
+            pasta = tempfile.mkdtemp(prefix="fake-ytdl-")
+        if not os.path.isdir(pasta):
+            os.makedirs(pasta)
+        caminho = os.path.join(pasta, self.prepare_filename(info))
+        with open(caminho, "wb") as arquivo:
+            arquivo.write(b"\0" * 16)
+        return caminho
 
     def prepare_filename(self, info: Dict[str, Any]) -> str:
         return "%s [%s].%s" % (info.get("title", "track"), info.get("id", "x"), info.get("ext", "m4a"))

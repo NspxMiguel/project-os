@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import os
 
 import pytest
 
@@ -368,6 +369,9 @@ def test_run_job_playlist_continues_past_one_failing_item(db, fake_ytdl, tmp_pat
     assert result["state"] == "done"
     count = db.scalar("SELECT COUNT(*) FROM app_birdtunes_tracks WHERE source = 'youtube'", default=0)
     assert count == 1  # only the good item made it in
+    kept = db.one("SELECT * FROM app_birdtunes_tracks WHERE source = 'youtube'")
+    assert kept["source_id"] == "good1"  # and it is the good one, not a playlist row
+    assert os.path.exists(kept["path"])  # a registered track is a file that exists
 
 
 def test_run_job_can_be_cancelled_mid_import(db, fake_ytdl, tmp_path):

@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -243,7 +244,15 @@ def _base_options(dest_dir: str, quality: str, noplaylist: bool,
             {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": quality}
         )
     return {
-        "format": "bestaudio/best",
+        # `bestaudio/best` parece pedir áudio e não pede: quando o cliente do
+        # YouTube só oferece formatos progressivos (áudio *dentro* do vídeo),
+        # `bestaudio` casa com um deles e o que desce é o filme inteiro. Medido
+        # aqui, no vídeo que ele mandou: 180 MB pelo cliente `android` contra
+        # 68,8 MB de áudio puro -- baixados, decodificados e jogados fora, num
+        # Pi 3B, para sobrar um mp3. `[vcodec=none]` é o que exige áudio de
+        # verdade; a cadeia atrás dele existe para não desistir de baixar quando
+        # nenhum cliente oferece um.
+        "format": "bestaudio[vcodec=none]/bestaudio/best",
         "outtmpl": os.path.join(dest_dir, "%(title).120B [%(id)s].%(ext)s"),
         "noplaylist": noplaylist,
         "ignoreerrors": True,
@@ -262,7 +271,11 @@ def _base_options(dest_dir: str, quality: str, noplaylist: bool,
 # often ("The page needs to be reloaded."), and the same video downloads fine as
 # the Android client -- verified on this machine minutes after the web client
 # was blocked. Tried in order, first one that works wins.
-PLAYER_CLIENTS = ("", "android", "ios", "web_safari", "tv")
+#: `android_vr` vem primeiro porque é o único, hoje, que oferece faixa de áudio
+#: separada: os outros ou são recusados ("The page needs to be reloaded.") ou
+#: respondem só com formatos progressivos, e aí não existe escolha a fazer --
+#: baixar áudio vira baixar o vídeo inteiro. Medido nos três vídeos do teste.
+PLAYER_CLIENTS = ("android_vr", "", "android", "ios", "web_safari", "tv")
 
 
 def _download_once(yt_dlp: Any, opts: Dict[str, Any], url: str, client: str):
@@ -281,7 +294,143 @@ def _download_once(yt_dlp: Any, opts: Dict[str, Any], url: str, client: str):
         return None, ydl, _tidy_error(exc)
     if info is None:
         return None, ydl, catcher.last
+    # `ignoreerrors` faz o yt-dlp registrar a falha e devolver `info` assim
+    # mesmo. Sem conferir o arquivo, "deu certo" era o que o app ouvia quando o
+    # download tinha respondido 403 -- e ele cadastrava no acervo uma faixa
+    # apontando para um caminho vazio, que some da tela como "arquivo sumido" e
+    # deixa a playlist criada sem música nenhuma dentro. Também é o que faz a
+    # troca de cliente valer: sem isto o primeiro cliente que *resolve* o vídeo
+    # encerra a busca, mesmo que não consiga baixar um byte.
+    if not _arquivo_que_saiu(info):
+        return None, ydl, catcher.last or "O download não gerou arquivo nenhum."
     return info, ydl, ""
+
+
+def _arquivo_que_saiu(info: Dict[str, Any]) -> str:
+    """O caminho que o download realmente escreveu, ou "" se não escreveu."""
+    for pedido in (info or {}).get("requested_downloads") or []:
+        caminho = pedido.get("filepath") or pedido.get("_filename") or ""
+        if caminho and os.path.exists(caminho):
+            return caminho
+    caminho = (info or {}).get("filepath") or (info or {}).get("_filename") or ""
+    return caminho if caminho and os.path.exists(caminho) else ""
+
+
+#: Quanto do tempo de um item é o download. O resto é o pós: extrair o áudio e
+#: cortar os trechos marcados -- num Pi 3B isso não é um detalhe, é metade da
+#: espera. Uma barra que chega a 100% e fica lá parada mente tanto quanto uma
+#: que fica em 0%.
+DOWNLOAD_SHARE = 0.7
+
+#: Nem toda atualização vale uma escrita no SQLite de um cartão SD.
+PROGRESS_STEP = 0.01
+PROGRESS_EVERY_S = 1.0
+
+#: O que aparece na tela em cada fase. Sem isto, meia hora de espera é meia hora
+#: sem saber se está baixando, convertendo ou travado.
+FASES = {
+    "download": "Baixando",
+    "FFmpegExtractAudio": "Separando o áudio",
+    "SponsorBlock": "Procurando propaganda para cortar",
+    "ModifyChapters": "Cortando a propaganda",
+    "EmbedThumbnail": "Guardando a capa",
+    "FFmpegMetadata": "Escrevendo os dados da música",
+}
+
+
+class _Andamento(object):
+    """Traduz os avisos do yt-dlp em progresso e em uma frase.
+
+    O progresso do trabalho era contado por item concluído: um vídeo só quer
+    dizer ``total = 1``, e ``(0 + 1) / 1`` só acontece no fim -- a barra ficava
+    em 0% do começo ao fim do download e pulava para 100% no último instante.
+    Aqui ela anda com os bytes que chegaram, dentro da fatia do item.
+    """
+
+    def __init__(self, db, job_id, on_progress=None, is_cancelled=None):
+        self.db = db
+        self.job_id = job_id
+        self.on_progress = on_progress
+        self.is_cancelled = is_cancelled
+        self.index = 0
+        self.total = 1
+        self.fracao_do_item = 0.0
+        self._ultimo_valor = -1.0
+        self._ultimo_instante = 0.0
+        self._ultima_pergunta = 0.0
+
+    def _parar_se_pedido(self):
+        """Cancelar valia só entre itens: um vídeo só nunca chegava lá.
+
+        ``run_job`` pergunta antes de cada item, o que resolve uma playlist e
+        não resolve nada num link só -- que é o caso comum. O yt-dlp para na
+        hora se um gancho levantar ``DownloadCancelled``, e é o único ponto de
+        dentro do download onde dá para perguntar.
+        """
+        if self.is_cancelled is None:
+            return
+        agora = time.time()
+        # Uma consulta ao banco por pacote recebido seria pior que o problema.
+        if agora - self._ultima_pergunta < 1.0:
+            return
+        self._ultima_pergunta = agora
+        if self.is_cancelled():
+            from yt_dlp.utils import DownloadCancelled
+
+            raise DownloadCancelled("cancelado por quem pediu")
+
+    def _publicar(self, fracao, frase, forcar=False):
+        fracao = max(0.0, min(1.0, fracao))
+        valor = round((self.index + fracao) / float(self.total or 1), 3)
+        agora = time.time()
+        if not forcar and (
+            abs(valor - self._ultimo_valor) < PROGRESS_STEP
+            and (agora - self._ultimo_instante) < PROGRESS_EVERY_S
+        ):
+            return
+        self._ultimo_valor = valor
+        self._ultimo_instante = agora
+        _update_job(self.db, self.job_id, progress=valor, message=frase)
+        if self.on_progress is not None:
+            self.on_progress({"job_id": self.job_id, "progress": valor,
+                              "index": self.index, "message": frase})
+
+    # -- ganchos do yt-dlp ------------------------------------------------
+    def no_download(self, d):
+        self._parar_se_pedido()
+        estado = d.get("status")
+        if estado == "downloading":
+            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+            feito = d.get("downloaded_bytes") or 0
+            # Sem tamanho anunciado (live, alguns fragmentados) não dá para
+            # inventar uma porcentagem: a frase carrega o que se sabe.
+            if not total:
+                self._publicar(0.0, "%s… %s" % (FASES["download"], _tamanho(feito)))
+                return
+            parte = (feito / float(total)) * DOWNLOAD_SHARE
+            self._publicar(parte, "%s %d%%" % (FASES["download"], round(feito * 100.0 / total)))
+        elif estado == "finished":
+            self._publicar(DOWNLOAD_SHARE, FASES["FFmpegExtractAudio"], forcar=True)
+        elif estado == "error":
+            self._publicar(self._ultimo_valor, "Erro no download", forcar=True)
+
+    def no_pos(self, d):
+        self._parar_se_pedido()
+        if d.get("status") != "started":
+            return
+        nome = str(d.get("postprocessor") or "")
+        frase = FASES.get(nome, nome or "Terminando")
+        # O pós ocupa o que sobra da fatia do item; sem saber quanto falta, o
+        # meio-termo é honesto: andou, e ainda não acabou.
+        self._publicar(DOWNLOAD_SHARE + (1.0 - DOWNLOAD_SHARE) / 2.0, frase, forcar=True)
+
+
+def _tamanho(bytes_):
+    for unidade in ("B", "KB", "MB", "GB"):
+        if bytes_ < 1024 or unidade == "GB":
+            return "%.0f %s" % (bytes_, unidade)
+        bytes_ /= 1024.0
+    return "%.0f GB" % bytes_
 
 
 def download_entry(yt_dlp: Any, opts: Dict[str, Any], url: str,
@@ -320,11 +469,30 @@ def preview(url: str) -> Dict[str, Any]:
         "quiet": True, "no_warnings": True, "noprogress": True,
         "extract_flat": "in_playlist", "skip_download": True,
     }
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except yt_dlp.utils.DownloadError as exc:
-        raise SourceError("Could not read %s" % url, code="preview_failed", hint=str(exc)) from exc
+    # A mesma troca de player client que o download faz. Sem ela, o "espiar" --
+    # que é por onde passa "criar playlist a partir deste link", para dar nome à
+    # playlist -- caía em "The page needs to be reloaded." e derrubava a
+    # importação inteira antes do primeiro byte, num link que o download baixaria
+    # sem reclamar. Medido nesta máquina: o cliente padrão recusou e o `android`
+    # leu o mesmo vídeo.
+    ultimo = None
+    for client in PLAYER_CLIENTS:
+        tentativa = dict(opts)
+        if client:
+            tentativa["extractor_args"] = {"youtube": {"player_client": [client]}}
+        try:
+            with yt_dlp.YoutubeDL(tentativa) as ydl:
+                info = ydl.extract_info(url, download=False)
+            if info is not None:
+                break
+        except yt_dlp.utils.DownloadError as exc:
+            ultimo = exc
+            info = None
+    if info is None:
+        raise SourceError(
+            "Could not read %s" % url, code="preview_failed",
+            hint=_tidy_error(ultimo) if ultimo is not None else "",
+        )
     entries = _iter_entries(info or {})
     is_playlist = bool((info or {}).get("entries") is not None)
     items = [
@@ -362,11 +530,30 @@ def create_job(
     return get_job(db, job_id) or {}
 
 
+def _com_fracao_do_item(job: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Acrescenta ``item_progress``: quanto falta do que está baixando agora.
+
+    ``progress`` é do trabalho inteiro -- útil quando são doze músicas, inútil
+    quando é uma. Quem está olhando quer saber quanto falta *desta*, e a conta
+    já está guardada: ``progress`` é ``(item + fração) / total`` e ``completed``
+    é quantos acabaram, então a fração do item de agora sai da diferença.
+    Derivado, não gravado: uma coluna a mais precisaria de migração no banco de
+    quem já tem o app instalado.
+    """
+    if not job:
+        return job
+    total = int(job.get("total") or 0) or 1
+    feitos = int(job.get("completed") or 0)
+    fracao = (float(job.get("progress") or 0.0) * total) - feitos
+    job["item_progress"] = round(max(0.0, min(1.0, fracao)), 3)
+    return job
+
+
 def get_job(db: Any, job_id: str) -> Optional[Dict[str, Any]]:
     row = db.one("SELECT * FROM app_birdtunes_imports WHERE id = ?", (job_id,))
     from project_os.db import row_to_dict
 
-    return row_to_dict(row)
+    return _com_fracao_do_item(row_to_dict(row))
 
 
 def job_in_flight(db: Any, url: str) -> Optional[Dict[str, Any]]:
@@ -393,9 +580,12 @@ def job_in_flight(db: Any, url: str) -> Optional[Dict[str, Any]]:
 def list_jobs(db: Any, limit: int = 50) -> List[Dict[str, Any]]:
     from project_os.db import rows_to_dicts
 
-    return rows_to_dicts(
-        db.query("SELECT * FROM app_birdtunes_imports ORDER BY created_at DESC LIMIT ?", (limit,))
-    )
+    return [
+        _com_fracao_do_item(j)
+        for j in rows_to_dicts(
+            db.query("SELECT * FROM app_birdtunes_imports ORDER BY created_at DESC LIMIT ?", (limit,))
+        )
+    ]
 
 
 def _update_job(db: Any, job_id: str, **fields: Any) -> None:
@@ -439,12 +629,21 @@ def run_job(
         raise KeyError(job_id)
     os.makedirs(dest_dir, exist_ok=True)
     yt_dlp = _yt_dlp()
-    _update_job(db, job_id, state="running")
+    # Antes do primeiro byte existe o `extract_info`, que resolve o link e, num
+    # Pi com a rede ruim, leva seus segundos. Sem esta frase esse trecho é uma
+    # barra em 0% sem explicação nenhuma -- que é onde a dúvida "está baixando
+    # ou não?" nasce.
+    _update_job(db, job_id, state="running", message="Lendo o link…")
 
     noplaylist = job["kind"] != "playlist"
     opts = _base_options(dest_dir, quality, noplaylist, skip_sponsors=skip_sponsors)
     catcher = _ErrorCatcher()
     opts["logger"] = catcher
+    # Os ganchos do próprio yt-dlp. `noprogress` acima cala a barra do terminal
+    # e não tem nada a ver com eles.
+    andamento = _Andamento(db, job_id, on_progress, is_cancelled)
+    opts["progress_hooks"] = [andamento.no_download]
+    opts["postprocessor_hooks"] = [andamento.no_pos]
     added_tracks = []  # type: List[Dict[str, Any]]
     # Everything the URL resolved to, downloaded now or already here. Adding a
     # link you once imported to a playlist has to work: "already in the library"
@@ -457,8 +656,10 @@ def run_job(
             info = ydl.extract_info(job["url"], download=False)
             entries = _iter_entries(info or {})
             total = len(entries) or 1
-            _update_job(db, job_id, total=total)
+            _update_job(db, job_id, total=total, message=FASES["download"])
+            andamento.total = total
             for index, entry in enumerate(entries or [info or {}]):
+                andamento.index = index
                 if is_cancelled is not None and is_cancelled():
                     _update_job(db, job_id, state="cancelled", finished_at=utcnow_iso())
                     return get_job(db, job_id) or {}
@@ -481,9 +682,14 @@ def run_job(
                             added_tracks.append(track)
                             resolved_ids.append(track["id"])
                 progress = round((index + 1) / float(total), 3)
-                _update_job(db, job_id, progress=progress, completed=index + 1)
+                _update_job(db, job_id, progress=progress, completed=index + 1, message="")
                 if on_progress is not None:
                     on_progress({"job_id": job_id, "progress": progress, "index": index})
+    except yt_dlp.utils.DownloadCancelled:
+        # Veio de dentro do download, pelo gancho: a linha já está marcada como
+        # cancelada por quem pediu; aqui só se fecha a hora.
+        _update_job(db, job_id, state="cancelled", message="", finished_at=utcnow_iso())
+        return get_job(db, job_id) or {}
     except yt_dlp.utils.DownloadError as exc:
         _update_job(db, job_id, state="error", message=str(exc), finished_at=utcnow_iso())
         return get_job(db, job_id) or {}
@@ -520,10 +726,16 @@ def _store_downloaded(db: Any, ydl: Any, info: Dict[str, Any], quality: str) -> 
     video_id = info.get("id", "")
     if not video_id:
         return None
-    filename = ydl.prepare_filename(info)
-    if ffmpeg_available():
-        # FFmpegExtractAudio rewrites the extension after the postprocessor runs.
-        filename = os.path.splitext(filename)[0] + ".mp3"
+    # O caminho que o yt-dlp diz ter escrito vale mais que o que dá para
+    # adivinhar do modelo: depois dos pós-processadores ele já aponta para o
+    # arquivo final. Adivinhar a extensão acertava no caso comum e cadastrava
+    # uma faixa apontando para o vazio quando errava.
+    filename = _arquivo_que_saiu(info)
+    if not filename:
+        filename = ydl.prepare_filename(info)
+        if ffmpeg_available():
+            # FFmpegExtractAudio rewrites the extension after the postprocessor runs.
+            filename = os.path.splitext(filename)[0] + ".mp3"
     container, codec = library.container_codec_for(filename)
     track_id = uuid.uuid5(uuid.NAMESPACE_URL, "birdtunes:youtube:%s" % video_id).hex
     duration = float(info.get("duration") or 0.0)

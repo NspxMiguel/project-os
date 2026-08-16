@@ -405,6 +405,8 @@ class BirdTunesApp(AppInstance):
         self._scheduler = None  # type: Optional[scheduler.SchedulerLoop]
         self._session_task = None  # type: Optional[asyncio.Task]
         self._import_tasks = set()  # type: set
+        #: A fila: um download por vez. Ver _run_import.
+        self._fila_de_downloads = asyncio.Semaphore(1)
         self._rng = random.Random()
 
     # -- lifecycle ---------------------------------------------------------
@@ -934,6 +936,17 @@ class BirdTunesApp(AppInstance):
 
     async def _run_import(self, job_id: str, dest_dir: str, quality: str,
                           skip_sponsors: bool = True) -> None:
+        # Um de cada vez. Sem esta trava, colar três links dispara três
+        # downloads simultâneos que dividem a banda e, no fim, três ffmpeg
+        # disputando um Pi 3B de quatro núcleos lentos: tudo termina mais tarde
+        # do que se tivessem esperado a vez, e nenhum dá sinal de vida enquanto
+        # isso. A fila é esta trava mais o estado "queued" que já existia na
+        # tabela e nunca era usado para valer.
+        async with self._fila_de_downloads:
+            await self._importar_agora(job_id, dest_dir, quality, skip_sponsors)
+
+    async def _importar_agora(self, job_id: str, dest_dir: str, quality: str,
+                              skip_sponsors: bool = True) -> None:
         loop = asyncio.get_event_loop()
 
         def on_progress(payload: Dict[str, Any]) -> None:

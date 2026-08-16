@@ -446,7 +446,10 @@ def test_a_refused_download_is_retried_as_another_youtube_client(tmp_path, monke
             if self.client != "android":
                 self.logger.error("ERROR: [youtube] x: The page needs to be reloaded.")
                 return None
-            return {"id": "abc12345678", "title": "Passaros", "webpage_url": url}
+            escrito = tmp_path / "abc12345678.m4a"
+            escrito.write_bytes(b"audio")
+            return {"id": "abc12345678", "title": "Passaros", "webpage_url": url,
+                    "requested_downloads": [{"filepath": str(escrito)}]}
 
     fake = type("m", (), {"YoutubeDL": FakeYDL, "utils": type("u", (), {"DownloadError": Exception})})
 
@@ -454,7 +457,14 @@ def test_a_refused_download_is_retried_as_another_youtube_client(tmp_path, monke
     assert error == ""
     assert info["id"] == "abc12345678"
     assert ydl.client == "android"
-    assert seen[0] == "", "the default client is tried first"
+    # A ordem mudou por medição, não por gosto: o cliente padrão é recusado
+    # ("The page needs to be reloaded.") e o `android`, que responde, só devolve
+    # formatos progressivos -- baixar áudio por ele é baixar o vídeo inteiro
+    # (180 MB contra 68,8 MB no vídeo do teste). `android_vr` é o que oferece
+    # faixa de áudio separada, então é por ele que se começa; o resto da cadeia
+    # continua existindo para quando ele falhar, que é o que este teste mostra.
+    assert seen[0] == "android_vr", "primeiro o cliente que oferece áudio separado"
+    assert "" in seen, "e o padrão continua na fila de tentativas"
 
 
 def test_the_same_preset_twice_does_not_become_two_windows():
