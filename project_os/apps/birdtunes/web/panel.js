@@ -62,6 +62,9 @@ export default {
       'bt.output.paired': 'Paired.',
       'bt.output.volume': 'Volume',
       'bt.output.silent': 'No speaker',
+      'bt.offline': 'Cannot talk to BirdTunes right now.',
+      'bt.offline.unreachable': 'The app did not answer. It may be stopped, or still starting.',
+      'bt.offline.retry': 'Try again',
       'bt.section.library': 'Songs',
       'bt.library.empty': 'No tracks yet. Add from YouTube, or drop files in the media folder and scan.',
       'bt.library.empty.search': 'Nothing matches "%s".',
@@ -201,6 +204,7 @@ export default {
       stats: null,
       outputs: null,
       outputOpen: false,
+      offline: null,
       pairing: null,
       busy: false,
     };
@@ -230,10 +234,20 @@ export default {
 
     // ------------------------------------------------------------------ dados
 
+    // Devolver `null` calado era o que fazia a tela mentir: com /outputs falhando
+    // o seletor de caixa de som aparecia sem opção nenhuma, e com /stats falhando
+    // os quatro números viravam "—". Nada dizia que não tinha sido possível
+    // perguntar. O erro continua não derrubando a tela, mas agora fica anotado.
     async function safeGet(path, query) {
       try {
-        return await appApi.get(path, query ? {query} : undefined);
+        const corpo = await appApi.get(path, query ? {query} : undefined);
+        state.offline = null;
+        return corpo;
       } catch (err) {
+        state.offline = {
+          message: String((err && err.message) || err),
+          status: (err && err.status) || 0,
+        };
         return null;
       }
     }
@@ -1070,8 +1084,11 @@ export default {
                + (backendPorTipo[d.kind].available
                   ? '' : ' — ' + (backendPorTipo[d.kind].hint || 'indisponível')))))),
         ),
-        usable.length === 0 ? h('p', {class: 'field__hint'}, t2('bt.output.empty')) : null,
-        usable.length === 0 ? h('div', {class: 'bt-toolbar'},
+        // "Nenhuma caixa achada" e "não consegui perguntar" são coisas
+        // diferentes, e procurar de novo não resolve a segunda.
+        usable.length === 0 ? h('p', {class: 'field__hint'},
+          t2(state.offline ? 'bt.offline' : 'bt.output.empty')) : null,
+        usable.length === 0 && !state.offline ? h('div', {class: 'bt-toolbar'},
           h('button', {class: 'btn btn--outline btn--sm', onClick: () => act(async () => {
             const api = await import('/lib/api.js');
             await api.post('/devices/scan', {});
@@ -1197,6 +1214,22 @@ export default {
       render();
     }
 
+    function offlineWarning() {
+      if (!state.offline) return null;
+      return h('div', {class: 'bt-warn'},
+        icon('warning', {size: 16}),
+        h('div', {class: 'grow'},
+          h('div', {class: 'bt-warn__title'}, t2('bt.offline')),
+          h('div', {class: 'small muted'}, state.offline.status
+            ? state.offline.message : t2('bt.offline.unreachable')),
+        ),
+        h('button', {class: 'btn btn--sm', onClick: () => act(async () => {
+          await loadCommon();
+          await loadForView();
+        })}, t2('bt.offline.retry')),
+      );
+    }
+
     function render() {
       renderNav();
       listHost = null;
@@ -1206,6 +1239,7 @@ export default {
           : state.view === 'add' ? addView()
           : state.view === 'schedule' ? scheduleView()
           : homeView();
+      nodes.unshift(offlineWarning());
       main.replaceChildren(...nodes.filter(Boolean));
       renderPlayer();
       renderSheet();

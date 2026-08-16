@@ -105,6 +105,45 @@ def test_a_frase_da_conexao_nao_ficou_para_tras():
     assert "bt.output.backend" not in io.open(PT, encoding="utf-8").read()
 
 
+# --------------------------------------------------------------------------- a tela muda
+
+
+def test_uma_chamada_que_falhou_nao_passa_calada():
+    """``catch { return null }`` é o que fazia a tela do print dele mentir.
+
+    Com ``/outputs`` falhando, ``backends`` fica vazio e o seletor aparece sem
+    opção nenhuma -- a caixa vazia do print. Com ``/stats`` falhando, os quatro
+    números viram "—". Nada dizia que não tinha sido possível perguntar.
+    """
+    fonte = _painel()
+    inicio = fonte.index("async function safeGet(")
+    trecho = fonte[inicio:fonte.index("\n    }", inicio)]
+    assert "state.offline = {" in trecho, "o erro precisa ficar anotado em algum lugar"
+    assert "state.offline = null" in trecho, "e precisa sair quando a resposta vem"
+
+
+def test_a_tela_diz_quando_nao_esta_falando_com_o_app():
+    fonte = _painel()
+    assert "function offlineWarning()" in fonte
+    assert "nodes.unshift(offlineWarning());" in fonte, "a função existe e ninguém chama"
+    assert "t2('bt.offline.retry')" in fonte, "avisar sem dar como tentar de novo é meio aviso"
+
+
+def test_nao_conseguir_perguntar_nao_e_nao_ter_achado():
+    """Procurar de novo não resolve um app que não responde."""
+    folha = _folha()
+    assert "t2(state.offline ? 'bt.offline' : 'bt.output.empty')" in folha
+    assert "usable.length === 0 && !state.offline" in folha, (
+        "o botão de procurar não pode aparecer quando nem dá para perguntar"
+    )
+
+
+def test_o_portugues_do_aviso_de_fora_do_ar_existe():
+    pt = io.open(PT, encoding="utf-8").read()
+    for chave in ("bt.offline", "bt.offline.unreachable", "bt.offline.retry"):
+        assert "'%s':" % chave in pt, "falta o português de %s" % chave
+
+
 # --------------------------------------------------------------------------- o aparelho repetido
 
 
