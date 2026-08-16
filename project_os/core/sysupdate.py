@@ -90,7 +90,11 @@ def check(manifest_url: str = "") -> Dict[str, Any]:
         "url": tarball,
         "sha256": sha256,
         "size": int(system.get("size") or 0),
-        "notes": str(system.get("notes") or ""),
+        # 880 MB e um reinício: aqui é onde mais importa poder ler o que muda
+        # antes de decidir. Ver updates._notes_text -- manifesto antigo manda um
+        # endereço neste campo, e endereço não responde "o que mudou".
+        "notes": updates._notes_text(system.get("notes")),
+        "notes_url": updates._notes_link(system),
     }
 
 

@@ -428,8 +428,12 @@ export default {
       saveValues({'ui.dock_terminal': on});
     }
 
+    // As seis abas somam mais que a largura de um celular. Sem rolagem própria,
+    // a tira empurrava a *página*: a grade das Configurações passava a ter a
+    // largura da tira, os cartões saíam pela direita da tela e a página inteira
+    // rolava de lado. Rolar dentro da tira mantém isso onde é do tamanho dela.
     function tabs() {
-      return h('div', {class: 'segmented'},
+      return h('div', {class: 'segmented segmented--scroll'},
         SECTIONS.map((key) => h('a', {
           class: 'segmented__btn' + (key === section ? ' is-active' : ''),
           href: '#/settings/' + key,
@@ -628,10 +632,22 @@ export default {
             achado && !temNova
               ? h('p', null, t('settings.updates.uptodate'))
               : null,
+            // O que muda, aqui mesmo, antes do botão. Quem decide se atualiza
+            // agora não devia ter que abrir outra tela para saber o que vem --
+            // e o campo mostrava a URL do release, que não responde nada.
             temNova
               ? h('div', {class: 'stack stack--sm'},
                   h('p', null, t('settings.updates.found', {version: achado.latest})),
-                  achado.notes ? h('p', {class: 'muted small'}, achado.notes) : null)
+                  achado.notes
+                    ? h('details', {class: 'changelog__box', open: true},
+                        h('summary', null, t('updates.notes')),
+                        h('pre', {class: 'changelog'}, achado.notes.trim()))
+                    : null,
+                  achado.notes_url
+                    ? h('a', {class: 'small', href: achado.notes_url,
+                              target: '_blank', rel: 'noopener noreferrer'},
+                        t('updates.notes.full'))
+                    : null)
               : null,
             h('p', {class: 'muted small'}, t('settings.updates.about')),
           ),

@@ -33,6 +33,7 @@ setStrings('en', {
   'updates.back': 'Back on {version}.',
   'updates.confirm': 'Update to {version}? project-os will restart. Apps stop for a few seconds; your data is untouched.',
   'updates.notes': 'What changed',
+  'updates.notes.full': 'Read the whole release on GitHub',
   'updates.source': 'Update source',
   'updates.error.check': 'Could not check for updates.',
   'updates.rollback': 'Go back to {version}',
@@ -274,13 +275,31 @@ export default {
       });
     }
 
+    // O que mudou, para quem está decidindo se instala agora. O texto vem de
+    // uma mensagem de commit: as quebras de linha são o que separa o assunto do
+    // motivo, e um <p> comum junta tudo num parágrafo só.
+    function notesBlock(check) {
+      if (!check) return null;
+      const texto = (check.notes || '').trim();
+      const endereco = check.notes_url || '';
+      if (!texto && !endereco) return null;
+      return h('div', {class: 'stack stack--sm'},
+        h('div', {class: 'field-row__label'}, t('updates.notes')),
+        texto ? h('pre', {class: 'changelog'}, texto) : null,
+        endereco
+          ? h('a', {class: 'small', href: endereco, target: '_blank', rel: 'noopener noreferrer'},
+              t('updates.notes.full'))
+          : null,
+      );
+    }
+
     function availableCard() {
       const check = state.check;
       if (!check) return null;
       if (!check.update_available) {
         return card({
           title: t('updates.uptodate'), iconName: 'info',
-          body: h('p', {class: 'muted'}, check.notes || ''),
+          body: check.notes ? notesBlock(check) : null,
         });
       }
       // can_install === false means the swap would fail before it started --
@@ -291,11 +310,7 @@ export default {
         title: t('updates.available', {version: check.latest}),
         iconName: 'download',
         body: h('div', {class: 'stack stack--sm'},
-          check.notes
-            ? h('div', {class: 'stack stack--sm'},
-                h('div', {class: 'field-row__label'}, t('updates.notes')),
-                h('p', null, check.notes))
-            : null,
+          notesBlock(check),
           bloqueado
             ? h('div', {class: 'stack stack--sm'},
                 h('p', null, t('updates.blocked')),
@@ -406,6 +421,9 @@ export default {
           h('span', {class: 'field-row__label'}, t('sys.good')),
           h('span', {class: 'field-row__value muted'}, t('sys.slot', {slot: slots.good || '?'}))),
         h('p', {class: 'muted small'}, t('sys.explain')),
+        // 880 MB e um reinício: é a atualização em que mais importa poder ler
+        // o que muda antes de dizer sim.
+        sistema.update_available ? notesBlock(sistema) : null,
       );
 
       const acoes = [];

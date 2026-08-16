@@ -804,6 +804,7 @@ export const PT_BR = {
   'updates.back': 'De volta na {version}.',
   'updates.confirm': 'Atualizar para a {version}? O project-os vai reiniciar. Os aplicativos param por alguns segundos; seus dados não são tocados.',
   'updates.notes': 'O que mudou',
+  'updates.notes.full': 'Ler o release inteiro no GitHub',
   'updates.source': 'De onde vem a atualização',
   'updates.error.check': 'Não deu para procurar atualização.',
   'updates.rollback': 'Voltar para a {version}',

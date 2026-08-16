@@ -178,6 +178,9 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # O que mudou, colhido ANTES de trocar para o main: depois do
+          # checkout o HEAD é outro commit e a mensagem seria a errada.
+          git log -1 --format=%B HEAD > "$RUNNER_TEMP/notas-sistema.txt"
           git fetch origin main
           git checkout -B main origin/main
           mkdir -p release
@@ -197,6 +200,13 @@ jobs:
               partes = str(texto or "0").split(".")
               return tuple(int(p) if p.isdigit() else 0 for p in partes[:3])
 
+          def _notas():
+              origem = os.path.join(os.environ.get("RUNNER_TEMP", "."), "notas-sistema.txt")
+              if not os.path.exists(origem):
+                  return ""
+              with open(origem) as f:
+                  return f.read().strip()
+
           nova = "${{ steps.image.outputs.version }}"
           atual = (dados.get("system") or {}).get("version", "")
           if atual and como_tupla(nova) < como_tupla(atual):
@@ -208,7 +218,10 @@ jobs:
               "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.rootfs.outputs.name }}",
               "sha256": "${{ steps.rootfs.outputs.sha }}",
               "size": int("${{ steps.rootfs.outputs.size }}" or 0),
-              "notes": "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}",
+              # Texto em `notes`, endereço em `notes_url`: são 880 MB e um
+              # reinício, e ninguém decide isso olhando para um link.
+              "notes": _notas()[:4000],
+              "notes_url": "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}",
           }
           with open(caminho, "w") as f:
               json.dump(dados, f, indent=2)

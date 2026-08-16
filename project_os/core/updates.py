@@ -201,6 +201,35 @@ def _fetch_json(url: str, timeout: float = NETWORK_TIMEOUT) -> Dict[str, Any]:
         raise UpdateError("O manifesto de atualização não é um JSON válido.", code="bad_manifest") from exc
 
 
+#: Teto do que vai para a tela. O texto vem de uma mensagem de commit; uma
+#: mensagem enorme não pode transformar o cartão numa página de rolagem.
+NOTES_MAX = 4000
+
+
+def _notes_text(bruto: Any) -> str:
+    """O que mudou, em texto. Um manifesto antigo manda um endereço aqui.
+
+    Versões até a 0.4.21 gravavam a URL do release no lugar do texto, e uma
+    caixa nova conversa com esses manifestos por anos. Endereço não é
+    changelog: some daqui e reaparece como link, que é onde ele serve.
+    """
+    texto = str(bruto or "").strip()
+    if not texto:
+        return ""
+    if texto.startswith(("http://", "https://")) and "\n" not in texto:
+        return ""
+    return texto[:NOTES_MAX]
+
+
+def _notes_link(manifest: Dict[str, Any]) -> str:
+    endereco = str(manifest.get("notes_url") or "").strip()
+    if not endereco:
+        antigo = str(manifest.get("notes") or "").strip()
+        if antigo.startswith(("http://", "https://")) and "\n" not in antigo:
+            endereco = antigo
+    return endereco if endereco.startswith(("http://", "https://")) else ""
+
+
 def check_tarball(manifest_url: str) -> Dict[str, Any]:
     manifest = _fetch_json(manifest_url)
     version = str(manifest.get("version") or "").strip()
@@ -223,7 +252,12 @@ def check_tarball(manifest_url: str) -> Dict[str, Any]:
         "update_available": is_newer(version),
         "url": url,
         "sha256": sha256,
-        "notes": str(manifest.get("notes") or ""),
+        # O que mudou, para quem decide se atualiza agora ou não. Já foi só um
+        # endereço: a tela mostrava um link embaixo de "O que mudou", e link
+        # nenhum responde a pergunta que a tela está fazendo. O texto vem do
+        # manifesto; `notes_url` é o lugar de ler por inteiro, à parte.
+        "notes": _notes_text(manifest.get("notes")),
+        "notes_url": _notes_link(manifest),
         "published_at": str(manifest.get("published_at") or ""),
         "checked_at": time.time(),
     }
@@ -237,7 +271,9 @@ def check_git(branch: str = "main", root: Optional[str] = None) -> Dict[str, Any
     behind = "0"
     if local != remote:
         behind = _git(["rev-list", "--count", "HEAD..origin/%s" % branch], where) or "0"
-    subject = _git(["log", "-1", "--pretty=%s", "origin/%s" % branch], where)
+    # A mensagem inteira, não só o assunto: numa instalação por git é ela que
+    # responde "o que muda se eu atualizar agora".
+    corpo = _git(["log", "-1", "--pretty=%B", "origin/%s" % branch], where)
     return {
         "method": METHOD_GIT,
         "current": __version__,
@@ -245,7 +281,8 @@ def check_git(branch: str = "main", root: Optional[str] = None) -> Dict[str, Any
         "update_available": local != remote,
         "commits_behind": int(behind or 0),
         "branch": branch,
-        "notes": subject,
+        "notes": corpo.strip()[:NOTES_MAX],
+        "notes_url": "",
         "checked_at": time.time(),
     }
 

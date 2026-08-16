@@ -43,6 +43,18 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      # O que mudou, em texto, colhido enquanto o checkout ainda está na tag.
+      # O manifesto anunciava a URL do release neste campo, e a tela mostrava
+      # esse link embaixo de "O que mudou" -- ninguém decide se atualiza olhando
+      # para um endereço. A mensagem do commit da tag é o changelog que já se
+      # escreve a cada versão.
+      - name: Collect what changed
+        id: notas
+        run: |
+          set -e
+          git log -1 --format=%B HEAD > "$RUNNER_TEMP/notas.txt"
+          wc -c < "$RUNNER_TEMP/notas.txt"
+
       - name: Build the tarball
         id: pack
         run: |
@@ -94,7 +106,16 @@ jobs:
           dados["version"] = "${{ steps.v.outputs.version }}"
           dados["url"] = "https://github.com/${{ github.repository }}/releases/download/${{ steps.v.outputs.tag }}/${{ steps.pack.outputs.name }}"
           dados["sha256"] = "${{ steps.pack.outputs.sha }}"
-          dados["notes"] = "https://github.com/${{ github.repository }}/releases/tag/${{ steps.v.outputs.tag }}"
+
+          # `notes` é texto e `notes_url` é endereço. Enquanto os dois moraram
+          # no mesmo campo, a tela tinha um link onde precisava de um changelog.
+          notas = ""
+          origem = os.path.join(os.environ.get("RUNNER_TEMP", "."), "notas.txt")
+          if os.path.exists(origem):
+              with open(origem) as f:
+                  notas = f.read().strip()
+          dados["notes"] = notas[:4000]
+          dados["notes_url"] = "https://github.com/${{ github.repository }}/releases/tag/${{ steps.v.outputs.tag }}"
           with open(caminho, "w") as f:
               json.dump(dados, f, indent=2)
               f.write("\n")

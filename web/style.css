@@ -404,6 +404,19 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--space-4) 0; }
   background: var(--surface-2);
   border: 1px solid var(--border);
 }
+/* Uma tira de abas que não cabe rola dentro de si mesma. Em grade, um item com
+   overflow próprio tem tamanho mínimo automático zero -- é isso que impede a
+   tira de definir a largura da coluna e, por tabela, a da página. */
+.segmented--scroll {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.segmented--scroll::-webkit-scrollbar { display: none; }
+.segmented--scroll > * { flex: none; }
+
 .segmented__btn {
   appearance: none; border: 0; background: transparent;
   color: var(--text-dim);
@@ -1082,4 +1095,38 @@ kbd {
   .sidebar, .topbar, .toast-region, .dock { display: none !important; }
   .content { padding: 0; max-width: none; }
   .card { break-inside: avoid; box-shadow: none; }
+}
+
+/* O que mudou, na tela de atualizações e no cartão das Configurações.
+   O texto vem de uma mensagem de commit: as quebras de linha separam o assunto
+   do motivo, e um <p> comum juntaria tudo num parágrafo só. Rola dentro do
+   próprio bloco -- uma mensagem comprida não pode empurrar o botão de instalar
+   para fora da tela, que é justamente o botão que a pessoa veio apertar. */
+.changelog {
+  margin: 0;
+  /* Item de flex nasce com `min-width: auto`, e a largura natural de um <pre>
+     é a da linha mais comprida: sem isto o bloco fica maior que a janela e é a
+     *página* que ganha rolagem lateral -- no celular, o cartão inteiro sai do
+     lugar por causa de uma linha de changelog. */
+  min-width: 0;
+  max-width: 100%;
+  max-height: 18rem;
+  overflow: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2, var(--surface));
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.changelog__box > summary {
+  cursor: pointer;
+  margin-bottom: var(--space-2);
+  color: var(--muted);
+  font-size: 0.875rem;
 }
