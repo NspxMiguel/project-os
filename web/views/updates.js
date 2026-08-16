@@ -49,6 +49,8 @@ setStrings('en', {
 
 const POLL_MS = 1200;
 const RESTART_GRACE_MS = 120000;
+// Tempo do aviso "de volta na X" ser lido antes de a página se recarregar.
+const RELOAD_DELAY_MS = 1500;
 
 function card(options) {
   const {title, sub, iconName, tools, body, footer} = options;
@@ -189,9 +191,13 @@ export default {
           if (!disposed && health && health.version) {
             state.waiting = false;
             toast(t('updates.back', {version: health.version}), {type: 'success'});
-            await load();
-            state.check = null;
-            render();
+            // A atualização troca a árvore inteira, e a tela faz parte dela: o
+            // navegador continua rodando o JavaScript da versão anterior contra
+            // a API da nova. Dava para ver na barra lateral, que seguia
+            // anunciando a versão de antes do clique. Recarregar é o que faz as
+            // duas metades voltarem a ser a mesma versão -- depois do aviso,
+            // para o recado não sumir junto com a página.
+            setTimeout(() => window.location.reload(), RELOAD_DELAY_MS);
             return;
           }
         } catch (err) {

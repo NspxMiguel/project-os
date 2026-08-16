@@ -282,3 +282,17 @@ def test_as_frases_novas_existem_em_portugues():
 def test_o_toast_de_voltar_nao_e_mais_texto_cru_em_ingles():
     fonte = _tela()
     assert "'Rolled back.'" not in fonte
+
+
+def test_depois_do_reinicio_a_pagina_recarrega():
+    """A tela é trocada pela atualização junto com o resto da árvore.
+
+    Sem recarregar, o navegador segue rodando o JavaScript da versão anterior
+    contra a API da nova -- e a barra lateral continua anunciando a versão de
+    antes do clique, que é a mesma tela dizendo dois números diferentes.
+    """
+    fonte = _tela()
+    corte = fonte.index("function waitForRestart()")
+    trecho = fonte[corte:corte + 1600]
+    assert "location.reload()" in trecho, "a tela velha continua no ar contra a API nova"
+    assert "RELOAD_DELAY_MS" in trecho, "recarregar antes do aviso apaga o aviso"
