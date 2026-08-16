@@ -146,3 +146,62 @@ def test_o_manifesto_de_hoje_anuncia_os_dois():
     sistema = dados.get("system") or {}
     assert sistema.get("url"), "o manifesto parou de anunciar o sistema"
     assert len(sistema.get("sha256") or "") == 64
+
+
+# --------------------------------------------------------------------------- fora de ordem
+
+IMAGE_YML = os.path.join(RAIZ, ".github", "workflows", "image.yml")
+
+
+def _script_da_imagem(versao):
+    fonte = io.open(IMAGE_YML, encoding="utf-8").read()
+    achado = re.search(r"python3 - <<'PY'\n(.*?)\n\s*PY\n", fonte, re.S)
+    assert achado, "o passo do manifesto da imagem mudou de forma"
+    corpo = textwrap.dedent(achado.group(1))
+    falsos = {
+        "steps.image.outputs.version": versao,
+        "steps.rootfs.outputs.name": "project-os-rootfs-%s.tar.gz" % versao,
+        "steps.rootfs.outputs.sha": "a" * 64,
+        "steps.rootfs.outputs.size": "881187275",
+        "github.repository": "NspxMiguel/project-os",
+        "github.ref_name": "v%s" % versao,
+    }
+
+    def trocar(m):
+        chave = m.group(1).strip()
+        assert chave in falsos, "expressão nova no script da imagem: %s" % chave
+        return falsos[chave]
+
+    return re.sub(r"\$\{\{(.*?)\}\}", trocar, corpo)
+
+
+def test_uma_imagem_antiga_nao_rebaixa_o_sistema_anunciado(tmp_path):
+    """Cinco builds ao mesmo tempo terminam fora de ordem, e a última a escrever ganha.
+
+    Sem esta comparação, um build de 0.4.9 que demorou mais faz o manifesto
+    anunciar 0.4.9 depois de 0.4.13 já estar lá -- e o Pi passa a oferecer um
+    downgrade de 880 MB como se fosse atualização.
+    """
+    (tmp_path / "release").mkdir()
+    (tmp_path / "release" / "latest.json").write_text(json.dumps({
+        "version": "0.4.13",
+        "system": {"version": "0.4.13", "url": "u", "sha256": "b" * 64, "size": 9},
+    }), encoding="utf-8")
+
+    resultado = _rodar(_script_da_imagem("0.4.9"), tmp_path)
+    assert resultado.returncode == 0, resultado.stderr
+    depois = json.loads((tmp_path / "release" / "latest.json").read_text(encoding="utf-8"))
+    assert depois["system"]["version"] == "0.4.13", "build antigo sobrescreveu o novo"
+
+
+def test_uma_imagem_mais_nova_entra(tmp_path):
+    (tmp_path / "release").mkdir()
+    (tmp_path / "release" / "latest.json").write_text(json.dumps({
+        "version": "0.4.13",
+        "system": {"version": "0.4.8", "url": "u", "sha256": "b" * 64, "size": 9},
+    }), encoding="utf-8")
+
+    _rodar(_script_da_imagem("0.4.13"), tmp_path)
+    depois = json.loads((tmp_path / "release" / "latest.json").read_text(encoding="utf-8"))
+    assert depois["system"]["version"] == "0.4.13"
+    assert depois["version"] == "0.4.13", "a parte do app não é tocada pelo build de imagem"

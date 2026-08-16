@@ -188,6 +188,21 @@ jobs:
           if os.path.exists(caminho):
               with open(caminho) as f:
                   dados = json.load(f)
+          # Duas imagens construindo ao mesmo tempo terminam fora de ordem, e a
+          # última a escrever ganha: sem esta comparação, um build antigo que
+          # demorou mais faz o manifesto anunciar um sistema *mais velho* que o
+          # já publicado -- e o Pi passa a oferecer um downgrade como se fosse
+          # atualização.
+          def como_tupla(texto):
+              partes = str(texto or "0").split(".")
+              return tuple(int(p) if p.isdigit() else 0 for p in partes[:3])
+
+          nova = "${{ steps.image.outputs.version }}"
+          atual = (dados.get("system") or {}).get("version", "")
+          if atual and como_tupla(nova) < como_tupla(atual):
+              print("manifesto já anuncia %s; %s é mais antiga, não sobrescrevo" % (atual, nova))
+              raise SystemExit(0)
+
           dados["system"] = {
               "version": "${{ steps.image.outputs.version }}",
               "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.rootfs.outputs.name }}",
