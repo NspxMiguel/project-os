@@ -172,3 +172,61 @@ def test_parar_devolve_o_volume():
     corpo = fonte[fonte.index("    async def stop(self)"):]
     corpo = corpo[:corpo.index("    async def pause(self)")]
     assert "_devolver_volume_do_aparelho()" in corpo
+
+
+# ------------------------------------------------------------- e o HomePod
+
+
+class _AudioFalso(object):
+    def __init__(self, volume_0a100):
+        self.volume = volume_0a100
+        self.escritas = []
+
+    async def set_volume(self, valor):
+        self.escritas.append(valor)
+        self.volume = valor
+
+
+def _airplay(volume_da_caixa):
+    from project_os.apps.birdtunes.players.airplay import AirPlayPlayer
+
+    p = AirPlayPlayer.__new__(AirPlayPlayer)
+    p._atv = type("A", (), {"audio": _AudioFalso(volume_da_caixa)})()
+    p._volume_do_aparelho = None
+    p.volume = 0.15
+    p.device = {"id": "homepod:x", "name": "HomePod"}
+    return p
+
+
+def test_o_homepod_tambem_volta_ao_volume_dele():
+    """Uma caixa tem um volume só, e ele fica como a gente deixou.
+
+    O mesmo defeito da TV: depois de os passarinhos cantarem a 30%, a próxima
+    música que ele mandar para a caixa começa a 30%.
+    """
+    p = _airplay(20.0)  # pyatv fala 0-100
+    _rodar(p.set_volume(0.30))
+    assert p._atv.audio.volume == 30.0
+
+    _rodar(p._devolver_volume_do_aparelho())
+    assert p._atv.audio.volume == 20.0
+
+
+def test_e_tambem_guarda_uma_vez_so():
+    p = _airplay(20.0)
+    _rodar(p.set_volume(0.30))
+    _rodar(p.set_volume(0.45))
+    _rodar(p._devolver_volume_do_aparelho())
+    assert p._atv.audio.volume == 20.0
+
+
+def test_parar_no_airplay_devolve_o_volume():
+    import io
+    import os
+
+    fonte = io.open(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "project_os", "apps", "birdtunes", "players", "airplay.py"), encoding="utf-8").read()
+    corpo = fonte[fonte.index("    async def stop(self)"):]
+    corpo = corpo[:corpo.index("PlaybackState.STOPPED")]
+    assert "_devolver_volume_do_aparelho()" in corpo

@@ -86,6 +86,8 @@ class AirPlayPlayer(Player):
         self._stopping = False
         self._mode = ""
         self._pairing = None  # type: Optional[Dict[str, Any]]
+        #: O volume que a caixa tinha antes de a gente mexer. Ver set_volume.
+        self._volume_do_aparelho = None  # type: Optional[float]
 
     # -- availability ----------------------------------------------------
     @classmethod
@@ -390,6 +392,7 @@ class AirPlayPlayer(Player):
                 atv.stream.close()
             except Exception as exc:  # pragma: no cover - device already gone
                 self.log.debug("stream.close() failed: %s", exc)
+        await self._devolver_volume_do_aparelho()
         self._set_state(PlaybackState.STOPPED)
 
     async def pause(self) -> None:
@@ -438,6 +441,12 @@ class AirPlayPlayer(Player):
         self.volume = value
         if self._atv is None:
             return
+        # Um HomePod tem um volume só, que fica como a gente deixou: depois de
+        # os passarinhos cantarem, a próxima música que ele mandar para a caixa
+        # começa naquele nível. Guardar o que havia antes é o que permite
+        # devolver quando a nossa música acaba.
+        if self._volume_do_aparelho is None:
+            self._volume_do_aparelho = await self._volume_atual_do_aparelho()
         try:
             # pyatv speaks 0-100, BirdTunes speaks 0.0-1.0.
             await self._atv.audio.set_volume(value * 100.0)
@@ -446,6 +455,27 @@ class AirPlayPlayer(Player):
                 "Could not set the volume on %s" % device_label(self.device),
                 code="airplay_volume_failed",
             ) from exc
+
+    async def _volume_atual_do_aparelho(self) -> Optional[float]:
+        atv = self._atv
+        audio = getattr(atv, "audio", None) if atv is not None else None
+        nivel = getattr(audio, "volume", None) if audio is not None else None
+        try:
+            if asyncio.iscoroutine(nivel):
+                nivel = await nivel
+            return float(nivel) / 100.0 if nivel is not None else None
+        except (TypeError, ValueError):  # pragma: no cover - pyatv fora do padrão
+            return None
+
+    async def _devolver_volume_do_aparelho(self) -> None:
+        """Devolve à caixa o volume que ela tinha antes de a gente tocar."""
+        anterior, self._volume_do_aparelho = self._volume_do_aparelho, None
+        if anterior is None or self._atv is None:
+            return
+        try:
+            await self._atv.audio.set_volume(anterior * 100.0)
+        except Exception as exc:  # pragma: no cover - aparelho já fora de alcance
+            self.log.debug("could not restore the device volume: %s", exc)
 
     async def disconnect(self) -> None:
         await self._cancel_stream(REASON_STOPPED, notify=False)
