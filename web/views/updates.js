@@ -83,6 +83,7 @@ export default {
       info: null,       // GET /updates
       check: null,      // POST /updates/check
       checking: false,
+      checkError: null,
       job: null,
       waiting: false,   // the server is restarting
     };
@@ -119,16 +120,44 @@ export default {
         state.error = err instanceof ApiError ? err.message : String(err);
       }
       render();
+      // Abrir a tela de atualizações é a pergunta. Ela só mostrava o que tinha
+      // sido conferido em algum momento anterior e esperava um clique -- num
+      // cartão que nunca conferiu, isso é o título "Esta máquina está na X"
+      // parecendo um veredito sobre uma pergunta que ninguém fez. Uma versão
+      // nova podia estar publicada há semanas e a tela dizer a mesma coisa.
+      if (state.status === 'ready' && !state.checking && _velho(state.check)) void check(true);
     }
 
-    async function check() {
+    //: Conferido há menos que isto, o resultado guardado ainda serve.
+    const CHECK_FRESH_MS = 6 * 60 * 60 * 1000;
+
+    function _velho(check) {
+      if (!check || !check.checked_at) return true;
+      // O servidor manda `time.time()`: segundos, não milissegundos, e não ISO.
+      const bruto = check.checked_at;
+      const quando = typeof bruto === 'number' ? bruto * 1000 : Date.parse(bruto);
+      if (!quando) return true;
+      return (Date.now() - quando) > CHECK_FRESH_MS;
+    }
+
+    // `automatico`: a conferida que a própria tela faz ao abrir. Ela aparece nos
+    // cartões, mas não fala por cima de quem só passou pela tela -- o aviso de
+    // "está na mais nova" é resposta a um clique, não a uma visita.
+    async function check(automatico) {
       state.checking = true;
       render();
       try {
         state.check = await api.post('/updates/check', {});
-        if (!state.check.update_available) toast(t('updates.uptodate'), {type: 'success'});
+        state.checkError = null;
+        if (!automatico && !state.check.update_available) {
+          toast(t('updates.uptodate'), {type: 'success'});
+        }
       } catch (err) {
-        toast(err instanceof ApiError ? err.message : t('updates.error.check'), {type: 'error'});
+        if (!automatico) {
+          toast(err instanceof ApiError ? err.message : t('updates.error.check'), {type: 'error'});
+        } else {
+          state.checkError = err instanceof ApiError ? err.message : String(err);
+        }
       } finally {
         state.checking = false;
         render();
@@ -230,6 +259,11 @@ export default {
               info.method === 'git' ? (info.branch || 'main') : (info.manifest_url || '—')),
           ),
           info.enabled === false ? h('div', {class: 'notice notice--warning'}, t('updates.disabled')) : null,
+          // A conferida automática falhar em silêncio devolveria a tela ao que
+          // ela era: um número de versão e nenhuma notícia.
+          state.checkError
+            ? h('div', {class: 'notice notice--warning'}, t('updates.error.check') + ' ' + state.checkError)
+            : null,
         ),
         footer: h('div', {class: 'row'},
           h('button', {
