@@ -71,6 +71,12 @@ jobs:
         # e o release saiu sem manifesto -- ou seja, a atualização pela rede,
         # que é a razão de existir deste workflow, ficou anunciando a versão
         # anterior.
+        #
+        # A chave "system" do manifesto é escrita pelo image.yml e anuncia o
+        # rootfs A/B. Aqui ela é lida e devolvida intacta: um `cat >` apagava o
+        # anúncio do sistema a cada release de aplicação, e o botão "Atualizar
+        # sistema" ficava sem alvo até o próximo build de imagem -- que demora
+        # uma hora e não roda a cada tag.
         run: |
           set -e
           git config user.name "github-actions[bot]"
@@ -78,14 +84,21 @@ jobs:
           git fetch origin main
           git checkout -B main origin/main
           mkdir -p release
-          cat > release/latest.json <<JSON
-          {
-            "version": "${{ steps.v.outputs.version }}",
-            "url": "https://github.com/${{ github.repository }}/releases/download/${{ steps.v.outputs.tag }}/${{ steps.pack.outputs.name }}",
-            "sha256": "${{ steps.pack.outputs.sha }}",
-            "notes": "https://github.com/${{ github.repository }}/releases/tag/${{ steps.v.outputs.tag }}"
-          }
-          JSON
+          python3 - <<'PY'
+          import json, os
+          caminho = "release/latest.json"
+          dados = {}
+          if os.path.exists(caminho):
+              with open(caminho) as f:
+                  dados = json.load(f)
+          dados["version"] = "${{ steps.v.outputs.version }}"
+          dados["url"] = "https://github.com/${{ github.repository }}/releases/download/${{ steps.v.outputs.tag }}/${{ steps.pack.outputs.name }}"
+          dados["sha256"] = "${{ steps.pack.outputs.sha }}"
+          dados["notes"] = "https://github.com/${{ github.repository }}/releases/tag/${{ steps.v.outputs.tag }}"
+          with open(caminho, "w") as f:
+              json.dump(dados, f, indent=2)
+              f.write("\n")
+          PY
           git add release/latest.json
           git diff --cached --quiet && exit 0
           git commit -m "release ${{ steps.v.outputs.version }}: manifesto de atualização"
