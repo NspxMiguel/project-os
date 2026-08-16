@@ -461,6 +461,28 @@ SEM_FORMATO = "format is not available"
 #: exige de *todos* os clientes antes de qualquer um baixar vídeo.
 FORMATO_SO_AUDIO = "bestaudio[vcodec=none]"
 
+#: Falha que vale insistir: o formato de áudio existia e foi a busca dos bytes
+#: que caiu. Medido em cinco tentativas seguidas do mesmo vídeo pelo mesmo
+#: cliente, três trouxeram os 14,5 MB de áudio e duas responderam 403 -- é
+#: passageiro. Insistir uma vez leva a chance de acabar baixando o vídeo
+#: inteiro de ~40% para ~16%, e custa 8 segundos contra 24 MB num Pi.
+TROPECO = ("403", "unable to download")
+
+
+def _tropecou(erro: str) -> bool:
+    texto = (erro or "").lower()
+    return any(marca in texto for marca in TROPECO)
+
+
+#: O que a tela diz enquanto nenhum byte chegou ainda. Sem isto são dezenas de
+#: segundos de barra parada em zero -- cada cliente recusado custa ~1s e um que
+#: responde e depois tropeça custa ~8s.
+RECADOS_DA_PROCURA = {
+    "audio": "Procurando o áudio (%d de %d)…",
+    "insistir": "Insistindo no áudio (%d de %d)…",
+    "video": "Tentando outro jeito (%d de %d)…",
+}
+
 
 def download_entry(yt_dlp: Any, opts: Dict[str, Any], url: str,
                    clients: Optional[Iterable[str]] = None,
@@ -481,27 +503,39 @@ def download_entry(yt_dlp: Any, opts: Dict[str, Any], url: str,
     lista = list(clients if clients is not None else PLAYER_CLIENTS)
     first_error = ""
     responderam = []  # type: List[str]
+    tropecaram = []  # type: List[str]
+    so_audio = dict(opts, format=FORMATO_SO_AUDIO)
 
     for numero, client in enumerate(lista):
         if on_attempt is not None:
-            on_attempt(numero + 1, len(lista), True)
-        info, ydl, error = _download_once(
-            yt_dlp, dict(opts, format=FORMATO_SO_AUDIO), url, client)
+            on_attempt(numero + 1, len(lista), "audio")
+        info, ydl, error = _download_once(yt_dlp, so_audio, url, client)
         if info is not None:
             return info, ydl, ""
         if error and SEM_FORMATO in error:
-            # Respondeu; só não tinha áudio puro. É candidato da segunda passada.
+            # Respondeu; só não tinha áudio puro. É candidato da última passada.
             responderam.append(client)
-        elif error and not first_error:
+        elif error and _tropecou(error):
+            tropecaram.append(client)
+        if error and not first_error:
             first_error = error
 
-    # Segunda passada: aceita o progressivo. Quem foi recusado na primeira será
-    # recusado de novo, então só se tenta de novo quem respondeu -- e, se
-    # ninguém respondeu, a lista inteira, para nunca ficar pior que antes.
-    segunda = responderam or lista
-    for numero, client in enumerate(segunda):
+    # Insistir com quem tinha o áudio e tropeçou nos bytes, antes de desistir
+    # dele e baixar o filme inteiro.
+    for numero, client in enumerate(tropecaram):
         if on_attempt is not None:
-            on_attempt(numero + 1, len(segunda), False)
+            on_attempt(numero + 1, len(tropecaram), "insistir")
+        info, ydl, error = _download_once(yt_dlp, so_audio, url, client)
+        if info is not None:
+            return info, ydl, ""
+
+    # Última passada: aceita o progressivo. Quem foi recusado será recusado de
+    # novo, então só se tenta de novo quem respondeu -- e, se ninguém
+    # respondeu, a lista inteira, para nunca ficar pior que antes.
+    ultima = responderam or lista
+    for numero, client in enumerate(ultima):
+        if on_attempt is not None:
+            on_attempt(numero + 1, len(ultima), "video")
         info, ydl, error = _download_once(yt_dlp, opts, url, client)
         if info is not None:
             return info, ydl, ""
@@ -736,10 +770,9 @@ def run_job(
                     # ~1s e um que responde e depois dá 403 custa ~8s. Medido
                     # neste vídeo: 16s de barra parada sem uma palavra, que é
                     # exatamente "não dá pra saber se está baixando".
-                    def _avisar(numero, total, procurando_audio, _id=job_id):
-                        _update_job(db, _id, message=(
-                            "Procurando o áudio (%d de %d)…" if procurando_audio
-                            else "Tentando outro jeito (%d de %d)…") % (numero, total))
+                    def _avisar(numero, total, fase, _id=job_id):
+                        _update_job(db, _id, message=RECADOS_DA_PROCURA.get(
+                            fase, RECADOS_DA_PROCURA["audio"]) % (numero, total))
 
                     downloaded, used_ydl, failure = download_entry(
                         yt_dlp, opts, entry.get("webpage_url") or job["url"], clients,

@@ -152,6 +152,63 @@ def test_ninguem_baixa_video_antes_de_todos_tentarem_o_audio(tmp_path):
     assert all(estrito for _c, estrito in seen), "ninguém chegou a aceitar vídeo"
 
 
+def test_quem_tem_o_audio_e_tropeca_nos_bytes_ganha_outra_chance(tmp_path):
+    """O 403 no áudio é passageiro: 3 de 5 tentativas seguidas trouxeram o arquivo.
+
+    Desistir na primeira é aceitar ~40% de chance de baixar o vídeo inteiro
+    quando o áudio estava lá. Insistir custa 8 segundos.
+    """
+    from project_os.apps.birdtunes import sources
+
+    tentativas = []
+
+    class FakeYDL(object):
+        def __init__(self, opts):
+            cliente = ((opts.get("extractor_args") or {}).get("youtube") or {}).get("player_client")
+            self.client = cliente[0] if cliente else ""
+            self.logger = opts.get("logger")
+            tentativas.append(self.client)
+
+        def extract_info(self, url, download=False):
+            if self.client != "android_vr":
+                self.logger.error("ERROR: [youtube] x: The page needs to be reloaded.")
+                return None
+            if tentativas.count("android_vr") == 1:  # o 403 da primeira vez
+                self.logger.error("ERROR: unable to download video data: HTTP Error 403: Forbidden")
+                return None
+            escrito = tmp_path / "audio.m4a"
+            escrito.write_bytes(b"audio")
+            return {"id": "x", "requested_downloads": [{"filepath": str(escrito)}]}
+
+    fake = type("m", (), {"YoutubeDL": FakeYDL, "utils": type("u", (), {"DownloadError": Exception})})
+    info, _ydl, erro = sources.download_entry(fake, {"format": "bestaudio/best"}, "https://y/x")
+
+    assert erro == ""
+    assert info["requested_downloads"][0]["filepath"].endswith("audio.m4a")
+    assert tentativas.count("android_vr") == 2, tentativas
+
+
+def test_mas_nao_insiste_com_quem_so_foi_recusado():
+    """Recusa não é tropeço: repetir só gastaria segundos de espera de verdade."""
+    from project_os.apps.birdtunes import sources
+
+    tentativas = []
+
+    class FakeYDL(object):
+        def __init__(self, opts):
+            cliente = ((opts.get("extractor_args") or {}).get("youtube") or {}).get("player_client")
+            tentativas.append(cliente[0] if cliente else "")
+            self.logger = opts.get("logger")
+
+        def extract_info(self, url, download=False):
+            self.logger.error("ERROR: [youtube] x: The page needs to be reloaded.")
+            return None
+
+    fake = type("m", (), {"YoutubeDL": FakeYDL, "utils": type("u", (), {"DownloadError": Exception})})
+    sources.download_entry(fake, {}, "https://y/x", clients=["a", "b"])
+    assert tentativas == ["a", "b", "a", "b"], "uma passada exigente e a última, sem insistência"
+
+
 def test_e_quando_ninguem_tem_audio_o_video_serve():
     """Desistir seria pior: o pedido é ouvir o passarinho, não ganhar a discussão."""
     from project_os.apps.birdtunes import sources
@@ -217,16 +274,18 @@ def test_a_tela_ouve_cada_tentativa():
 
     fake = type("m", (), {"YoutubeDL": FakeYDL, "utils": type("u", (), {"DownloadError": Exception})})
     sources.download_entry(fake, {}, "https://y/x", clients=["a", "b"],
-                           on_attempt=lambda n, total, audio: avisos.append((n, total, audio)))
+                           on_attempt=lambda n, total, fase: avisos.append((n, total, fase)))
 
-    assert avisos[:2] == [(1, 2, True), (2, 2, True)]
-    assert (1, 2, False) in avisos, "e a segunda passada também se anuncia"
+    assert avisos[:2] == [(1, 2, "audio"), (2, 2, "audio")]
+    assert (1, 2, "video") in avisos, "e a última passada também se anuncia"
 
 
 def test_o_trabalho_conta_isso_na_mensagem():
     fonte = _ler(FONTE)
-    assert "Procurando o áudio (%d de %d)…" in fonte
-    assert "Tentando outro jeito (%d de %d)…" in fonte
+    from project_os.apps.birdtunes.sources import RECADOS_DA_PROCURA
+
+    assert set(RECADOS_DA_PROCURA) == {"audio", "insistir", "video"}
+    assert all("%d de %d" in frase for frase in RECADOS_DA_PROCURA.values())
     assert "on_attempt=_avisar" in fonte
 
 
