@@ -224,6 +224,18 @@ def sponsorblock_available() -> Tuple[bool, str]:
     return True, ""
 
 
+def _perto_da_taxa(quality: str) -> List[str]:
+    """Ordenar os formatos pela taxa mais perto da que o mp3 vai ter.
+
+    ``abr~192`` é o jeito do yt-dlp de dizer "prefira o mais próximo de 192",
+    e não "pelo menos 192" -- na tabela real de um vídeo (48, 50, 129, 130,
+    195 e 387 kbps) isso escolhe o de 195. Sem número configurado não há o que
+    preferir, e aí vale o padrão do yt-dlp.
+    """
+    alvo = str(quality or "").strip()
+    return ["abr~%d" % int(alvo)] if alvo.isdigit() and int(alvo) > 0 else []
+
+
 def _base_options(dest_dir: str, quality: str, noplaylist: bool,
                   skip_sponsors: bool = True,
                   categories: Optional[Iterable[str]] = None) -> Dict[str, Any]:
@@ -253,6 +265,13 @@ def _base_options(dest_dir: str, quality: str, noplaylist: bool,
         # verdade; a cadeia atrás dele existe para não desistir de baixar quando
         # nenhum cliente oferece um.
         "format": "bestaudio[vcodec=none]/bestaudio/best",
+        # `bestaudio` quer dizer o de maior taxa, e o YouTube guarda um de 387
+        # kbps: 28,9 MB baixados num vídeo de 10 minutos para virar um mp3 de
+        # 192 -- metade jogada fora na conversão. Pedindo a faixa mais perto da
+        # taxa que se vai gerar, o mesmo vídeo desce com 14,5 MB (195 kbps) sem
+        # perder nada que sobreviva ao mp3. Quem escolher 320 continua levando a
+        # faixa grande, que é o que ele pediu.
+        "format_sort": _perto_da_taxa(quality),
         "outtmpl": os.path.join(dest_dir, "%(title).120B [%(id)s].%(ext)s"),
         "noplaylist": noplaylist,
         "ignoreerrors": True,
@@ -433,15 +452,56 @@ def _tamanho(bytes_):
     return "%.0f GB" % bytes_
 
 
+#: O que o yt-dlp diz quando o cliente respondeu mas não tem faixa de áudio
+#: separada para oferecer -- diferente de ter sido recusado, e a diferença
+#: decide quem vale a pena tentar de novo na segunda passada.
+SEM_FORMATO = "format is not available"
+
+#: Só faixa de áudio de verdade, sem queda nenhuma: é o que a primeira passada
+#: exige de *todos* os clientes antes de qualquer um baixar vídeo.
+FORMATO_SO_AUDIO = "bestaudio[vcodec=none]"
+
+
 def download_entry(yt_dlp: Any, opts: Dict[str, Any], url: str,
-                   clients: Optional[Iterable[str]] = None):
+                   clients: Optional[Iterable[str]] = None,
+                   on_attempt: Optional[Any] = None):
     """Download ``url``, falling back through the player clients.
+
+    Duas passadas, e a ordem importa: a primeira exige faixa de áudio de
+    verdade em *todos* os clientes; só se nenhum tiver é que a segunda aceita
+    o formato progressivo, que é o vídeo inteiro. Numa passada só, o primeiro
+    cliente que responde decide -- e se ele só oferece progressivo (o `android`
+    oferece), baixa-se o filme mesmo quando o cliente seguinte tinha o áudio
+    separado guardado. Medido num vídeo de 10 minutos: 24 MB de mp4 contra
+    3,6 MB de áudio.
 
     Returns ``(info, ydl, error)``; ``info`` is None when every client failed,
     and ``error`` is the first real sentence YouTube gave -- not a guess.
     """
+    lista = list(clients if clients is not None else PLAYER_CLIENTS)
     first_error = ""
-    for client in (clients if clients is not None else PLAYER_CLIENTS):
+    responderam = []  # type: List[str]
+
+    for numero, client in enumerate(lista):
+        if on_attempt is not None:
+            on_attempt(numero + 1, len(lista), True)
+        info, ydl, error = _download_once(
+            yt_dlp, dict(opts, format=FORMATO_SO_AUDIO), url, client)
+        if info is not None:
+            return info, ydl, ""
+        if error and SEM_FORMATO in error:
+            # Respondeu; só não tinha áudio puro. É candidato da segunda passada.
+            responderam.append(client)
+        elif error and not first_error:
+            first_error = error
+
+    # Segunda passada: aceita o progressivo. Quem foi recusado na primeira será
+    # recusado de novo, então só se tenta de novo quem respondeu -- e, se
+    # ninguém respondeu, a lista inteira, para nunca ficar pior que antes.
+    segunda = responderam or lista
+    for numero, client in enumerate(segunda):
+        if on_attempt is not None:
+            on_attempt(numero + 1, len(segunda), False)
         info, ydl, error = _download_once(yt_dlp, opts, url, client)
         if info is not None:
             return info, ydl, ""
@@ -671,8 +731,19 @@ def run_job(
                 if existing is not None:
                     resolved_ids.append(existing["id"])
                 if existing is None:
+                    # Entre pedir o vídeo e o primeiro pacote chegar podem
+                    # passar dezenas de segundos: cada cliente recusado custa
+                    # ~1s e um que responde e depois dá 403 custa ~8s. Medido
+                    # neste vídeo: 16s de barra parada sem uma palavra, que é
+                    # exatamente "não dá pra saber se está baixando".
+                    def _avisar(numero, total, procurando_audio, _id=job_id):
+                        _update_job(db, _id, message=(
+                            "Procurando o áudio (%d de %d)…" if procurando_audio
+                            else "Tentando outro jeito (%d de %d)…") % (numero, total))
+
                     downloaded, used_ydl, failure = download_entry(
-                        yt_dlp, opts, entry.get("webpage_url") or job["url"], clients)
+                        yt_dlp, opts, entry.get("webpage_url") or job["url"], clients,
+                        on_attempt=_avisar)
                     if downloaded is None and not error_message:
                         error_message = failure or (
                             "YouTube refused %s and gave no reason." % (entry.get("title") or video_id))

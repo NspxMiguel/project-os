@@ -76,11 +76,158 @@ def test_mas_nao_desiste_de_baixar_quando_nao_existe_audio_puro():
     assert seletor.endswith("best")
 
 
+def test_a_faixa_escolhida_e_a_mais_perto_da_taxa_que_o_mp3_vai_ter():
+    """``bestaudio`` quer dizer a de maior taxa, e isso passa longe do alvo.
+
+    A tabela de verdade de um vídeo de 10 minutos, pelo cliente que oferece
+    áudio separado: 48, 50, 129, 130, 195 e 387 kbps -- de 3,6 MB a 28,9 MB.
+    Para gerar um mp3 de 192, baixar os 28,9 MB é jogar metade fora na
+    conversão. Medido depois desta ordenação: 14,5 MB, a faixa de 195 kbps.
+    """
+    from project_os.apps.birdtunes.sources import _base_options, _perto_da_taxa
+
+    assert _perto_da_taxa("192") == ["abr~192"]
+    assert _perto_da_taxa("320") == ["abr~320"], "quem pede 320 leva a faixa grande"
+    assert _perto_da_taxa("") == [] and _perto_da_taxa("melhor") == []
+    assert _base_options("/tmp", "192", True)["format_sort"] == ["abr~192"]
+
+
 def test_o_primeiro_cliente_tentado_e_o_que_oferece_audio_separado():
     from project_os.apps.birdtunes.sources import PLAYER_CLIENTS
 
     assert PLAYER_CLIENTS[0] == "android_vr", PLAYER_CLIENTS
     assert "android" in PLAYER_CLIENTS, "o que respondia antes continua na lista"
+
+
+# --------------------------------------------------------------------------- duas passadas
+
+
+def _fake_de_clientes(tmp_path, quem_tem_audio, seen):
+    """Um YouTube de mentira onde só ``quem_tem_audio`` oferece faixa separada.
+
+    Os outros respondem com formatos progressivos, que é o caso do ``android``
+    medido de verdade: 4 formatos, nenhum de áudio puro.
+    """
+    from project_os.apps.birdtunes import sources
+
+    class FakeYDL(object):
+        def __init__(self, opts):
+            self.opts = opts
+            cliente = ((opts.get("extractor_args") or {}).get("youtube") or {}).get("player_client")
+            self.client = cliente[0] if cliente else ""
+            self.estrito = opts.get("format") == sources.FORMATO_SO_AUDIO
+            self.logger = opts.get("logger")
+            seen.append((self.client, self.estrito))
+
+        def extract_info(self, url, download=False):
+            if self.client == quem_tem_audio:
+                escrito = tmp_path / (self.client + ".m4a")
+                escrito.write_bytes(b"audio")
+                return {"id": "x", "requested_downloads": [{"filepath": str(escrito)}]}
+            if self.estrito:
+                self.logger.error("ERROR: [youtube] x: Requested format is not available.")
+                return None
+            escrito = tmp_path / (self.client + ".mp4")  # o filme inteiro
+            escrito.write_bytes(b"video" * 1000)
+            return {"id": "x", "requested_downloads": [{"filepath": str(escrito)}]}
+
+    return type("m", (), {"YoutubeDL": FakeYDL, "utils": type("u", (), {"DownloadError": Exception})})
+
+
+def test_ninguem_baixa_video_antes_de_todos_tentarem_o_audio(tmp_path):
+    """O primeiro que responde não decide.
+
+    O ``android`` responde rápido e só oferece progressivo. Numa passada só,
+    era ele quem ganhava -- 24 MB de mp4 num vídeo de 10 minutos, contra os
+    3,6 MB de áudio que outro cliente tinha guardado.
+    """
+    from project_os.apps.birdtunes import sources
+
+    seen = []
+    fake = _fake_de_clientes(tmp_path, "web_safari", seen)
+    info, _ydl, erro = sources.download_entry(fake, {"format": "bestaudio/best"}, "https://y/x")
+
+    assert erro == ""
+    assert info["requested_downloads"][0]["filepath"].endswith("web_safari.m4a")
+    assert all(estrito for _c, estrito in seen), "ninguém chegou a aceitar vídeo"
+
+
+def test_e_quando_ninguem_tem_audio_o_video_serve():
+    """Desistir seria pior: o pedido é ouvir o passarinho, não ganhar a discussão."""
+    from project_os.apps.birdtunes import sources
+    import tempfile
+
+    pasta = tempfile.mkdtemp()
+    seen = []
+    fake = _fake_de_clientes(__import__("pathlib").Path(pasta), "ninguem", seen)
+    info, _ydl, erro = sources.download_entry(fake, {"format": "bestaudio/best"}, "https://y/x")
+
+    assert erro == "" and info is not None
+    assert info["requested_downloads"][0]["filepath"].endswith(".mp4")
+    assert seen[0][1] is True, "mas a primeira passada foi a exigente"
+    assert any(not estrito for _c, estrito in seen), "e a segunda foi a que aceitou"
+
+
+def test_a_segunda_passada_nao_repete_quem_recusou(tmp_path):
+    """Quem recusou vai recusar de novo; repetir só custa segundos ao vivo."""
+    from project_os.apps.birdtunes import sources
+
+    seen = []
+
+    class FakeYDL(object):
+        def __init__(self, opts):
+            cliente = ((opts.get("extractor_args") or {}).get("youtube") or {}).get("player_client")
+            self.client = cliente[0] if cliente else ""
+            self.estrito = opts.get("format") == sources.FORMATO_SO_AUDIO
+            self.logger = opts.get("logger")
+            seen.append((self.client, self.estrito))
+
+        def extract_info(self, url, download=False):
+            if self.client == "android":  # responde, mas só com progressivo
+                if self.estrito:
+                    self.logger.error("ERROR: [youtube] x: Requested format is not available.")
+                    return None
+                escrito = tmp_path / "android.mp4"
+                escrito.write_bytes(b"video")
+                return {"id": "x", "requested_downloads": [{"filepath": str(escrito)}]}
+            self.logger.error("ERROR: [youtube] x: The page needs to be reloaded.")
+            return None
+
+    fake = type("m", (), {"YoutubeDL": FakeYDL, "utils": type("u", (), {"DownloadError": Exception})})
+    info, _ydl, erro = sources.download_entry(fake, {"format": "bestaudio/best"}, "https://y/x")
+
+    assert erro == "" and info is not None
+    segunda = [cliente for cliente, estrito in seen if not estrito]
+    assert segunda == ["android"], segunda
+
+
+def test_a_tela_ouve_cada_tentativa():
+    """Sem isto a barra fica parada, sem número, enquanto os clientes falham."""
+    from project_os.apps.birdtunes import sources
+
+    avisos = []
+
+    class FakeYDL(object):
+        def __init__(self, opts):
+            self.logger = opts.get("logger")
+
+        def extract_info(self, url, download=False):
+            self.logger.error("ERROR: [youtube] x: The page needs to be reloaded.")
+            return None
+
+    fake = type("m", (), {"YoutubeDL": FakeYDL, "utils": type("u", (), {"DownloadError": Exception})})
+    sources.download_entry(fake, {}, "https://y/x", clients=["a", "b"],
+                           on_attempt=lambda n, total, audio: avisos.append((n, total, audio)))
+
+    assert avisos[:2] == [(1, 2, True), (2, 2, True)]
+    assert (1, 2, False) in avisos, "e a segunda passada também se anuncia"
+
+
+def test_o_trabalho_conta_isso_na_mensagem():
+    fonte = _ler(FONTE)
+    assert "Procurando o áudio (%d de %d)…" in fonte
+    assert "Tentando outro jeito (%d de %d)…" in fonte
+    assert "on_attempt=_avisar" in fonte
 
 
 # --------------------------------------------------------------------------- o arquivo fantasma
