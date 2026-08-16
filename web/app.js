@@ -50,6 +50,14 @@ setStrings('en', {
 
 setStrings('pt-BR', PT_BR);
 
+//: Quantas vezes perguntar "quem sou eu" quando a caixa não responde, e o
+//: intervalo entre elas. A janela que isto cobre é a do serviço reiniciando
+//: depois de uma atualização -- segundos, não minutos.
+const AUTH_RETRIES = 4;
+const AUTH_RETRY_MS = 1200;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const LS_MODE = 'project_os.mode';
 const LS_THEME = 'project_os.theme';
 const LS_ACCENT = 'project_os.accent';
@@ -1078,14 +1086,39 @@ export async function boot() {
       authenticated = true;
       user = {username: 'local', anonymous: true};
     } else {
-      try {
-        user = normalizeUser(await api.get('/auth/me', {redirectOnAuth: false}));
-        authenticated = Boolean(user);
-      } catch (err) {
-        if (err && err.status && err.status !== 401 && err.status !== 428) {
-          console.warn('[shell] /auth/me failed', err.message);
+      // Só o servidor decide que alguém não está logado, e ele diz isso com um
+      // 401 (ou 428, quando a caixa ainda não tem dono). Um pedido que não
+      // chega -- ApiError com status 0 -- não é resposta nenhuma, e tratar isso
+      // como "deslogado" mandava para a tela de login quem tinha acabado de
+      // atualizar: a atualização reinicia o serviço, a página recarrega logo em
+      // seguida, e a primeira pergunta pega a caixa ainda subindo. A sessão
+      // continuava inteira no banco o tempo todo; o login pedido ali era um
+      // login que não precisava acontecer.
+      for (let tentativa = 0; tentativa < AUTH_RETRIES; tentativa++) {
+        try {
+          user = normalizeUser(await api.get('/auth/me', {redirectOnAuth: false}));
+          authenticated = Boolean(user);
+          break;
+        } catch (err) {
+          const status = err && err.status;
+          if (status === 401 || status === 428) {
+            authenticated = false;      // o servidor respondeu, e a resposta é essa
+            break;
+          }
+          if (status) {
+            console.warn('[shell] /auth/me failed', err.message);
+            authenticated = false;      // erro do servidor: não invento sessão
+            break;
+          }
+          if (tentativa === AUTH_RETRIES - 1) {
+            // Não alcancei a caixa nem depois de insistir. Login aqui seria
+            // pior que inútil -- o formulário também não teria com quem falar.
+            fatal(err instanceof ApiError ? err.message : String(err));
+            return;
+          }
+          await sleep(AUTH_RETRY_MS);
+          if (token !== bootToken) return;
         }
-        authenticated = false;
       }
     }
   }
