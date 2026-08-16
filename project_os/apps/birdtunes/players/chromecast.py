@@ -88,6 +88,8 @@ class ChromecastPlayer(Player):
         self._cast = None  # type: Any
         self._watch_task = None  # type: Optional[asyncio.Future]
         self._youtube = None  # type: Any  # the device's own YouTube app, when used
+        #: O volume que a TV tinha antes de a gente mexer. Ver set_volume.
+        self._volume_do_aparelho = None  # type: Optional[float]
 
     # -- availability ------------------------------------------------------
     @classmethod
@@ -412,6 +414,7 @@ class ChromecastPlayer(Player):
                 await loop.run_in_executor(None, self._cast.media_controller.stop)
             except Exception as exc:  # pragma: no cover - device already gone
                 self.log.debug("chromecast stop failed: %s", exc)
+        await self._devolver_volume_do_aparelho()
         self._finish_playback(REASON_STOPPED)
         self._set_state(PlaybackState.STOPPED)
 
@@ -444,6 +447,11 @@ class ChromecastPlayer(Player):
         self.volume = value
         if self._cast is None:
             return
+        # Numa TV o volume é do aparelho, não da nossa sessão: o número que a
+        # gente escreve fica lá para o próximo vídeo que ele abrir. Guardar o
+        # que havia antes de mexer é o que permite devolver no fim.
+        if self._volume_do_aparelho is None:
+            self._volume_do_aparelho = self._volume_atual_do_aparelho()
         try:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, self._cast.set_volume, value)
@@ -452,6 +460,25 @@ class ChromecastPlayer(Player):
                 "Could not set the volume on %s" % device_label(self.device),
                 code="chromecast_volume_failed",
             ) from exc
+
+    def _volume_atual_do_aparelho(self) -> Optional[float]:
+        status = getattr(self._cast, "status", None) if self._cast is not None else None
+        nivel = getattr(status, "volume_level", None) if status is not None else None
+        try:
+            return float(nivel) if nivel is not None else None
+        except (TypeError, ValueError):  # pragma: no cover - status estranho
+            return None
+
+    async def _devolver_volume_do_aparelho(self) -> None:
+        """Devolve à TV o volume que ela tinha antes de a gente tocar."""
+        anterior, self._volume_do_aparelho = self._volume_do_aparelho, None
+        if anterior is None or self._cast is None:
+            return
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._cast.set_volume, anterior)
+        except Exception as exc:  # pragma: no cover - aparelho já fora de alcance
+            self.log.debug("could not restore the device volume: %s", exc)
 
     async def disconnect(self) -> None:
         await self._cancel_watch()

@@ -413,6 +413,9 @@ class BirdTunesApp(AppInstance):
         #: ordem dele, e a janela não insiste. Ver _on_schedule_still_open.
         self._silencio_pedido = False
         self._ultima_retomada = 0.0
+        #: O volume que existia antes de uma janela com volume próprio mexer
+        #: nele. Devolvido quando a janela fecha. Ver _on_schedule_play.
+        self._volume_de_antes = None  # type: Optional[float]
         self._rng = random.Random()
 
     # -- lifecycle ---------------------------------------------------------
@@ -799,6 +802,9 @@ class BirdTunesApp(AppInstance):
 
     async def set_volume(self, value: Any) -> Dict[str, Any]:
         volume = safety.clamp_volume(value, self.ctx.config.raw_dict())
+        # Ele mexeu no volume com a mão: não existe mais "volume de antes" para
+        # devolver no fim da janela, senão a janela desfaria a escolha dele.
+        self._volume_de_antes = None
         self.ctx.config.set("output.volume", volume)
         self.ctx.config.save()
         if self._player is not None:
@@ -889,6 +895,14 @@ class BirdTunesApp(AppInstance):
         playlist_id = window.get("playlist_id") or library.ALL_PLAYLIST_ID
         volume_override = window.get("volume")
         if volume_override is not None:
+            # O volume da janela vale *durante* a janela. Escrever direto na
+            # configuração fazia dele o volume de tudo dali para a frente: uma
+            # janela marcada a 30% mudava para 30% o botão de tocar, as outras
+            # janelas sem volume próprio e o padrão da tela -- e ninguém pediu
+            # isso. O valor de antes é guardado aqui e devolvido quando a
+            # janela fecha.
+            if self._volume_de_antes is None:
+                self._volume_de_antes = self.ctx.config.get("output.volume", DEFAULT_VOLUME)
             self.ctx.config.set("output.volume", safety.clamp_volume(volume_override, self.ctx.config.raw_dict()))
         # Um horário que chega e não toca é a única coisa que este app faz sozinho
         # dando errado -- e ele errava em silêncio de três jeitos: exceção engolida
@@ -964,7 +978,15 @@ class BirdTunesApp(AppInstance):
     async def _on_schedule_stop(self) -> None:
         self._silencio_pedido = False
         self._ultima_retomada = 0.0
+        self._devolver_volume()
         await self.stop_playback()
+
+    def _devolver_volume(self) -> None:
+        """Põe de volta o volume que existia antes da janela mexer nele."""
+        if self._volume_de_antes is None:
+            return
+        anterior, self._volume_de_antes = self._volume_de_antes, None
+        self.ctx.config.set("output.volume", anterior)
 
     # -- import ----------------------------------------------------------
     async def start_import(self, url: str, playlist_id: Optional[str], as_playlist: bool) -> Dict[str, Any]:
