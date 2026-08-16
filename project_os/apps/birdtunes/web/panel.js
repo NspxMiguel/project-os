@@ -51,10 +51,11 @@ export default {
       'bt.queue.empty': 'Nothing queued.',
       'bt.queue.more': 'and %d more',
       'bt.section.output': 'Where it plays',
-      'bt.output.backend': 'Connection',
       'bt.output.device': 'Speaker',
-      'bt.output.none': 'Not chosen',
-      'bt.output.empty': 'No speakers found yet. Run device discovery from Devices.',
+      'bt.output.none': 'None -- keep quiet',
+      'bt.output.via': 'Plays over %s.',
+      'bt.output.scan': 'Look for speakers',
+      'bt.output.empty': 'No speakers found yet.',
       'bt.output.pair': 'Pair',
       'bt.output.pin': 'PIN shown on the speaker',
       'bt.output.pin.send': 'Confirm PIN',
@@ -1031,11 +1032,17 @@ export default {
       const status = state.status || {};
       const currentBackend = status.output || 'null';
       const currentDevice = (config && config.get && config.get('output.device_id', '')) || '';
-      // Só os aparelhos que a conexão escolhida sabe tocar: oferecer um
-      // Chromecast ao AirPlay produz um erro que ninguém em casa resolve.
-      const backend = backends.filter((b) => b.kind === currentBackend)[0];
-      const kinds = (backend && backend.device_kinds) || [];
-      const usable = kinds.length ? devices.filter((d) => kinds.indexOf(d.kind) !== -1) : devices;
+      // Uma lista só, de caixas de som. Quem escolhe é alguém que quer tocar no
+      // HomePod da sala -- não alguém que saiba que HomePod fala AirPlay e a
+      // Google Home fala Chromecast. A conexão sai do próprio aparelho, e o
+      // aparelho continua indo só para quem sabe tocá-lo.
+      const backendPorTipo = {};
+      backends.forEach((b) => (b.device_kinds || []).forEach((tipo) => {
+        if (!backendPorTipo[tipo]) backendPorTipo[tipo] = b;
+      }));
+      const usable = devices.filter((d) => backendPorTipo[d.kind]);
+      const escolhida = usable.filter((d) => d.id === currentDevice)[0] || null;
+      const conexao = escolhida ? backendPorTipo[escolhida.kind] : null;
       let pinRef = null;
 
       // replaceChildren não é o h(): um `null` na lista vira o *texto* "null"
@@ -1044,27 +1051,41 @@ export default {
         sectionHead(t2('bt.section.output'), '',
           iconBtn('x', t2('bt.stop'), () => { state.outputOpen = false; renderSheet(); })),
         h('label', {class: 'field'},
-          h('span', {class: 'field__label'}, t2('bt.output.backend')),
-          h('select', {class: 'input',
-            onChange: (event) => act(() => appApi.put('/output', {type: event.target.value, device_id: ''})),
-          }, backends.map((b) => h('option', {
-            value: b.kind, selected: b.kind === currentBackend, disabled: !b.available,
-          }, b.name + (b.available ? '' : ' — ' + (b.hint || 'indisponível'))))),
-        ),
-        currentBackend === 'null' ? null : h('label', {class: 'field'},
           h('span', {class: 'field__label'}, t2('bt.output.device')),
-          usable.length === 0
-            ? h('p', {class: 'field__hint'}, t2('bt.output.empty'))
-            : h('select', {class: 'input',
-                onChange: (event) => act(() => appApi.put('/output', {
-                  type: currentBackend, device_id: event.target.value,
-                })),
-              }, [h('option', {value: '', selected: !currentDevice}, t2('bt.output.none'))].concat(
-                usable.map((d) => h('option', {value: d.id, selected: d.id === currentDevice},
-                  d.name + (d.online ? '' : ' (offline)'))))),
+          h('select', {class: 'input',
+            onChange: (event) => {
+              const alvo = usable.filter((d) => d.id === event.target.value)[0] || null;
+              const tipo = alvo ? backendPorTipo[alvo.kind].kind : 'null';
+              act(() => appApi.put('/output', {type: tipo, device_id: alvo ? alvo.id : ''}));
+            },
+          }, [h('option', {value: '', selected: !escolhida}, t2('bt.output.none'))].concat(
+            usable.map((d) => h('option', {
+              value: d.id,
+              selected: d.id === currentDevice,
+              // Uma caixa que este cartão não sabe tocar aparece dizendo o
+              // porquê, antes do clique -- e não como um erro depois dele.
+              disabled: !backendPorTipo[d.kind].available,
+            }, d.name
+               + (d.online ? '' : ' (offline)')
+               + (backendPorTipo[d.kind].available
+                  ? '' : ' — ' + (backendPorTipo[d.kind].hint || 'indisponível')))))),
         ),
+        usable.length === 0 ? h('p', {class: 'field__hint'}, t2('bt.output.empty')) : null,
+        usable.length === 0 ? h('div', {class: 'bt-toolbar'},
+          h('button', {class: 'btn btn--outline btn--sm', onClick: () => act(async () => {
+            const api = await import('/lib/api.js');
+            await api.post('/devices/scan', {});
+            state.outputs = await appApi.get('/outputs');
+            renderSheet();
+          })}, t2('bt.output.scan')),
+        ) : null,
+        // A conexão deixa de ser uma pergunta e vira o que de fato está
+        // acontecendo: era ela, escolhida antes do aparelho, que fazia a folha
+        // abrir com uma caixa de som só, vazia, e nenhum aparelho para escolher.
+        escolhida && conexao ? h('p', {class: 'field__hint'},
+          fmtStr('bt.output.via', conexao.name)) : null,
         // Uma Apple TV recusa áudio até ser pareada, e o PIN aparece na própria TV.
-        currentBackend === 'airplay' && currentDevice ? h('div', {class: 'bt-toolbar'},
+        conexao && conexao.kind === 'airplay' && currentDevice ? h('div', {class: 'bt-toolbar'},
           h('button', {class: 'btn btn--outline btn--sm', onClick: async () => {
             try {
               state.pairing = await appApi.post('/outputs/' + encodeURIComponent(currentDevice) + '/pair', {});

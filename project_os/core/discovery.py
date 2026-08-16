@@ -538,6 +538,16 @@ def identity_token(value: str) -> Optional[str]:
     return "id:" + compact
 
 
+def _identity_token(device_id: str) -> str:
+    """O que num id de aparelho não depende do tipo: o MAC, o UUID, o host.
+
+    ``homepod:mac-22d61dba1645`` e ``apple_tv:mac-22d61dba1645`` são a mesma
+    caixa de som vista em dois momentos do mDNS.
+    """
+    texto = str(device_id or "")
+    return texto.split(":", 1)[1] if ":" in texto else ""
+
+
 def stable_id(kind: str, token: Optional[str], host: str = "", port: int = 0) -> str:
     """``<kind>:<uuid-or-mac-or-host>``, identical on every scan.
 
@@ -1843,6 +1853,42 @@ class DeviceRegistry(object):
         except Exception:  # pragma: no cover - the bus is not worth a crash
             log.debug("could not publish %s", topic, exc_info=True)
 
+    def _index_by_token(self, existing: Dict[str, Any]) -> Dict[str, Any]:
+        """Identidade -> a linha mais antiga que a carrega.
+
+        Quando há mais de uma, as demais são duplicatas nascidas de uma troca de
+        tipo entre varreduras. Elas são apagadas aqui, depois de passarem para a
+        sobrevivente o que foi o usuário quem decidiu (nome dado, fixado,
+        ignorado) -- o resto é cache de varredura e volta na próxima.
+        """
+        agrupadas = {}  # type: Dict[str, List[Any]]
+        for row in existing.values():
+            token = _identity_token(row["id"])
+            if token:
+                agrupadas.setdefault(token, []).append(row)
+
+        indice = {}  # type: Dict[str, Any]
+        for token, linhas in agrupadas.items():
+            linhas.sort(key=lambda r: (r["first_seen"] or "", r["id"]))
+            sobrevivente = linhas[0]
+            indice[token] = sobrevivente
+            for repetida in linhas[1:]:
+                try:
+                    self.db.execute(
+                        "UPDATE devices SET custom_name = COALESCE(custom_name, ?),"
+                        " pinned = MAX(pinned, ?), ignored = MAX(ignored, ?) WHERE id = ?",
+                        (repetida["custom_name"], int(repetida["pinned"] or 0),
+                         int(repetida["ignored"] or 0), sobrevivente["id"]),
+                    )
+                    self.db.execute("DELETE FROM devices WHERE id = ?", (repetida["id"],))
+                except Exception:  # pragma: no cover - banco velho
+                    log.warning("could not merge the duplicate %s", repetida["id"], exc_info=True)
+                    continue
+                existing.pop(repetida["id"], None)
+                self._online.discard(repetida["id"])
+                log.info("device %s merged into %s", repetida["id"], sobrevivente["id"])
+        return indice
+
     def _persist(self, devices: Sequence[Device]) -> Tuple[int, int]:
         """Upsert every device found; returns ``(new, updated)`` counts.
 
@@ -1865,8 +1911,24 @@ class DeviceRegistry(object):
         updated_count = 0
         try:
             with self.db.transaction():
+                por_token = self._index_by_token(existing)
                 for device in devices:
                     row = existing.get(device.id)
+                    if row is None:
+                        # Quem identifica um aparelho é o MAC, não o palpite de
+                        # tipo que veio junto: o mesmo HomePod responde ao mDNS
+                        # ora com o modelo (`homepod`), ora sem ele
+                        # (`apple_tv`), e como o tipo entrava no id cada palpite
+                        # abria uma linha nova. A anterior ficava no banco, com
+                        # o mesmo nome, e a lista de caixas de som mostrava o
+                        # aparelho duas vezes -- indistinguíveis na hora de
+                        # escolher. O id continua o da primeira vez que o
+                        # aparelho apareceu, porque é ele que está guardado em
+                        # `output.device_id` e em qualquer outra escolha já
+                        # feita; o tipo é corrigido na linha que já existe.
+                        row = por_token.get(_identity_token(device.id))
+                        if row is not None:
+                            device.id = row["id"]
                     properties = json.dumps(device.properties, default=str)
                     capabilities = json.dumps(device.capabilities)
                     if row is None:
