@@ -39,11 +39,12 @@ setStrings('en', {
   'updates.rollback.confirm': 'Restore {version}? The files go back and project-os restarts. Your data is untouched.',
   'updates.rollback.done': 'Back on {version}. Restarting…',
   'updates.previous.title': 'Previous version kept: {version}',
-  'updates.previous.body': 'The update saved the old tree next to the install, so this box can go back to {version} without the network.',
+  'updates.previous.body': 'The update saved the old tree on disk, so this box can go back to {version} without the network.',
   'updates.disabled': 'Updates are turned off in settings.',
   'updates.log': 'Log',
-  // On an image install the code lives in a directory this service cannot swap
-  // (see updates.can_apply). Saying so beats an [Errno 13] after a download.
+  // The swap has two ways in -- around the code tree or inside it (see
+  // updates.swap_strategy). This is for the box where neither is writable:
+  // saying so beats an [Errno 13] after a download.
   'updates.blocked': 'This box cannot swap the app on its own.',
 }, {activate: false});
 
@@ -248,9 +249,9 @@ export default {
           body: h('p', {class: 'muted'}, check.notes || ''),
         });
       }
-      // can_install === false means the swap would fail before it started: the
-      // code tree's parent belongs to root. The version still gets announced,
-      // and the system update below is the way in on that kind of install.
+      // can_install === false means the swap would fail before it started --
+      // nem por fora nem por dentro da pasta do código. The version still gets
+      // announced, and the system update below is the way in on that install.
       const bloqueado = check.can_install === false;
       return card({
         title: t('updates.available', {version: check.latest}),

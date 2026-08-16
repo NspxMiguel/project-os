@@ -135,6 +135,10 @@ async def status(
     return {
         "version": __version__,
         "method": updates.method(),
+        # Por onde a troca de versão vai passar nesta caixa -- por fora da pasta
+        # do código, por dentro dela, ou por git. Responde "por que atualizou
+        # aqui e não ali?" sem precisar abrir o Pi.
+        "strategy": updates.swap_strategy()[0],
         "root": updates.root_dir(),
         "under_systemd": updates.under_systemd(),
         "manifest_url": settings["manifest_url"],

@@ -165,27 +165,40 @@ A tela oferece duas, e elas não são a mesma coisa:
   É meio giga, e é a única que troca o que está fora do `/opt` — ajudantes em
   `/usr/local/sbin`, o sudoers, o systemd, as permissões do próprio `/opt`.
 
-A troca do app não acontece *dentro* da pasta do código: acontece em volta dela
-(pasta de trabalho ao lado, renomeia a atual para `.previous-<versão>`, renomeia a
-nova para o lugar). São três operações em `/opt` — e num cartão gravado até a
-**0.4.7** o `/opt` é `root:root 755`, enquanto o serviço roda como `project-os`.
-Naquelas imagens a atualização do app não tinha como funcionar: baixava o pacote e
-morria com `Permission denied`.
+A troca do app tem dois caminhos, e o app escolhe sozinho (`updates.swap_strategy`):
 
-Da **0.4.8** em diante a imagem deixa o grupo do serviço escrever em `/opt`, e o
-próprio app confere isso antes de baixar qualquer coisa (`updates.can_apply`): onde
-não dá, a tela diz que não dá e aponta a atualização de sistema, em vez de gastar
-meio giga para terminar num erro de permissão.
+* **por fora** — pasta de trabalho ao lado do código, renomeia a atual para
+  `project-os.previous-<versão>`, renomeia a nova para o lugar. Uma renomeação só
+  para quem olha: nunca existe meia árvore. Precisa de escrita em `/opt`, e é o que
+  roda em qualquer cartão gravado da **0.4.8** em diante, onde a imagem deixa o
+  grupo do serviço escrever lá.
+* **por dentro** — a mesma ideia um andar abaixo: o que está em `/opt/project-os`
+  desce para `/opt/project-os/.previous-<versão>`, o que veio no pacote sobe no
+  lugar, e o `.venv` não se mexe. Precisa apenas da pasta do código, que é do
+  serviço em toda imagem.
 
-Num cartão gravado com 0.4.6 ou 0.4.7, então, o caminho é: **atualizar o sistema**
-uma vez. Depois disso as duas funcionam.
+Num cartão gravado até a **0.4.7** o `/opt` é `root:root 755`, enquanto o serviço
+roda como `project-os` — ali a troca por fora é recusada em todas as três operações,
+e por um tempo isso significou que atualizar o app era impossível: baixava o pacote
+e morria com `Permission denied`. A única saída era um rootfs de meio giga para
+entregar uma correção de setecentos kilobytes.
+
+Da **0.4.14** em diante essas caixas se atualizam pelo caminho de dentro, sem
+gravação nova e sem tocar em permissão nenhuma. Só quando nem a pasta do código é
+escrevível é que a tela recusa antes de baixar e aponta a atualização de sistema.
+
+A troca por dentro não é uma renomeação só, então existe uma janela de alguns
+milissegundos com a árvore pela metade. Se ela for interrompida no meio, o que já
+tinha se movido volta (`_move_names` desfaz o que fez); e é um preço barato perto de
+"esta caixa não se atualiza".
 
 ### Voltar a versão anterior do app
 
-A árvore trocada não é apagada: ela fica em `/opt/project-os.previous-<versão>`,
-ao lado da instalação. É o A/B da atualização de app — mais pobre que o do
-sistema, porque só cobre o que está dentro do `/opt`, e suficiente para o caso
-comum, que é uma versão nova pior que a anterior.
+A árvore trocada não é apagada: ela fica em `/opt/project-os.previous-<versão>`
+quando a troca foi por fora, ou em `/opt/project-os/.previous-<versão>` quando foi
+por dentro. A tela procura nos dois lugares. É o A/B da atualização de app — mais
+pobre que o do sistema, porque só cobre o que está dentro do `/opt`, e suficiente
+para o caso comum, que é uma versão nova pior que a anterior.
 
 Duas coisas que essa pasta exige, e que a **0.4.10** conserta:
 
@@ -194,8 +207,8 @@ Duas coisas que essa pasta exige, e que a **0.4.10** conserta:
   reinicia o serviço, o botão desaparecia no instante em que passaria a servir
   para alguma coisa. Quem quisesse voltar tinha que fazer as duas renomeações
   na mão, por SSH.
-* **O virtualenv volta junto.** A atualização *move* o `.venv` para a árvore
-  nova (é o mesmo interpretador, e copiar meio giga de dependências a cada
+* **O virtualenv volta junto.** A atualização por fora *move* o `.venv` para a
+  árvore nova (é o mesmo interpretador, e copiar meio giga de dependências a cada
   versão não faria sentido), então a árvore guardada fica sem ele. Voltar sem
   trazê-lo de volta devolvia uma instalação sem interpretador: o `bin/project-os`
   cai no python do sistema, que na imagem não tem uvicorn, e o serviço não sobe.

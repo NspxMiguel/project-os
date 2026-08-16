@@ -69,6 +69,25 @@ UNIT_NAME = "project-os.service"
 #: Never inside the code tree, and never removed by an update.
 KEEP_IN_PLACE = (".venv", "PEDIDOS.md")
 
+#: Como a troca acontece nesta caixa. ``parent`` é a de sempre -- pasta nova ao
+#: lado do código e duas renomeações, atômica do ponto de vista de quem olha.
+#: ``in-place`` é a mesma ideia um andar abaixo, dentro da própria pasta do
+#: código, para quando a de cima é do root. ``git`` é ``git reset --hard``.
+STRATEGY_PARENT = "parent"
+STRATEGY_IN_PLACE = "in-place"
+STRATEGY_GIT = "git"
+
+#: A árvore antiga guardada por uma atualização. Ao lado do código na troca por
+#: fora (``project-os.previous-0.4.6``), dentro dele na troca por dentro
+#: (``project-os/.previous-0.4.6``) -- o mesmo sufixo nos dois, porque quem
+#: procura versão anterior procura pelas duas.
+PREVIOUS_PREFIX = ".previous-"
+
+#: Prefixos das pastas de trabalho da própria atualização, que nunca são parte
+#: do código e nunca viajam numa troca.
+WORK_PREFIX = ".project_os-update-"
+FAILED_PREFIX = ".project_os-failed-"
+
 #: Said whenever the code tree cannot be swapped in place. There is a second,
 #: root-privileged way to update on an image install, and it is the one that
 #: works there: a whole rootfs written to the spare slot. See docs/RECOVERY.md.
@@ -231,33 +250,53 @@ def check_git(branch: str = "main", root: Optional[str] = None) -> Dict[str, Any
     }
 
 
-def can_apply(root: Optional[str] = None) -> Tuple[bool, str]:
-    """Whether the code tree can be swapped from here, and why not.
+def swap_strategy(root: Optional[str] = None) -> Tuple[str, str]:
+    """Por onde a troca de versão consegue passar nesta caixa, e por que não passa.
 
-    The swap happens *around* the code tree, not inside it: a staging directory
-    beside it, then two renames. All three touch the **parent**. On the image
-    that parent is ``/opt``, still ``root:root 755`` while the service runs as
-    ``project-os`` -- so every one of them is refused, and the first refusal used
-    to arrive as a raw ``PermissionError`` after the whole tarball had been
-    downloaded.
+    O jeito bom é *em volta* da pasta do código: pasta de trabalho ao lado,
+    renomeia a atual para ``.previous-<versão>``, renomeia a nova para o lugar.
+    Quem olha nunca vê meia árvore, porque a troca é uma renomeação só. Isso
+    precisa de escrita na pasta **de cima**.
 
-    Answered here rather than at the failure site so the update screen can say
-    so before offering a button that cannot work.
+    Num cartão gravado antes da 0.4.8 essa pasta de cima é o ``/opt`` padrão do
+    Debian -- ``root:root 755`` -- e o serviço roda como ``project-os``. Ali as
+    três operações são recusadas, e por muito tempo a resposta foi só recusar
+    com um motivo: quem estava na 0.4.6 tinha que baixar um sistema inteiro de
+    880 MB para receber uma correção de 700 KB, ou levar o cartão até o PC.
 
-    A git checkout is a different story and always allowed: ``git reset --hard``
-    rewrites files *inside* the tree and never touches the parent. Blocking it
-    here would gray out a button that works.
+    Só que a pasta do código é dele -- o stage faz ``chown -R project-os`` --,
+    e a mesma troca cabe um andar abaixo: as coisas velhas vão para
+    ``<código>/.previous-<versão>``, as novas sobem no lugar delas. Não é uma
+    renomeação só, então existe uma janela de alguns milissegundos com a árvore
+    pela metade; em troca, a caixa se conserta sozinha pela rede. Vale a pena
+    exatamente onde a alternativa é não atualizar.
+
+    Um checkout git não usa nenhum dos dois: ``git reset --hard`` reescreve
+    arquivos dentro da árvore e nunca toca na pasta de cima.
     """
     where = os.path.abspath(root or root_dir())
     if is_git_checkout(where):
-        return True, ""
+        return STRATEGY_GIT, ""
     parent = os.path.dirname(where)
-    if not os.access(parent, os.W_OK | os.X_OK):
-        return False, (
-            "Não posso escrever em %s, e a troca de versão acontece lá "
-            "(pasta nova ao lado, duas renomeações)." % parent
-        )
-    return True, ""
+    if os.access(parent, os.W_OK | os.X_OK):
+        return STRATEGY_PARENT, ""
+    if os.access(where, os.W_OK | os.X_OK):
+        return STRATEGY_IN_PLACE, ""
+    return "", (
+        "Não posso escrever nem em %s nem em %s, e a troca de versão precisa de "
+        "uma das duas." % (parent, where)
+    )
+
+
+def can_apply(root: Optional[str] = None) -> Tuple[bool, str]:
+    """Whether the code tree can be swapped from here, and why not.
+
+    Answered here rather than at the failure site so the update screen can say
+    so before offering a button that cannot work -- e um ``[Errno 13]`` depois
+    do download inteiro é a pior hora possível para descobrir.
+    """
+    estrategia, motivo = swap_strategy(root)
+    return bool(estrategia), motivo
 
 
 def check(manifest_url: str = DEFAULT_MANIFEST_URL, branch: str = "main",
@@ -349,21 +388,89 @@ def _looks_like_project_os(path: str) -> bool:
     )
 
 
+def _own_files(directory: str) -> List[str]:
+    """Os nomes do primeiro nível que são *o código*, e não a atualização.
+
+    Fora ficam o que sobrevive a qualquer troca (``.venv``, as anotações dele) e
+    as pastas de trabalho da própria atualização -- mover uma delas no meio da
+    troca seria a atualização puxando o próprio tapete.
+    """
+    guardados = []  # type: List[str]
+    for name in sorted(os.listdir(directory)):
+        if name in KEEP_IN_PLACE:
+            continue
+        if name.startswith((PREVIOUS_PREFIX, WORK_PREFIX, FAILED_PREFIX)):
+            continue
+        guardados.append(name)
+    return guardados
+
+
+def _move_names(origem: str, destino: str, nomes: List[str]) -> None:
+    """Renomeia cada nome de uma pasta para a outra, desfazendo se parar no meio.
+
+    Renomear dentro do mesmo sistema de arquivos é instantâneo, então a lista
+    inteira leva microssegundos -- mas "instantâneo" não é "atômico", e uma
+    árvore metade nova metade velha é o pior estado possível para uma caixa que
+    ninguém pode abrir. Se a segunda falha, a primeira volta.
+    """
+    movidos = []  # type: List[str]
+    try:
+        for name in nomes:
+            os.rename(os.path.join(origem, name), os.path.join(destino, name))
+            movidos.append(name)
+    except OSError:
+        for name in reversed(movidos):
+            try:
+                os.rename(os.path.join(destino, name), os.path.join(origem, name))
+            except OSError:  # pragma: no cover - o desfazer também falhou
+                pass
+        raise
+
+
+def _swap_in_place(where: str, extracted: str, current: str,
+                   say: Any) -> str:
+    """Troca o conteúdo da pasta do código sem tocar na pasta de cima.
+
+    O velho desce para ``<código>/.previous-<versão>``, o novo sobe no lugar. O
+    ``.venv`` não se mexe -- ele já está onde precisa estar, e os caminhos
+    absolutos gravados dentro dele continuam válidos justamente porque a pasta
+    do código não mudou de nome.
+    """
+    previous = os.path.join(where, PREVIOUS_PREFIX + current)
+    shutil.rmtree(previous, ignore_errors=True)
+    os.mkdir(previous)
+
+    antigos = _own_files(where)
+    novos = _own_files(extracted)
+    say("trocando por dentro: %d itens saem, %d entram" % (len(antigos), len(novos)))
+    _move_names(where, previous, antigos)
+    try:
+        _move_names(extracted, where, novos)
+    except OSError:
+        # A árvore nova não entrou: devolve a antiga antes de desistir, senão a
+        # caixa fica sem código nenhum.
+        _move_names(previous, where, antigos)
+        shutil.rmtree(previous, ignore_errors=True)
+        raise
+    return previous
+
+
 def apply_tarball(info: Dict[str, Any], root: Optional[str] = None,
                   on_line: Optional[Any] = None) -> Dict[str, Any]:
     """Download, verify, and swap the code tree. Returns where the old one went."""
     where = os.path.abspath(root or root_dir())
     say = on_line or (lambda line: None)
 
-    # Antes de baixar: sem permissão na pasta de cima, nada disto vai acontecer,
-    # e descobrir isso depois do download é meio giga jogado fora para acabar
-    # mostrando "[Errno 13] Permission denied" na tela dele.
-    pode, motivo = can_apply(where)
-    if not pode:
+    # Antes de baixar: se não dá para trocar, nada disto vai acontecer, e
+    # descobrir depois do download é meio giga jogado fora para acabar mostrando
+    # "[Errno 13] Permission denied" na tela dele.
+    estrategia, motivo = swap_strategy(where)
+    if not estrategia:
         raise UpdateError(motivo, code="root_not_writable", hint=SYSTEM_UPDATE_HINT)
 
+    por_dentro = estrategia == STRATEGY_IN_PLACE
     parent = os.path.dirname(where)
-    workdir = tempfile.mkdtemp(prefix=".project_os-update-", dir=parent)
+    workdir = tempfile.mkdtemp(prefix=WORK_PREFIX, dir=where if por_dentro else parent)
     try:
         archive = os.path.join(workdir, "release.tar.gz")
         say("fetching %s" % info["url"])
@@ -376,6 +483,15 @@ def apply_tarball(info: Dict[str, Any], root: Optional[str] = None,
                 "O pacote não contém uma árvore do project-os.", code="bad_archive",
             )
 
+        atual = info.get("current") or __version__
+        if por_dentro:
+            # Aqui o ``.venv`` não é carregado para lugar nenhum: ele já está no
+            # lugar certo e é a árvore em volta dele que muda. Carregá-lo seria
+            # movê-lo para dentro da pasta de trabalho -- que é apagada no fim.
+            previous = _swap_in_place(where, extracted, atual, say)
+            say("pronto -- versão anterior guardada em %s" % previous)
+            return {"previous": previous, "root": where, "strategy": estrategia}
+
         # Anything that must survive the swap is carried across rather than
         # restored afterwards: a half-applied update is worse than none.
         for name in KEEP_IN_PLACE:
@@ -387,7 +503,7 @@ def apply_tarball(info: Dict[str, Any], root: Optional[str] = None,
                 else:
                     shutil.copy2(source, os.path.join(extracted, name))
 
-        previous = "%s.previous-%s" % (where, info.get("current") or __version__)
+        previous = "%s%s%s" % (where, PREVIOUS_PREFIX, atual)
         if os.path.exists(previous):
             shutil.rmtree(previous, ignore_errors=True)
         say("swapping in %s" % info.get("latest", "the new version"))
@@ -398,7 +514,7 @@ def apply_tarball(info: Dict[str, Any], root: Optional[str] = None,
             os.rename(previous, where)  # put it back before giving up
             raise
         say("done -- previous version kept at %s" % previous)
-        return {"previous": previous, "root": where}
+        return {"previous": previous, "root": where, "strategy": estrategia}
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
@@ -425,28 +541,56 @@ def previous_versions(root: Optional[str] = None) -> List[Dict[str, Any]]:
     atualização reinicia o serviço, então o botão de voltar sumia exatamente
     depois da única ação que o torna útil. A pasta continua no disco ao lado da
     instalação; basta olhar.
+
+    Olha nos dois lugares: ao lado da árvore, que é onde a troca por fora
+    guarda, e dentro dela, que é onde a troca por dentro guarda. Uma caixa pode
+    ter as duas coisas -- ela pode ter sido atualizada por dentro e depois ter
+    ganhado permissão na pasta de cima.
     """
     where = os.path.abspath(root or root_dir())
-    parent = os.path.dirname(where)
-    prefix = os.path.basename(where) + ".previous-"
     found = []  # type: List[Dict[str, Any]]
-    try:
-        names = os.listdir(parent)
-    except OSError:
-        return found
-    for name in names:
-        if not name.startswith(prefix):
+    lugares = [
+        (os.path.dirname(where), os.path.basename(where) + PREVIOUS_PREFIX),
+        (where, PREVIOUS_PREFIX),
+    ]
+    for pasta, prefix in lugares:
+        try:
+            names = os.listdir(pasta)
+        except OSError:
             continue
-        path = os.path.join(parent, name)
-        if not os.path.isdir(path):
-            continue
-        found.append({
-            "path": path,
-            "version": name[len(prefix):],
-            "at": os.path.getmtime(path),
-        })
+        for name in names:
+            if not name.startswith(prefix):
+                continue
+            path = os.path.join(pasta, name)
+            if not os.path.isdir(path):
+                continue
+            found.append({
+                "path": path,
+                "version": name[len(prefix):],
+                "at": os.path.getmtime(path),
+            })
     found.sort(key=lambda item: item["at"], reverse=True)
     return found
+
+
+def _rollback_in_place(previous: str, where: str) -> None:
+    """Volta uma troca feita por dentro: o que está no lugar desce, o guardado sobe.
+
+    Espelho exato do ``_swap_in_place``, e com o mesmo motivo para não carregar
+    o ``.venv``: ele nunca saiu do lugar.
+    """
+    broken = tempfile.mkdtemp(prefix=FAILED_PREFIX, dir=where)
+    try:
+        atuais = _own_files(where)
+        _move_names(where, broken, atuais)
+        try:
+            _move_names(previous, where, _own_files(previous))
+        except OSError:
+            _move_names(broken, where, atuais)
+            raise
+    finally:
+        shutil.rmtree(broken, ignore_errors=True)
+    shutil.rmtree(previous, ignore_errors=True)
 
 
 def rollback(previous: str, root: Optional[str] = None) -> None:
@@ -454,6 +598,8 @@ def rollback(previous: str, root: Optional[str] = None) -> None:
     where = os.path.abspath(root or root_dir())
     if not os.path.isdir(previous):
         raise UpdateError("Não existe versão anterior em %s." % previous, code="no_previous")
+    if os.path.dirname(os.path.abspath(previous)) == where:
+        return _rollback_in_place(os.path.abspath(previous), where)
     broken = "%s.failed" % where
     shutil.rmtree(broken, ignore_errors=True)
     if os.path.exists(where):
@@ -624,5 +770,6 @@ __all__ = [
     "restart_argv",
     "rollback",
     "root_dir",
+    "swap_strategy",
     "under_systemd",
 ]
