@@ -844,6 +844,18 @@ class BirdTunesApp(AppInstance):
 
     # -- import ----------------------------------------------------------
     async def start_import(self, url: str, playlist_id: Optional[str], as_playlist: bool) -> Dict[str, Any]:
+        # Antes de qualquer coisa: o mesmo link já está baixando? Dois downloads
+        # do mesmo vídeo brigam pelo mesmo arquivo e o segundo morre com "No
+        # such file or directory". A conferência vem antes de criar playlist,
+        # senão um clique repetido também deixaria uma playlist vazia para trás.
+        em_curso = sources.job_in_flight(self.ctx.db, url)
+        if em_curso is not None:
+            return {
+                "job_id": em_curso["id"],
+                "playlist_id": em_curso.get("playlist_id") or playlist_id,
+                "already_running": True,
+            }
+
         target_playlist_id = playlist_id
         if as_playlist and not target_playlist_id:
             try:
@@ -856,14 +868,16 @@ class BirdTunesApp(AppInstance):
         job = sources.create_job(self.ctx.db, url, kind=kind, playlist_id=target_playlist_id)
         dest_dir = str(paths.data_dir(APP_ID) / "downloads")
         quality = str(self.ctx.config.get("import.youtube.quality", "192"))
+        cortar = bool(self.ctx.config.get("import.youtube.skip_sponsors", True))
         # Kept in a set, not fired and forgotten: stop() has to be able to wind
         # these down, and a bare ensure_future is also collectable mid-flight.
-        task = asyncio.ensure_future(self._run_import(job["id"], dest_dir, quality))
+        task = asyncio.ensure_future(self._run_import(job["id"], dest_dir, quality, cortar))
         self._import_tasks.add(task)
         task.add_done_callback(self._import_tasks.discard)
         return {"job_id": job["id"], "playlist_id": target_playlist_id}
 
-    async def _run_import(self, job_id: str, dest_dir: str, quality: str) -> None:
+    async def _run_import(self, job_id: str, dest_dir: str, quality: str,
+                          skip_sponsors: bool = True) -> None:
         loop = asyncio.get_event_loop()
 
         def on_progress(payload: Dict[str, Any]) -> None:
@@ -875,7 +889,8 @@ class BirdTunesApp(AppInstance):
 
         try:
             result = await loop.run_in_executor(
-                None, sources.run_job, self.ctx.db, job_id, dest_dir, quality, is_cancelled, on_progress
+                None, sources.run_job, self.ctx.db, job_id, dest_dir, quality,
+                is_cancelled, on_progress, None, skip_sponsors,
             )
         except Exception as exc:
             self.log.exception("birdtunes import job %s failed", job_id)
@@ -903,6 +918,19 @@ class BirdTunesApp(AppInstance):
             # Dito antes do clique: sem yt-dlp o botão de importar só pode
             # responder 503, e respondia -- depois de a pessoa colar o link.
             "ytdlp_available": sources.available(),
+            # O corta-propaganda: se está ligado, se esta caixa consegue, e por
+            # que não. A tela mostra os três -- um interruptor ligado que não
+            # faz nada é pior que não ter interruptor.
+            "sponsorblock": self._sponsorblock_state(),
+        }
+
+    def _sponsorblock_state(self) -> Dict[str, Any]:
+        pode, motivo = sources.sponsorblock_available()
+        return {
+            "enabled": bool(self.ctx.config.get("import.youtube.skip_sponsors", True)),
+            "available": pode,
+            "reason": motivo,
+            "categories": list(sources.SPONSOR_CATEGORIES),
         }
 
     # -- conversão ------------------------------------------------------

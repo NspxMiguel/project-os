@@ -69,6 +69,24 @@ Import accepts a single video URL, a playlist URL, or a channel/mix URL. A playl
 may be imported **as a BirdTunes playlist** (creating one named after the YouTube
 playlist) or flattened into an existing playlist.
 
+The same link twice, while the first is still running, returns the running job instead
+of starting a second one. Two downloads of one video share an output filename, so the
+second dies renaming a file the first already moved (`No such file or directory:
+… .webm -> …`) — and even when it survives it is wasted work, because the track id is
+derived from the video id and the copy overwrites the original.
+
+**Ads.** Two different paths, and only one of them is ours:
+
+- **What is downloaded** goes through SponsorBlock (`import.youtube.skip_sponsors`, on by
+  default): yt-dlp asks the public SponsorBlock database which parts of the video people
+  marked as sponsor, self-promo, interaction or off-topic, and ffmpeg cuts them out of the
+  audio that is kept. Without ffmpeg the cut cannot happen, so the switch reports itself
+  unavailable with the reason instead of sitting there ticked and doing nothing.
+- **"Play on the TV"** hands a video id to the television's own YouTube app. The Pi is not
+  in that conversation — the TV talks to YouTube directly — so nothing here can filter it,
+  DNS blocking included (YouTube serves its ads from the same hosts as the video). The
+  panel says so, and points at the download path, which has no ads at all.
+
 `yt-dlp` is invoked in-process via `YoutubeDL` (never by shelling out), inside
 `run_in_executor` because it blocks. Options:
 

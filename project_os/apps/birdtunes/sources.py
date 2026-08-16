@@ -17,7 +17,7 @@ import os
 import re
 import shutil
 import uuid
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from project_os.db import utcnow_iso
 
@@ -198,8 +198,46 @@ class _ErrorCatcher(object):
             self.last = text
 
 
-def _base_options(dest_dir: str, quality: str, noplaylist: bool) -> Dict[str, Any]:
+#: O que o SponsorBlock corta do que é baixado. Escolhidas para música: são as
+#: categorias que a comunidade marca como propaganda e enrolação, e não trechos
+#: musicais. ``music_offtopic`` existe exatamente para vídeo de música com
+#: conversa no meio.
+SPONSOR_CATEGORIES = ("sponsor", "selfpromo", "interaction", "music_offtopic")
+
+
+def sponsorblock_available() -> Tuple[bool, str]:
+    """Se dá para cortar patrocínio do que for baixado, e por que não.
+
+    Precisa de duas coisas: o yt-dlp saber consultar o SponsorBlock (que é uma
+    base pública de trechos marcados por gente) e o ffmpeg, porque cortar
+    pedaço do meio de um arquivo é trabalho dele. Sem ffmpeg o yt-dlp baixa e
+    ignora as marcas -- em silêncio, que é o que esta função existe para
+    evitar.
+    """
+    try:
+        from yt_dlp.postprocessor import SponsorBlockPP  # noqa: F401
+    except Exception:
+        return False, "O yt-dlp desta máquina não conhece o SponsorBlock."
+    if not ffmpeg_available():
+        return False, "Falta o ffmpeg: sem ele não dá para cortar trecho do meio do arquivo."
+    return True, ""
+
+
+def _base_options(dest_dir: str, quality: str, noplaylist: bool,
+                  skip_sponsors: bool = True,
+                  categories: Optional[Iterable[str]] = None) -> Dict[str, Any]:
     postprocessors = []
+    # Ordem importa: o SponsorBlock marca, o ModifyChapters corta, e só então o
+    # áudio é extraído -- extrair antes cortaria depois de já ter jogado fora a
+    # informação dos trechos.
+    if skip_sponsors and sponsorblock_available()[0]:
+        wanted = list(categories or SPONSOR_CATEGORIES)
+        postprocessors.append(
+            {"key": "SponsorBlock", "categories": wanted, "when": "after_filter"}
+        )
+        postprocessors.append(
+            {"key": "ModifyChapters", "remove_sponsor_segments": wanted}
+        )
     if ffmpeg_available():
         postprocessors.append(
             {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": quality}
@@ -331,6 +369,27 @@ def get_job(db: Any, job_id: str) -> Optional[Dict[str, Any]]:
     return row_to_dict(row)
 
 
+def job_in_flight(db: Any, url: str) -> Optional[Dict[str, Any]]:
+    """Um trabalho ainda rodando para este mesmo endereço, se houver.
+
+    Dois downloads do mesmo vídeo escrevem no mesmo arquivo -- o ``outtmpl`` é
+    montado a partir do título e do id. O segundo tenta renomear o que o
+    primeiro já renomeou e morre com *"No such file or directory: ... .webm ->
+    ..."*, que foi o que apareceu no Pi dele depois de clicar em Trazer três
+    vezes no mesmo link. E mesmo dando certo seria trabalho jogado fora: a
+    faixa tem id derivado do vídeo, então a segunda cópia sobrescreve a
+    primeira.
+    """
+    from project_os.db import row_to_dict
+
+    row = db.one(
+        "SELECT * FROM app_birdtunes_imports WHERE url = ? AND state IN ('queued', 'running') "
+        "ORDER BY created_at DESC LIMIT 1",
+        (url,),
+    )
+    return row_to_dict(row)
+
+
 def list_jobs(db: Any, limit: int = 50) -> List[Dict[str, Any]]:
     from project_os.db import rows_to_dicts
 
@@ -365,6 +424,7 @@ def run_job(
     is_cancelled: Optional[Callable[[], bool]] = None,
     on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
     clients: Optional[Iterable[str]] = None,
+    skip_sponsors: bool = True,
 ) -> Dict[str, Any]:
     """Do the actual download, one item at a time, honestly reporting failures.
 
@@ -382,7 +442,7 @@ def run_job(
     _update_job(db, job_id, state="running")
 
     noplaylist = job["kind"] != "playlist"
-    opts = _base_options(dest_dir, quality, noplaylist)
+    opts = _base_options(dest_dir, quality, noplaylist, skip_sponsors=skip_sponsors)
     catcher = _ErrorCatcher()
     opts["logger"] = catcher
     added_tracks = []  # type: List[Dict[str, Any]]

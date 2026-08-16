@@ -12,30 +12,165 @@
     "panel": "panel.js",
     "styles": "panel.css"
   },
-  "permissions": ["network", "media"],
+  "permissions": [
+    "network",
+    "media"
+  ],
   "config_schema": [
-    {"key": "output.type", "type": "string", "label": "Saída de som", "default": "null"},
-    {"key": "output.device_id", "type": "string", "label": "Aparelho", "default": ""},
-    {"key": "output.ha_entity", "type": "string", "label": "Entidade do Home Assistant", "default": ""},
-    {"key": "output.volume", "type": "number", "label": "Volume", "default": 0.15},
-    {"key": "output.max_volume", "type": "number", "label": "Volume máximo", "default": 0.6},
-    {"key": "library.paths", "type": "array", "label": "Pastas da biblioteca", "default": []},
-    {"key": "library.follow_symlinks", "type": "boolean", "label": "Seguir atalhos (symlinks)", "default": false},
-    {"key": "library.extensions", "type": "array", "label": "Extensões de arquivo", "default": [".mp3", ".m4a", ".flac", ".wav", ".ogg", ".oga", ".opus", ".aac", ".wma", ".aiff"]},
-    {"key": "schedule.enabled", "type": "boolean", "label": "Agenda ligada", "default": true},
-    {"key": "schedule.quiet_hours.start", "type": "string", "label": "Silêncio começa às", "default": "20:00"},
-    {"key": "schedule.quiet_hours.end", "type": "string", "label": "Silêncio termina às", "default": "07:00"},
-    {"key": "schedule.windows", "type": "array", "label": "Horários de tocar", "default": []},
-    {"key": "playback.fade_seconds", "type": "number", "label": "Segundos de fade", "default": 3},
-    {"key": "playback.max_session_minutes", "type": "number", "label": "Duração máxima da sessão (minutos)", "default": 120},
-    {"key": "playback.gap_seconds", "type": "number", "label": "Pausa entre faixas (segundos)", "default": 2},
-    {"key": "playback.shuffle", "type": "boolean", "label": "Embaralhar", "default": true},
-    {"key": "recommender.like_boost", "type": "number", "label": "Peso do curtir", "default": 0.8},
-    {"key": "recommender.dislike_decay", "type": "number", "label": "Peso do não curtir", "default": 0.35},
-    {"key": "recommender.less_decay", "type": "number", "label": "Peso do tocar menos", "default": 0.6},
-    {"key": "recommender.recency_window", "type": "number", "label": "Janela de repetição", "default": 8},
-    {"key": "recommender.novelty_bonus", "type": "number", "label": "Bônus de novidade", "default": 0.25},
-    {"key": "recommender.explore_rate", "type": "number", "label": "Taxa de descoberta", "default": 0.1},
-    {"key": "import.youtube.quality", "type": "string", "label": "Qualidade do download do YouTube", "default": "192"}
+    {
+      "key": "output.type",
+      "type": "string",
+      "label": "Saída de som",
+      "default": "null"
+    },
+    {
+      "key": "output.device_id",
+      "type": "string",
+      "label": "Aparelho",
+      "default": ""
+    },
+    {
+      "key": "output.ha_entity",
+      "type": "string",
+      "label": "Entidade do Home Assistant",
+      "default": ""
+    },
+    {
+      "key": "output.volume",
+      "type": "number",
+      "label": "Volume",
+      "default": 0.15
+    },
+    {
+      "key": "output.max_volume",
+      "type": "number",
+      "label": "Volume máximo",
+      "default": 0.6
+    },
+    {
+      "key": "library.paths",
+      "type": "array",
+      "label": "Pastas da biblioteca",
+      "default": []
+    },
+    {
+      "key": "library.follow_symlinks",
+      "type": "boolean",
+      "label": "Seguir atalhos (symlinks)",
+      "default": false
+    },
+    {
+      "key": "library.extensions",
+      "type": "array",
+      "label": "Extensões de arquivo",
+      "default": [
+        ".mp3",
+        ".m4a",
+        ".flac",
+        ".wav",
+        ".ogg",
+        ".oga",
+        ".opus",
+        ".aac",
+        ".wma",
+        ".aiff"
+      ]
+    },
+    {
+      "key": "schedule.enabled",
+      "type": "boolean",
+      "label": "Agenda ligada",
+      "default": true
+    },
+    {
+      "key": "schedule.quiet_hours.start",
+      "type": "string",
+      "label": "Silêncio começa às",
+      "default": "20:00"
+    },
+    {
+      "key": "schedule.quiet_hours.end",
+      "type": "string",
+      "label": "Silêncio termina às",
+      "default": "07:00"
+    },
+    {
+      "key": "schedule.windows",
+      "type": "array",
+      "label": "Horários de tocar",
+      "default": []
+    },
+    {
+      "key": "playback.fade_seconds",
+      "type": "number",
+      "label": "Segundos de fade",
+      "default": 3
+    },
+    {
+      "key": "playback.max_session_minutes",
+      "type": "number",
+      "label": "Duração máxima da sessão (minutos)",
+      "default": 120
+    },
+    {
+      "key": "playback.gap_seconds",
+      "type": "number",
+      "label": "Pausa entre faixas (segundos)",
+      "default": 2
+    },
+    {
+      "key": "playback.shuffle",
+      "type": "boolean",
+      "label": "Embaralhar",
+      "default": true
+    },
+    {
+      "key": "recommender.like_boost",
+      "type": "number",
+      "label": "Peso do curtir",
+      "default": 0.8
+    },
+    {
+      "key": "recommender.dislike_decay",
+      "type": "number",
+      "label": "Peso do não curtir",
+      "default": 0.35
+    },
+    {
+      "key": "recommender.less_decay",
+      "type": "number",
+      "label": "Peso do tocar menos",
+      "default": 0.6
+    },
+    {
+      "key": "recommender.recency_window",
+      "type": "number",
+      "label": "Janela de repetição",
+      "default": 8
+    },
+    {
+      "key": "recommender.novelty_bonus",
+      "type": "number",
+      "label": "Bônus de novidade",
+      "default": 0.25
+    },
+    {
+      "key": "recommender.explore_rate",
+      "type": "number",
+      "label": "Taxa de descoberta",
+      "default": 0.1
+    },
+    {
+      "key": "import.youtube.quality",
+      "type": "string",
+      "label": "Qualidade do download do YouTube",
+      "default": "192"
+    },
+    {
+      "key": "import.youtube.skip_sponsors",
+      "type": "boolean",
+      "label": "Cortar propaganda e patrocínio do que for trazido",
+      "default": true
+    }
   ]
 }

@@ -123,7 +123,12 @@ export default {
       'bt.import.jobs': 'Recent imports',
       'bt.import.jobs.empty': 'No imports yet.',
       'bt.import.cast': 'Play on the TV (no download)',
-      'bt.import.cast.hint': 'Plays through the television’s own YouTube app, so YouTube shows its own ads. To listen without ads, use Add instead: the audio is kept here and BirdTunes plays it.',
+      'bt.import.cast.hint': 'Plays through the television’s own YouTube app — so the ads come from the TV, not from here, and nothing on this box can cut them. The ad-free path is Add: the audio is kept here and BirdTunes plays it.',
+      'bt.adblock.title': 'Cut ads out of what you add',
+      'bt.adblock.on': 'Cut sponsors and promos (SponsorBlock)',
+      'bt.adblock.what': 'Uses the SponsorBlock database — segments people marked in the video — and cuts %s from the audio kept here.',
+      'bt.adblock.tv': 'On "play on the TV" it cannot work: that video is fetched by the television, and this box is not in the way.',
+      'bt.adblock.saved': 'Saved.',
       'bt.import.dest': 'Add to',
       'bt.import.dest.library': 'Library only',
       'bt.import.dest.new': 'New playlist from this link',
@@ -728,6 +733,36 @@ export default {
       });
     }
 
+    // O corta-propaganda. Ele age no que é *baixado*: o SponsorBlock é uma base
+    // de trechos marcados por gente, e o corte é feito no arquivo aqui. No
+    // caminho "tocar na TV" não há o que interceptar -- quem busca o vídeo é a
+    // televisão, direto do YouTube, e o Pi não está no meio. Dizer isso é o que
+    // separa um botão de um enfeite.
+    function adblockCard() {
+      const estado = (state.compat && state.compat.sponsorblock) || null;
+      if (!estado) return null;
+      const categorias = (estado.categories || []).join(', ');
+      return h('div', {class: 'bt-sheet'},
+        h('div', {class: 'bt-section__title'}, t2('bt.adblock.title')),
+        h('label', {class: 'row row--tight'},
+          h('input', {
+            type: 'checkbox', checked: Boolean(estado.enabled), disabled: !estado.available,
+            onChange: (event) => act(async () => {
+              await config.set('import.youtube.skip_sponsors', event.target.checked);
+              toast(t2('bt.adblock.saved'), {type: 'success'});
+            }),
+          }),
+          h('span', null, t2('bt.adblock.on')),
+        ),
+        h('p', {class: 'field__hint'}, fmtStr('bt.adblock.what', categorias)),
+        estado.available
+          ? null
+          : h('div', {class: 'notice notice--warning'},
+              h('div', {class: 'notice__body'}, h('span', null, estado.reason))),
+        h('p', {class: 'field__hint'}, t2('bt.adblock.tv')),
+      );
+    }
+
     function addView() {
       let urlRef = null;
       const jobs = state.importJobs || [];
@@ -790,6 +825,7 @@ export default {
             }}, icon('cast', {size: 16}), ' ', t2('bt.import.cast')),
           ),
           h('p', {class: 'field__hint'}, t2('bt.import.cast.hint')),
+          adblockCard(),
         ),
         h('div', {class: 'bt-section'},
           sectionHead(t2('bt.import.jobs')),
