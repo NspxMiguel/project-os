@@ -418,6 +418,37 @@ def apply_git(info: Dict[str, Any], root: Optional[str] = None,
     return {"previous": before, "root": where}
 
 
+def previous_versions(root: Optional[str] = None) -> List[Dict[str, Any]]:
+    """As árvores que atualizações anteriores guardaram, da mais nova para a mais velha.
+
+    O caminho da anterior era lembrado só na memória do processo -- e a
+    atualização reinicia o serviço, então o botão de voltar sumia exatamente
+    depois da única ação que o torna útil. A pasta continua no disco ao lado da
+    instalação; basta olhar.
+    """
+    where = os.path.abspath(root or root_dir())
+    parent = os.path.dirname(where)
+    prefix = os.path.basename(where) + ".previous-"
+    found = []  # type: List[Dict[str, Any]]
+    try:
+        names = os.listdir(parent)
+    except OSError:
+        return found
+    for name in names:
+        if not name.startswith(prefix):
+            continue
+        path = os.path.join(parent, name)
+        if not os.path.isdir(path):
+            continue
+        found.append({
+            "path": path,
+            "version": name[len(prefix):],
+            "at": os.path.getmtime(path),
+        })
+    found.sort(key=lambda item: item["at"], reverse=True)
+    return found
+
+
 def rollback(previous: str, root: Optional[str] = None) -> None:
     """Put a tarball update back the way it was."""
     where = os.path.abspath(root or root_dir())
@@ -427,6 +458,20 @@ def rollback(previous: str, root: Optional[str] = None) -> None:
     shutil.rmtree(broken, ignore_errors=True)
     if os.path.exists(where):
         os.rename(where, broken)
+        # O virtualenv e as anotações foram *movidos* para a árvore nova pela
+        # atualização, então a anterior está sem eles. Restaurar sem trazê-los
+        # de volta devolve uma instalação sem interpretador: o launcher cai no
+        # python do sistema, que na imagem não tem uvicorn, e o serviço não
+        # sobe. Ou seja, o botão que existe para salvar uma atualização ruim
+        # deixaria a caixa pior do que ela estava.
+        for name in KEEP_IN_PLACE:
+            source = os.path.join(broken, name)
+            target = os.path.join(previous, name)
+            if os.path.exists(source) and not os.path.exists(target):
+                if os.path.isdir(source):
+                    shutil.move(source, target)
+                else:
+                    shutil.copy2(source, target)
     os.rename(previous, where)
     shutil.rmtree(broken, ignore_errors=True)
 
@@ -573,6 +618,7 @@ __all__ = [
     "is_git_checkout",
     "is_newer",
     "method",
+    "previous_versions",
     "remember_argv",
     "restart",
     "restart_argv",

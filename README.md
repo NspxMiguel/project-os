@@ -84,7 +84,10 @@ B. An update writes the *other* one and reboots into it; the one that was
 working is left untouched. A system that does not come back up — or comes up and
 never answers — is given three tries and then the card boots the last one that
 worked, on its own, from the initramfs. The card never has to come out of the
-Pi. See [docs/RECOVERY.md](docs/RECOVERY.md).
+Pi. The lighter app-only update keeps the tree it replaced next to the install,
+so going back to the previous version is a button on the same screen — including
+after the restart the update itself performs. See
+[docs/RECOVERY.md](docs/RECOVERY.md).
 
 ## Requirements
 

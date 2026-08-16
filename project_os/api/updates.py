@@ -115,6 +115,18 @@ def _translate(exc: updates.UpdateError) -> ApiError:
     return ApiError(status, exc.code, exc.message, exc.hint or None)
 
 
+def _previous() -> Optional[Dict[str, Any]]:
+    """A versão anterior guardada no disco, se houver.
+
+    Lida a cada pedido, e não lembrada da instalação: a instalação reinicia o
+    serviço, então tudo que estivesse só na memória sumiria antes de alguém
+    querer voltar.
+    """
+    for item in updates.previous_versions():
+        return {"version": item["version"], "path": item["path"], "at": item["at"]}
+    return None
+
+
 @router.get("")
 async def status(
     config: Any = Depends(get_config), user: Dict[str, Any] = Depends(auth.require_auth)
@@ -130,6 +142,7 @@ async def status(
         "enabled": settings["enabled"],
         "last_check": _last_check,
         "job": _job.as_dict(),
+        "previous": _previous(),
     }
 
 
@@ -330,15 +343,44 @@ async def system_rollback(user: Dict[str, Any] = Depends(auth.require_auth)) -> 
 
 @router.post("/rollback")
 async def rollback(user: Dict[str, Any] = Depends(auth.require_auth)) -> Dict[str, Any]:
-    previous = _job.previous
+    guardada = _previous()
+    # _job.previous só existe até o serviço reiniciar -- e a atualização
+    # reinicia. O disco é quem sabe.
+    previous = _job.previous or (guardada or {}).get("path") or ""
     if not previous:
-        raise ApiError(404, "no_previous", "Não existe versão anterior para voltar.")
+        raise ApiError(
+            404, "no_previous",
+            "Não existe versão anterior guardada nesta caixa para voltar.",
+        )
     try:
         await anyio.to_thread.run_sync(lambda: updates.rollback(previous))
     except updates.UpdateError as exc:
         raise _translate(exc)
     _job.say("rolled back to %s" % previous)
-    return {"ok": True, "restored": previous}
+    _job.previous = ""
+    return {
+        "ok": True,
+        "restored": previous,
+        "version": (guardada or {}).get("version", ""),
+        "restart_required": True,
+    }
+
+
+@router.post("/restart")
+async def restart_service(user: Dict[str, Any] = Depends(auth.require_auth)) -> Dict[str, Any]:
+    """Reinicia o serviço para o código que está no disco passar a valer.
+
+    Voltar uma versão troca os arquivos e não a memória: sem isto a caixa fica
+    com 0.4.8 no disco e 0.4.9 na tela até alguém reiniciar na mão -- e reiniciar
+    na mão é o SSH que este projeto existe para não precisar.
+
+    Numa thread porque as duas saídas de ``updates.restart`` matam este
+    processo: sob systemd o unit reinicia, e fora dele o processo se re-executa.
+    """
+    log.warning("reinício pedido por %s", user.get("username"))
+    _job.say("restarting on request")
+    threading.Thread(target=lambda: updates.restart(on_line=_job.say), daemon=True).start()
+    return {"ok": True}
 
 
 __all__ = ["router"]

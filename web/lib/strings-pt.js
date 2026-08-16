@@ -800,7 +800,11 @@ export const PT_BR = {
   'updates.notes': 'O que mudou',
   'updates.source': 'De onde vem a atualização',
   'updates.error.check': 'Não deu para procurar atualização.',
-  'updates.rollback': 'Voltar para a versão anterior',
+  'updates.rollback': 'Voltar para a {version}',
+  'updates.rollback.confirm': 'Voltar para a {version}? Os arquivos voltam e o project-os reinicia. Seus dados não são tocados.',
+  'updates.rollback.done': 'De volta na {version}. Reiniciando…',
+  'updates.previous.title': 'Versão anterior guardada: {version}',
+  'updates.previous.body': 'A atualização guardou a árvore antiga ao lado da instalação, então esta caixa volta para a {version} sem precisar de rede.',
 
   // Os dois sistemas do cartão -- docs/RECOVERY.md.
   'sys.title': 'Sistema do cartão',

@@ -35,7 +35,11 @@ setStrings('en', {
   'updates.notes': 'What changed',
   'updates.source': 'Update source',
   'updates.error.check': 'Could not check for updates.',
-  'updates.rollback': 'Go back to the previous version',
+  'updates.rollback': 'Go back to {version}',
+  'updates.rollback.confirm': 'Restore {version}? The files go back and project-os restarts. Your data is untouched.',
+  'updates.rollback.done': 'Back on {version}. Restarting…',
+  'updates.previous.title': 'Previous version kept: {version}',
+  'updates.previous.body': 'The update saved the old tree next to the install, so this box can go back to {version} without the network.',
   'updates.disabled': 'Updates are turned off in settings.',
   'updates.log': 'Log',
   // On an image install the code lives in a directory this service cannot swap
@@ -280,23 +284,58 @@ export default {
             : job.state === 'done' ? 'open'
             : 'connecting'}},
           h('span', {class: 'conn__dot'}), job.state),
-        body: h('div', {class: 'stack stack--sm'},
-          h('pre', {class: 'log log--compact'}, (job.log || []).join('\n') || ' '),
-          job.previous
-            ? h('button', {
-                class: 'btn btn--sm btn--danger', type: 'button',
-                onClick: async () => {
-                  try {
-                    await api.post('/updates/rollback', {});
-                    toast('Rolled back.', {type: 'success'});
-                  } catch (err) {
-                    toast(err instanceof ApiError ? err.message : String(err), {type: 'error'});
-                  }
-                },
-              }, t('updates.rollback'))
-            : null,
+        body: h('pre', {class: 'log log--compact'}, (job.log || []).join('\n') || ' '),
+      });
+    }
+
+    // O botão de voltar ficava dentro do cartão acima, que só existe enquanto
+    // há um trabalho na memória do processo -- e a atualização reinicia o
+    // processo. Ou seja: ele desaparecia no instante em que passaria a ser
+    // útil. Agora ele mora num cartão próprio, alimentado pela pasta que a
+    // atualização deixou no disco.
+    function previousCard() {
+      const anterior = (state.info || {}).previous;
+      if (!anterior || !anterior.version) return null;
+      return card({
+        title: t('updates.previous.title', {version: anterior.version}),
+        iconName: 'clock',
+        body: h('p', {class: 'muted'}, t('updates.previous.body', {version: anterior.version})),
+        footer: h('div', {class: 'row'},
+          h('button', {
+            class: 'btn btn--danger', type: 'button', disabled: state.waiting,
+            onClick: async () => {
+              const ok = await confirm(t('updates.rollback.confirm', {version: anterior.version}));
+              if (!ok) return;
+              try {
+                await api.post('/updates/rollback', {});
+                toast(t('updates.rollback.done', {version: anterior.version}), {type: 'success'});
+                await restartNow();
+              } catch (err) {
+                toast(err instanceof ApiError ? err.message : String(err), {type: 'error'});
+              }
+            },
+          }, t('updates.rollback', {version: anterior.version})),
         ),
       });
+    }
+
+    // Voltar os arquivos não volta o que já está na memória: o serviço segue
+    // rodando o código novo até reiniciar. Fazer isso pelo mesmo botão evita a
+    // caixa que diz 0.4.8 no disco e 0.4.9 na tela.
+    async function restartNow() {
+      try {
+        await api.post('/updates/restart', {});
+      } catch (err) {
+        // A resposta morre junto com o processo: é isso que reiniciar parece
+        // daqui. Só um erro antes de reiniciar merece recado.
+        if (err instanceof ApiError && err.status && err.status !== 0) {
+          toast(err.message, {type: 'error'});
+          return;
+        }
+      }
+      state.waiting = true;
+      render();
+      waitForRestart();
     }
 
     function systemCard() {
@@ -392,7 +431,7 @@ export default {
           h('div', {class: 'notice__body'}, h('span', null, state.error))));
         return;
       }
-      mount(slot, [statusCard(), jobCard(), availableCard(), systemCard()]);
+      mount(slot, [statusCard(), jobCard(), availableCard(), previousCard(), systemCard()]);
     }
 
     render();

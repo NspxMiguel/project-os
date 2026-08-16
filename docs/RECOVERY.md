@@ -180,6 +180,30 @@ meio giga para terminar num erro de permissão.
 Num cartão gravado com 0.4.6 ou 0.4.7, então, o caminho é: **atualizar o sistema**
 uma vez. Depois disso as duas funcionam.
 
+### Voltar a versão anterior do app
+
+A árvore trocada não é apagada: ela fica em `/opt/project-os.previous-<versão>`,
+ao lado da instalação. É o A/B da atualização de app — mais pobre que o do
+sistema, porque só cobre o que está dentro do `/opt`, e suficiente para o caso
+comum, que é uma versão nova pior que a anterior.
+
+Duas coisas que essa pasta exige, e que a **0.4.10** conserta:
+
+* **A tela procura a pasta no disco, e não na memória do processo.** O caminho
+  era lembrado pelo trabalho de atualização em andamento; como a atualização
+  reinicia o serviço, o botão desaparecia no instante em que passaria a servir
+  para alguma coisa. Quem quisesse voltar tinha que fazer as duas renomeações
+  na mão, por SSH.
+* **O virtualenv volta junto.** A atualização *move* o `.venv` para a árvore
+  nova (é o mesmo interpretador, e copiar meio giga de dependências a cada
+  versão não faria sentido), então a árvore guardada fica sem ele. Voltar sem
+  trazê-lo de volta devolvia uma instalação sem interpretador: o `bin/project-os`
+  cai no python do sistema, que na imagem não tem uvicorn, e o serviço não sobe.
+  O socorro deixava a caixa pior que o acidente que ele existe para consertar.
+
+Depois de voltar, o serviço reinicia sozinho — os arquivos são os antigos e a
+memória ainda é a nova até isso acontecer.
+
 ## 5. O que conta como "esse sistema presta"
 
 Um slot só vira `good` quando o project-os **atende uma requisição**. Não quando o
