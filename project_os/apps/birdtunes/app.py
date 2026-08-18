@@ -1075,6 +1075,10 @@ class BirdTunesApp(AppInstance):
             # Dito antes do clique: sem yt-dlp o botão de importar só pode
             # responder 503, e respondia -- depois de a pessoa colar o link.
             "ytdlp_available": sources.available(),
+            # Qual yt-dlp, e de quando. A imagem instala o baixador uma vez, no
+            # build, e nada mais o atualiza: meses depois o YouTube muda e o
+            # erro que aparece fala de extração, não de idade.
+            "ytdlp": sources.ytdlp_state(),
             # O corta-propaganda: se está ligado, se esta caixa consegue, e por
             # que não. A tela mostra os três -- um interruptor ligado que não
             # faz nada é pior que não ter interruptor.

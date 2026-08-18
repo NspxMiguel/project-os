@@ -124,6 +124,8 @@ export default {
       'bt.import.found': 'Found: %s (%d items)',
       'bt.import.no_ytdlp': 'yt-dlp is not installed. YouTube import is unavailable.',
       'bt.import.no_ytdlp.cast': 'Playing on the TV still works — it needs no download.',
+      'bt.import.ytdlp.old': 'The downloader is %s months old (yt-dlp %s).',
+      'bt.import.ytdlp.old.why': 'YouTube changes often and an old yt-dlp starts failing with extraction errors. Update it over the terminal:',
       'bt.import.jobs': 'Recent imports',
       'bt.import.jobs.empty': 'No imports yet.',
       'bt.import.cast': 'Play on the TV (no download)',
@@ -804,6 +806,21 @@ export default {
       );
     }
 
+    // A imagem instala o yt-dlp uma vez, quando é construída, e nada mais o
+    // atualiza: o updater do app roda pip só sobre o requirements.txt, onde o
+    // yt-dlp não está. Meses depois o YouTube muda de player e o que aparece na
+    // tela é um erro de extração, que não diz o que fazer. A idade diz.
+    function baixadorVelho() {
+      const est = state.compat && state.compat.ytdlp;
+      if (!est || !est.stale || !est.available) return null;
+      const meses = Math.max(1, Math.round(est.age_days / 30));
+      return h('div', {class: 'notice notice--warning'},
+        h('div', {class: 'notice__body'},
+          h('span', null, fmtStr('bt.import.ytdlp.old', meses, est.version)),
+          h('span', null, ' ' + t2('bt.import.ytdlp.old.why')),
+          h('code', {class: 'code bt-cmd'}, 'pip install -U yt-dlp')));
+    }
+
     function addView() {
       let urlRef = null;
       const jobs = state.importJobs || [];
@@ -819,6 +836,7 @@ export default {
           podeImportar ? null : h('div', {class: 'notice notice--warning'},
             h('div', {class: 'notice__body'},
               h('span', null, t2('bt.import.no_ytdlp') + ' ' + t2('bt.import.no_ytdlp.cast')))),
+          baixadorVelho(),
           h('div', {class: 'bt-toolbar'},
             h('input', {class: 'input bt-search', type: 'text', 'data-import-url': '1',
               placeholder: t2('bt.import.url'), ref: (el) => { urlRef = el; }}),

@@ -895,6 +895,8 @@ export const PT_BR = {
   'bt.import.found': 'Achei: %s (%d itens)',
   'bt.import.no_ytdlp': 'O yt-dlp não está instalado. Não dá para trazer do YouTube.',
   'bt.import.no_ytdlp.cast': 'Tocar direto na TV continua funcionando — isso não baixa nada.',
+  'bt.import.ytdlp.old': 'O baixador tem %s meses de idade (yt-dlp %s).',
+  'bt.import.ytdlp.old.why': 'O YouTube muda toda hora, e um yt-dlp velho começa a falhar com erro de extração. Para atualizar, pelo terminal:',
   'bt.import.jobs.empty': 'Nada trazido ainda.',
   'bt.import.cast': 'Tocar direto na TV (sem baixar)',
   'bt.import.cast.hint': 'Toca pelo aplicativo de YouTube da própria televisão — a propaganda vem da TV, não daqui, e nada nesta caixa consegue cortar. O caminho sem propaganda é Trazer: o áudio fica guardado aqui e o BirdTunes toca.',

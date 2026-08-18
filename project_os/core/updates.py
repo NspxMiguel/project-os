@@ -693,6 +693,65 @@ def install_requirements(root: Optional[str] = None, on_line: Optional[Any] = No
     return process.wait()
 
 
+#: O que a imagem instala fora do requirements.txt, no 01-run.sh do build.
+#:
+#: O requirements.txt é atualizado a cada versão pelo install_requirements
+#: acima, e tudo que está lá vem junto. Estes dois não estão: entram uma vez, no
+#: dia em que a imagem é construída, e ficam parados para sempre.
+#:
+#: Para o casttube isso quase não importa. Para o yt-dlp importa muito: o
+#: trabalho dele é perseguir mudança do YouTube, que acontece toda semana, e por
+#: isso ele lança versão quase toda semana também. Uma caixa de seis meses tenta
+#: baixar com um baixador de seis meses e falha com "Unable to extract player
+#: response" -- uma frase que não diz para ninguém que a causa é a idade.
+EXTRAS_DA_IMAGEM = ("yt-dlp", "casttube")
+
+
+def _pacotes_instalados(python: str) -> List[str]:
+    """Os nomes que o pip deste venv conhece, em minúsculas."""
+    try:
+        saida = subprocess.check_output(
+            [python, "-m", "pip", "list", "--format=freeze", "--disable-pip-version-check"],
+            stderr=subprocess.DEVNULL, universal_newlines=True, timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    nomes = []
+    for linha in saida.splitlines():
+        nome = linha.split("==")[0].split(" @ ")[0].strip().lower()
+        if nome:
+            nomes.append(nome)
+    return nomes
+
+
+def refresh_extras(root: Optional[str] = None, on_line: Optional[Any] = None) -> int:
+    """Atualiza os extras da imagem que já estão instalados. Melhor esforço.
+
+    Só atualiza o que já existe, e nunca instala o que não existe: numa caixa
+    onde o yt-dlp nunca entrou, o app funciona e diz o que falta, e puxar uma
+    dependência opcional pela primeira vez numa atualização de rotina seria
+    decidir por quem instalou.
+    """
+    where = root or root_dir()
+    say = on_line or (lambda line: None)
+    python = venv_python(where) or sys.executable
+    instalados = _pacotes_instalados(python)
+    presentes = [nome for nome in EXTRAS_DA_IMAGEM if nome.lower() in instalados]
+    if not presentes:
+        say("no image extras installed; nothing to refresh")
+        return 0
+    say("refreshing %s" % ", ".join(presentes))
+    process = subprocess.Popen(
+        [python, "-m", "pip", "install", "--quiet", "--upgrade"] + presentes,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL, universal_newlines=True,
+    )
+    if process.stdout is not None:
+        for line in process.stdout:
+            say(line.rstrip())
+    return process.wait()
+
+
 def under_systemd() -> bool:
     return bool(os.environ.get("INVOCATION_ID")) or os.path.exists("/run/systemd/system")
 
@@ -798,6 +857,7 @@ __all__ = [
     "check_git",
     "check_tarball",
     "install_requirements",
+    "refresh_extras",
     "is_git_checkout",
     "is_newer",
     "method",

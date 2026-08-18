@@ -13,9 +13,11 @@ starts (the import UI just explains why it is disabled).
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import shutil
+import sys
 import time
 import uuid
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
@@ -73,6 +75,65 @@ def available() -> bool:
         return importlib.util.find_spec("yt_dlp") is not None
     except (ImportError, ValueError):  # pragma: no cover - broken install
         return False
+
+
+#: Depois de quantos dias um baixador de YouTube passa a ser suspeito. O YouTube
+#: muda o player e a assinatura dos formatos várias vezes por mês, e a resposta
+#: do yt-dlp a isso é lançar versão nova quase toda semana. Três meses é folgado:
+#: antes disso o número assusta sem motivo, e muito depois disso a pessoa fica
+#: olhando para um erro de extração sem saber que a causa é a idade.
+VELHO_DEPOIS_DE_DIAS = 90
+
+
+def ytdlp_version() -> str:
+    """A versão instalada, ou "" -- sem rede e sem levantar exceção."""
+    try:
+        import yt_dlp
+
+        return str(getattr(yt_dlp.version, "__version__", "") or "")
+    except Exception:  # pragma: no cover - instalação quebrada
+        return ""
+
+
+def _dia_da_versao(versao: str) -> Optional[datetime.date]:
+    """O yt-dlp versiona por data: "2026.7.4" é 4 de julho de 2026.
+
+    Isso dá a idade do baixador sem consultar ninguém -- o mesmo raciocínio do
+    bit do MAC: um dado que já está na mão não desatualiza nem depende de rede.
+    """
+    partes = str(versao or "").split(".")[:3]
+    if len(partes) < 3:
+        return None
+    try:
+        ano, mes, dia = (int(p) for p in partes)
+        return datetime.date(ano, mes, dia)
+    except (TypeError, ValueError):
+        return None
+
+
+def ytdlp_state(hoje: Optional[datetime.date] = None) -> Dict[str, Any]:
+    """O que dá para dizer sobre o baixador sem sair para a rede.
+
+    Existe porque o yt-dlp desta caixa é instalado uma vez, quando a imagem é
+    construída, e nunca mais: o updater do app roda pip só sobre o
+    requirements.txt, e o yt-dlp não está lá. Meses depois, o que a pessoa vê
+    quando o YouTube muda de novo é "Unable to extract player response" -- uma
+    frase que não diz o que fazer. A idade diz.
+    """
+    versao = ytdlp_version()
+    dia = _dia_da_versao(versao)
+    hoje = hoje or datetime.date.today()
+    idade = (hoje - dia).days if dia else None
+    return {
+        "available": available(),
+        "version": versao,
+        "released": dia.isoformat() if dia else "",
+        "age_days": idade,
+        # None quando não dá para saber a data: um "sei lá" honesto é melhor
+        # que um alarme inventado.
+        "stale": bool(idade is not None and idade > VELHO_DEPOIS_DE_DIAS),
+        "python": "%d.%d" % (sys.version_info[0], sys.version_info[1]),
+    }
 
 
 #: Every shape of YouTube link a person actually pastes.

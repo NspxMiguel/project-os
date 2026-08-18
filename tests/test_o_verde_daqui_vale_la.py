@@ -52,20 +52,42 @@ def _ler(caminho):
 
 
 def _e_da_biblioteca_padrao(raiz):
-    """Sem ``sys.stdlib_module_names``, que só existe do 3.10 para cima.
+    """Do 3.10 para cima o próprio Python tem a lista; antes disso, na unha.
 
-    Quem não importa de jeito nenhum conta como de fora -- que é exatamente o
-    caso que este arquivo persegue: o yt_dlp ausente no runner.
+    A primeira versão deste guarda caiu no CI pelo defeito que ele existe para
+    pegar: passava aqui no 3.9 e falhava lá no 3.11, onde ``os`` e ``io`` são
+    módulos *congelados* e o ``spec.origin`` deles é a palavra "frozen" em vez
+    de um caminho -- então a conta de "mora na pasta da biblioteca padrão?" dava
+    não, e a suíte acusava o CI de não instalar o ``os``.
+
+    Quem não importa de jeito nenhum conta como de fora, que é exatamente o caso
+    perseguido aqui: o yt_dlp ausente no runner.
     """
+    nomes = getattr(sys, "stdlib_module_names", None)
+    if nomes is not None:
+        return raiz in nomes
     if raiz in sys.builtin_module_names:
         return True
     try:
         spec = importlib.util.find_spec(raiz)
     except (ImportError, ValueError):
         return False
-    if spec is None or not spec.origin:
-        return spec is not None and spec.origin is None
-    return os.path.dirname(os.__file__) in os.path.dirname(spec.origin)
+    if spec is None:
+        return False
+    origem = spec.origin or ""
+    if origem in ("frozen", "built-in"):
+        return True
+    if not origem:
+        return False
+    # Pasta, e não arquivo: ``asyncio`` e ``json`` são pacotes, e o origin deles
+    # aponta para um ``__init__.py`` uma pasta abaixo da biblioteca padrão.
+    raiz_padrao = os.path.dirname(os.__file__)
+    if not origem.startswith(raiz_padrao + os.sep):
+        return False
+    dentro = origem[len(raiz_padrao) + 1:]
+    # Em algumas máquinas o site-packages mora dentro da própria pasta da
+    # biblioteca padrão, e aí "começa com" não bastaria.
+    return not dentro.startswith(("site-packages", "dist-packages"))
 
 
 def _o_que_a_suite_importa():

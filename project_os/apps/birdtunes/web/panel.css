@@ -634,6 +634,29 @@
   border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--warn) 8%, transparent);
+  flex-wrap: wrap;
 }
 .bt-warn > svg { flex: none; margin-top: 2px; color: var(--warn); }
 .bt-warn__title { font-weight: 600; }
+
+/* Medido num celular de 375px: o botão "Escolher caixa de som" ficava com 152px
+   e a mensagem com 141 -- o botão mais largo que o aviso, e a frase que explica
+   por que nada vai tocar quebrada em dez caracteres por linha, cinco linhas.
+
+   A base de 15rem é o que a frase precisa para valer a pena dividir a linha com
+   o botão; abaixo disso o botão desce sozinho. Sem media query de propósito: o
+   que decide é o espaço que sobrou, e isso muda com a fonte do sistema e com o
+   tamanho do texto traduzido, não só com a largura da tela. */
+.bt-warn > .grow { flex: 1 1 15rem; min-width: 0; }
+.bt-warn > .btn { margin-left: auto; }
+
+/* O comando dentro de um aviso. Reusa a superfície de código do tema -- um
+   comando que a pessoa vai copiar precisa parecer texto de terminal, e inventar
+   uma segunda aparência para isso só criaria divergência. */
+.bt-cmd {
+  display: block;
+  margin-top: var(--space-2);
+  width: fit-content;
+  max-width: 100%;
+  user-select: all;
+}

@@ -74,3 +74,48 @@ def test_e_a_navegacao_dele_tambem():
 def test_o_modificador_antigo_continua_valendo():
     """Telas já escritas pedem `.segmented--scroll` pelo nome."""
     assert _regra(GLOBAL, ".segmented--scroll") != ""
+
+
+# --------------------------------------------------------------------------
+# Caber na largura não é o mesmo que ficar legível nela
+# --------------------------------------------------------------------------
+
+
+def test_o_aviso_da_agenda_nao_vira_uma_tirinha():
+    """Medido em 375px: mensagem com 141px e botão com 152 -- o botão mais largo
+    que o aviso, e a frase que explica por que nada vai tocar quebrada em dez
+    caracteres por linha.
+
+    A página cabia em 375/375 o tempo todo, então a regra de transbordo passava
+    e ninguém via o problema. Cabe e é ilegível são coisas diferentes.
+
+    Depois: 301px para o texto, e o botão desce para a linha de baixo. Em 768 e
+    em 1280 nada muda -- os dois continuam lado a lado.
+    """
+    aviso = _regra(PAINEL, ".bt-warn")
+    assert "flex-wrap: wrap" in aviso, "sem quebra, o botão nunca desce"
+    texto = _regra(PAINEL, ".bt-warn > .grow")
+    assert "flex: 1 1 15rem" in texto, "a base é o que decide quando o botão desce"
+    assert "min-width: 0" in texto
+
+
+def test_e_a_decisao_e_do_espaco_e_nao_da_largura_da_tela():
+    """Sem media query de propósito: o texto traduzido e a fonte do sistema
+    mudam a conta, e um número de breakpoint não sabe disso.
+    """
+    fonte = io.open(PAINEL, encoding="utf-8").read()
+    trecho = fonte[fonte.index(".bt-warn {"):]
+    trecho = trecho[:trecho.index(".bt-cmd")]
+    assert "@media" not in trecho
+
+
+def test_o_comando_do_aviso_usa_a_superficie_de_codigo_do_tema():
+    """Um comando para copiar tem que parecer terminal; inventar uma segunda
+    aparência para isso só criaria divergência com o resto do sistema.
+    """
+    painel = io.open(os.path.join(RAIZ, "project_os", "apps", "birdtunes", "web", "panel.js"),
+                     encoding="utf-8").read()
+    assert "class: 'code bt-cmd'" in painel
+    assert ".code, .log {" in io.open(GLOBAL, encoding="utf-8").read()
+    cmd = _regra(PAINEL, ".bt-cmd")
+    assert "user-select: all" in cmd, "clique de três dedos pega o comando inteiro"

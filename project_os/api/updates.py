@@ -178,6 +178,13 @@ def _run_install(info: Dict[str, Any], restart: bool) -> None:
             # Not fatal: the new code is in, and every optional dependency in
             # project-os degrades honestly when missing.
             _job.say("pip exited %d -- some optional dependencies may be missing" % code)
+        # O yt-dlp entra pelo script da imagem e não pelo requirements.txt, então
+        # a linha acima nunca o alcançava: ele ficava parado na versão do dia em
+        # que a imagem foi construída. Um baixador de YouTube parado é um
+        # baixador que vai falhar, porque o YouTube não fica parado.
+        extras = updates.refresh_extras(on_line=_job.say)
+        if extras != 0:
+            _job.say("pip exited %d refreshing the image extras" % extras)
         _job.state = STATE_DONE
         _job.message = "Updated to %s." % info.get("latest", "the new version")
         if restart:
