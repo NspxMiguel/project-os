@@ -269,3 +269,63 @@ def test_as_frases_do_relogio_existem_em_portugues():
     for chave in ("dash.card.clock", "dash.clock.wrong", "dash.clock.vsYou",
                   "dash.clock.running", "dash.clock.noZone"):
         assert "'%s':" % chave in pt, "falta a tradução de %s" % chave
+
+
+# ------------------------------------------- o app pergunta para quem sabe
+
+
+def test_a_fatia_de_um_app_ainda_acha_o_fuso_da_caixa(tmp_path, monkeypatch):
+    """A causa decisiva do atraso de três horas na caixa dele.
+
+    Um app recebe ``ctx.config``, que é uma vista de ``apps.settings.<id>``.
+    Perguntar ``system.timezone`` ali procura
+    ``apps.settings.birdtunes.system.timezone`` -- que não existe -- e volta
+    vazio. A tela de Ajustes mostrava ``America/Sao_Paulo``, o app nunca viu,
+    e o ``except`` que sobrava seguia em UTC escrevendo num log que ninguém lê.
+    """
+    monkeypatch.setenv("PROJECT_OS_HOME", str(tmp_path))
+    from project_os.config import load_config
+
+    cfg = load_config()
+    cfg.set("system.timezone", "America/Sao_Paulo")
+
+    fatia = cfg.app("birdtunes")
+    assert fatia.get("system.timezone", "") == "", (
+        "a fatia do app não enxerga a chave da caixa -- é esse o problema"
+    )
+    assert clock.zona(fatia)["effective"] == "America/Sao_Paulo", (
+        "o relógio tem que subir da fatia para a configuração da caixa"
+    )
+    assert clock.zona(fatia)["resolved"] is True
+
+
+def test_o_app_de_verdade_calcula_silencio_na_hora_da_casa(tmp_path, monkeypatch):
+    """A conta que ele viveu, com a configuração de verdade no meio."""
+    monkeypatch.setenv("PROJECT_OS_HOME", str(tmp_path))
+    from zoneinfo import ZoneInfo
+
+    from project_os.apps.birdtunes import app as modulo
+    from project_os.config import load_config
+
+    cfg = load_config()
+    cfg.set("system.timezone", "America/Sao_Paulo")
+
+    pelo_app = modulo._now(cfg.app("birdtunes"))
+    esperado = dt.datetime.now(ZoneInfo("America/Sao_Paulo")).replace(tzinfo=None)
+    assert abs((pelo_app - esperado).total_seconds()) < 5
+
+    em_utc = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    assert round((pelo_app - em_utc).total_seconds() / 3600.0) == -3, (
+        "o app voltou a contar as horas em UTC"
+    )
+
+
+def test_subir_a_fatia_nao_abre_o_resto_da_configuracao(tmp_path, monkeypatch):
+    """O app continua vendo só o que é dele; quem sobe é o relógio, não o app."""
+    monkeypatch.setenv("PROJECT_OS_HOME", str(tmp_path))
+    from project_os.config import load_config
+
+    cfg = load_config()
+    cfg.set("security.allow_shell", True)
+    fatia = cfg.app("birdtunes")
+    assert fatia.get("security.allow_shell", "nada") == "nada"

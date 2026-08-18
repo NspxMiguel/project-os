@@ -171,6 +171,27 @@ def ensure(config: Any) -> Dict[str, Any]:
 DERIVA_TOLERADA_S = 300
 
 
+def _config_da_caixa(config: Any) -> Any:
+    """A configuração da caixa, mesmo recebendo a fatia de um app.
+
+    Um app recebe ``ctx.config``, que é uma vista de ``apps.settings.<id>``:
+    pedir ``system.timezone`` ali procura por
+    ``apps.settings.birdtunes.system.timezone``, que não existe em lugar
+    nenhum, e volta vazio. Foi exatamente assim que o BirdTunes calculou
+    agenda em UTC numa caixa configurada para ``America/Sao_Paulo`` -- a tela
+    de Ajustes mostrava o fuso certo, o app nunca chegou a vê-lo, e o
+    ``except`` que sobrava escreveu um aviso de log e seguiu em frente.
+
+    Que fuso a caixa está é pergunta da caixa, não do app, então aqui se sobe
+    para a configuração de verdade que está atrás da fatia. Vale para qualquer
+    app, e não só para o que descobriu o problema.
+    """
+    interno = getattr(config, "_config", None)
+    if interno is not None and hasattr(interno, "get"):
+        return interno
+    return config
+
+
 def zona(config: Any = None) -> Dict[str, Any]:
     """Qual fuso esta caixa consegue mesmo aplicar.
 
@@ -181,7 +202,7 @@ def zona(config: Any = None) -> Dict[str, Any]:
     pedido = ""
     if config is not None:
         try:
-            pedido = str(config.get("system.timezone", "") or "").strip()
+            pedido = str(_config_da_caixa(config).get("system.timezone", "") or "").strip()
         except Exception:  # pragma: no cover - config nunca está tão quebrada
             pedido = ""
 

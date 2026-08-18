@@ -38,6 +38,9 @@ setStrings('en', {
   'apps.error.load': 'Could not load apps.',
   'apps.action.retry': 'Retry',
   'apps.action.start': 'Start',
+  'apps.onlyForNow': 'Running only until the next restart',
+  'apps.onlyForNow.detail': "This app was started by hand and is not in the enabled list, so it will not come back on its own after a reboot.",
+  'apps.action.keepOn': 'Keep it on',
   'apps.action.stop': 'Stop',
   'apps.action.restart': 'Restart',
   'apps.action.open': 'Open',
@@ -245,13 +248,25 @@ export default {
       const href = '#/apps/' + encodeURIComponent(app.id);
       const footer = [];
 
-      if (state_ === 'stopped' || state_ === 'error' || state_ === 'disabled') {
+      // Um app desligado precisa de `enable`, não de `start`. `start` sobe o app
+      // agora e não escreve nada em `apps.enabled`, então o próximo reinício o
+      // deixa para trás -- foi assim que o BirdTunes sumiu de uma caixa depois
+      // de dois dias tocando: o log mostra "0 running" no boot e um
+      // "start (by admin)" logo em seguida, e nada entre um reinício e outro.
+      // Quem clica em "Iniciar" está dizendo que quer o app, não que quer o app
+      // até desligar da tomada.
+      if (state_ === 'disabled') {
+        footer.push(actionButton(app, 'enable', t('apps.action.start'), 'play', 'primary'));
+      } else if (state_ === 'stopped' || state_ === 'error') {
         footer.push(actionButton(app, 'start', t('apps.action.start'), 'play', 'primary'));
       }
       if (state_ === 'running' || state_ === 'starting') {
         footer.push(actionButton(app, 'stop', t('apps.action.stop'), 'stop'));
         footer.push(actionButton(app, 'restart', t('apps.action.restart'), 'refresh'));
       }
+      // Rodando sem estar em `apps.enabled` é o estado que engana: funciona
+      // agora, e some no próximo boot sem dizer nada.
+      const soPorAgora = (state_ === 'running' || state_ === 'starting') && app.enabled === false;
       footer.push(actionButton(app, 'uninstall', t('apps.action.uninstall'), 'trash', 'danger'));
       if (app.has_ui) {
         footer.push(h('a', {class: 'btn btn--ghost btn--sm', href, style: {marginLeft: 'auto'}},
@@ -282,9 +297,20 @@ export default {
         variant: state_ === 'error' ? 'danger' : '',
         body: state_ === 'error'
           ? h('p', {class: 'small muted'}, app.error || t('apps.error.detail'))
-          : (app.description && app.description !== sub
-              ? h('p', {class: 'small muted'}, app.description)
-              : null),
+          : [
+              soPorAgora
+                ? h('div', {class: 'notice notice--warn'},
+                    icon('warning', {size: 16}),
+                    h('div', {class: 'notice__body'},
+                      h('div', {class: 'notice__title'}, t('apps.onlyForNow')),
+                      h('div', {class: 'small muted'}, t('apps.onlyForNow.detail')),
+                      h('div', {class: 'notice__actions'},
+                        actionButton(app, 'enable', t('apps.action.keepOn'), 'check', 'primary'))))
+                : null,
+              app.description && app.description !== sub
+                ? h('p', {class: 'small muted'}, app.description)
+                : null,
+            ],
         footer,
       });
     }
