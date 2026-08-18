@@ -1134,3 +1134,23 @@ kbd {
   color: var(--muted);
   font-size: 0.875rem;
 }
+
+/* ------------------------------------------------------------ relógio */
+/* O relógio da tela inicial. Grande de propósito: ele existe para que uma hora
+   errada seja vista de longe, sem ninguém ir procurar. */
+.clock {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.clock__time {
+  font-size: 2.6rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.clock__sec {
+  font-size: 1.1rem;
+  color: var(--text-dim);
+}

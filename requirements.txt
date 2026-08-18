@@ -14,6 +14,11 @@ PyYAML==6.0.3
 # the browser. FastAPI refuses to build the route at import time if it is
 # missing, so this is required, not optional.
 python-multipart==0.0.20
+# A base de fusos IANA em pacote Python. `zoneinfo` lê a base do sistema, e a
+# imagem instala com --no-install-recommends -- sem tzdata o fuso escolhido em
+# Ajustes não pode ser aplicado, e a caixa conta as horas em UTC calada. Medido
+# no Pi dele: silêncio começando às 17:00 e a rotina do meio-dia tocando 09:30.
+tzdata==2025.2
 
 # ---------------------------------------------------------------------------
 # Optional: device discovery and casting.

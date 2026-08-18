@@ -31,6 +31,13 @@ dependencies = [
     "fastapi>=0.128,<1.0",
     "uvicorn[standard]>=0.39,<1.0",
     "PyYAML>=6.0,<7.0",
+    # A base de fusos, em pacote. `zoneinfo` lê a base do sistema, e a imagem
+    # instala com --no-install-recommends: sem isto `ZoneInfo("America/Sao_Paulo")`
+    # levanta numa Pi recém-gravada, o fuso escolhido não vale, e tudo que
+    # depende de horário roda em UTC. Não é opcional -- uma caixa cuja função é
+    # fazer coisas na hora certa não pode depender de a distribuição ter
+    # trazido tzdata.
+    "tzdata>=2025.1",
 ]
 
 [project.optional-dependencies]

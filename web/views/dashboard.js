@@ -68,6 +68,14 @@ setStrings('en', {
   'dash.greeting.afternoon': 'Good afternoon',
   'dash.greeting.evening': 'Good evening',
   'dash.card.system': 'System',
+  'dash.card.clock': 'Clock',
+  'dash.devices.found': '{count} found on your network',
+  'dash.clock.noZone': 'no timezone set',
+  'dash.clock.running': 'running on {zone}',
+  'dash.clock.settings': 'Adjust the timezone',
+  'dash.clock.wrong': "This box's time is wrong",
+  'dash.clock.vsYou': 'Difference from you',
+  'dash.clock.same': 'same',
   'dash.card.apps': 'Apps',
   'dash.card.devices': 'Devices',
   'dash.card.suggestion': 'Suggestion',
@@ -360,11 +368,13 @@ export default {
       apps: 'loading',
       devices: 'loading',
       system: store.get('stats') ? 'ready' : 'loading',
+      clock: 'loading',
       errors: {},
       pendingSuggestions: new Set(),
       busyActions: new Set(),
     };
 
+    const clockSlot = h('div', {class: 'slot'});
     const systemSlot = h('div', {class: 'slot'});
     const suggestionSlot = h('div', {class: 'slot'});
     const appSlot = h('div', {class: 'slot'});
@@ -383,8 +393,106 @@ export default {
         ),
         h('div', {class: 'page__actions'}, refreshBtn),
       ),
-      h('div', {class: 'grid'}, systemSlot, suggestionSlot, appSlot, deviceSlot),
+      h('div', {class: 'grid'}, clockSlot, systemSlot, suggestionSlot, appSlot, deviceSlot),
     ]);
+
+    /* ------------------------------------------------------- clock card */
+    //
+    // Mostra a hora **da caixa**, nunca a do navegador. Parece detalhe e é o
+    // ponto inteiro: o fuso pode estar escolhido em Ajustes e mesmo assim não
+    // valer -- `zoneinfo` lê a base de fusos do sistema, e sem ela a caixa
+    // conta as horas em UTC calada. Foi assim que o horário de silêncio
+    // começou a valer às 17:00 e uma rotina do meio-dia tocou 09:30: tudo
+    // "funcionando", três horas fora.
+    //
+    // Por isso o relógio anda a partir do epoch que o servidor mandou, somado
+    // ao tempo passado desde a resposta, e nunca a partir de `new Date()` local
+    // -- um relógio que copiasse o do navegador mostraria a hora certa sempre e
+    // não denunciaria nada.
+
+    let relogio = null;        // resposta de /api/system/clock
+    let relogioEm = 0;         // performance.now() de quando ela chegou
+    let relogioTimer = null;
+
+    function horaDaCaixa() {
+      if (!relogio) return null;
+      const passou = (performance.now() - relogioEm) / 1000;
+      const ms = (relogio.epoch + passou) * 1000 + (relogio.offset_minutes || 0) * 60000;
+      const d = new Date(ms);
+      const dois = (n) => String(n).padStart(2, '0');
+      return {
+        hhmm: dois(d.getUTCHours()) + ':' + dois(d.getUTCMinutes()),
+        ss: dois(d.getUTCSeconds()),
+        data: d,
+      };
+    }
+
+    function renderClock() {
+      if (state.clock === 'loading' && !relogio) {
+        mount(clockSlot, skeletonCard());
+        return;
+      }
+      if (!relogio) {
+        mount(clockSlot, card({
+          title: t('dash.card.clock'), iconName: 'clock', variant: 'danger',
+          body: errorState(state.errors.clock || '', () => loadClock()),
+        }));
+        return;
+      }
+
+      const hora = horaDaCaixa();
+      const problema = !relogio.ok;
+      const fuso = relogio.timezone || t('dash.clock.noZone');
+      const aplicado = relogio.effective || 'UTC';
+
+      mount(clockSlot, card({
+        title: t('dash.card.clock'),
+        sub: relogio.resolved ? fuso : t('dash.clock.running', {zone: aplicado}),
+        iconName: 'clock',
+        variant: problema ? 'warn' : '',
+        tools: h('a', {class: 'btn btn--icon btn--sm', href: '#/settings',
+          title: t('dash.clock.settings'), 'aria-label': t('dash.clock.settings')},
+          icon('chevron', {size: 16})),
+        body: [
+          h('div', {class: 'clock'},
+            h('span', {class: 'clock__time'}, hora ? hora.hhmm : '—'),
+            h('span', {class: 'clock__sec'}, hora ? hora.ss : ''),
+          ),
+          problema
+            ? h('div', {class: 'notice notice--warn'},
+                icon('warning', {size: 16}),
+                h('div', {class: 'notice__body'},
+                  h('div', {class: 'notice__title'}, t('dash.clock.wrong')),
+                  h('div', {class: 'small muted'}, relogio.message || ''),
+                ))
+            : null,
+          relogio.drift_seconds !== null && relogio.drift_seconds !== undefined
+            ? h('div', {class: 'stats'},
+                h('div', {class: 'stat'},
+                  h('span', {class: 'stat__label'}, t('dash.clock.vsYou')),
+                  h('span', {class: 'stat__value' + (relogio.clock_disagrees ? ' warn' : '')},
+                    fmt.duration(Math.abs(relogio.drift_seconds)) === '0s'
+                      ? t('dash.clock.same')
+                      : fmt.duration(Math.abs(relogio.drift_seconds))),
+                ))
+            : null,
+        ],
+      }));
+    }
+
+    async function loadClock() {
+      state.clock = 'loading';
+      try {
+        const dados = await api.get('/system/clock', {browser_epoch: Date.now() / 1000});
+        relogio = dados;
+        relogioEm = performance.now();
+        delete state.errors.clock;
+      } catch (err) {
+        state.errors.clock = err && err.message ? err.message : String(err);
+      }
+      state.clock = 'ready';
+      renderClock();
+    }
 
     /* ------------------------------------------------------ system card */
 
@@ -694,7 +802,7 @@ export default {
 
       mount(deviceSlot, card({
         title: t('dash.card.devices'),
-        sub: devices.length ? devices.length + ' found on your network' : null,
+        sub: devices.length ? t('dash.devices.found', {count: devices.length}) : null,
         iconName: 'devices',
         tools: h('a', {class: 'btn btn--icon btn--sm', href: '#/devices', title: t('dash.devices.all'), 'aria-label': t('dash.devices.all')},
           icon('chevron', {size: 16})),
@@ -820,11 +928,12 @@ export default {
         refreshBtn.disabled = true;
         setTimeout(() => { refreshBtn.disabled = false; }, 800);
       }
-      return Promise.all([loadStats(), loadSuggestions(), loadApps(), loadDevices()]);
+      return Promise.all([loadClock(), loadStats(), loadSuggestions(), loadApps(), loadDevices()]);
     }
 
     /* ------------------------------------------------------ live wiring */
 
+    renderClock();
     renderSystem();
     renderSuggestions();
     renderApps();
@@ -844,8 +953,16 @@ export default {
     // store, so nothing else needs polling here.
     loadAll(false);
 
+    // O ponteiro anda sozinho; a resposta do servidor só é buscada de novo de
+    // minuto em minuto, porque o que muda ali é o diagnóstico, não o segundo.
+    relogioTimer = setInterval(() => {
+      if (disposed) return;
+      if (relogio && !state.errors.clock) renderClock();
+    }, 1000);
+
     return () => {
       disposed = true;
+      if (relogioTimer) clearInterval(relogioTimer);
       offStore();
     };
   },

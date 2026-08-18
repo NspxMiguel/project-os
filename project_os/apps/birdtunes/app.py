@@ -1197,27 +1197,16 @@ def _now(config: Any = None) -> Any:
     The image boots on UTC -- it has no way to know where it will be plugged in
     -- so on a fresh Pi "quiet hours 20:00" meant 17:00 in Brazil. For an app
     whose whole job is *when* to make noise, that is not a cosmetic bug.
-    """
-    import datetime as dt
 
-    name = ""
-    if config is not None:
-        try:
-            name = str(config.get("system.timezone", "") or "")
-        except Exception:  # pragma: no cover - config is never this broken
-            name = ""
-    if not name:
-        return dt.datetime.now()
-    try:
-        from zoneinfo import ZoneInfo
-    except ImportError:  # pragma: no cover - Python 3.9 without tzdata
-        return dt.datetime.now()
-    try:
-        return dt.datetime.now(ZoneInfo(name)).replace(tzinfo=None)
-    except Exception:
-        logging.getLogger("project_os.apps.birdtunes").warning(
-            "unknown timezone %r; falling back to the system clock", name)
-        return dt.datetime.now()
+    A conta em si mora em ``core.clock``: aqui havia uma cópia do ``try/except``
+    que, quando o fuso não resolvia, escrevia um aviso no log e devolvia UTC. O
+    app seguia funcionando e errado -- silêncio começando às 17:00 dele --, e o
+    único registro estava num log que ninguém abre. Agora quem decide as horas é
+    um lugar só, e a falha aparece no relógio da tela inicial.
+    """
+    from project_os.core import clock
+
+    return clock.now(config)
 
 
 def setup(ctx: AppContext) -> BirdTunesApp:
