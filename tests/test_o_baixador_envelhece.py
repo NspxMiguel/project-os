@@ -217,3 +217,107 @@ def test_mas_renova_o_que_estava(monkeypatch):
     assert visto and visto[0][-1] == "yt-dlp"
     assert "--upgrade" in visto[0]
     assert "casttube" not in visto[0], "só o que está instalado"
+
+
+# ------------------------------------- e conserta a atualização que já passou
+
+
+def test_a_troca_de_versao_renova_os_extras_no_primeiro_boot():
+    """Descoberto ensaiando a atualização dele de 0.4.14 para 0.4.33.
+
+    Quem *executa* uma atualização é sempre o código antigo -- ele baixa, troca
+    os arquivos e só então o novo sobe. Então consertar isso dentro do updater
+    conserta a próxima atualização e nunca a que está acontecendo. O primeiro
+    boot depois da troca é o único momento em que o código novo pode consertar
+    uma atualização que já aconteceu.
+    """
+    fonte = _ler("project_os", "main.py")
+    corpo = fonte[fonte.index("def _renovar_extras_apos_atualizar"):]
+    corpo = corpo[:corpo.index("def _settle_timezone")]
+    assert 'config.get("state.last_version"' in corpo
+    assert "updates.refresh_extras" in corpo
+    assert "if anterior == __version__:" in corpo, "uma vez por versão, não a cada boot"
+    assert "updates.previous_versions()" in corpo, \
+        "a caixa dele não tem a chave; o sinal é a árvore que a troca deixou"
+    assert "run_in_executor(None, _renovar_extras_apos_atualizar" in fonte, \
+        "pip não pode segurar o boot"
+
+
+def test_uma_instalacao_nova_nao_sai_atualizando_pacote():
+    """Sem versão anterior gravada, não houve troca: é a primeira vez que esta
+    caixa liga, e o que está instalado é o que a imagem acabou de pôr."""
+    import logging
+
+    from project_os import main
+
+    class _Cfg(object):
+        def __init__(self, valores):
+            self.valores = valores
+            self.gravou = []
+
+        def get(self, chave, padrao=None):
+            return self.valores.get(chave, padrao)
+
+        def set(self, chave, valor):
+            self.gravou.append((chave, valor))
+            self.valores[chave] = valor
+
+        def save(self):
+            pass
+
+    chamou = []
+    from project_os.core import updates
+
+    real, antigas = updates.refresh_extras, updates.previous_versions
+    updates.refresh_extras = lambda **k: chamou.append(1)
+    updates.previous_versions = lambda root=None: []   # nunca atualizou
+    try:
+        cfg = _Cfg({})
+        main._renovar_extras_apos_atualizar(cfg)
+        assert chamou == [], "primeira vez não renova nada"
+        assert cfg.gravou and cfg.gravou[0][0] == "state.last_version"
+
+        # segunda vez, mesma versão: também não
+        main._renovar_extras_apos_atualizar(cfg)
+        assert chamou == []
+
+        # agora com versão antiga gravada: renova uma vez
+        cfg.valores["state.last_version"] = "0.0.1"
+        main._renovar_extras_apos_atualizar(cfg)
+        assert chamou == [1]
+        main._renovar_extras_apos_atualizar(cfg)
+        assert chamou == [1], "só uma vez por troca de versão"
+    finally:
+        updates.refresh_extras, updates.previous_versions = real, antigas
+
+
+def test_a_caixa_dele_e_o_caso_dificil():
+    """0.4.14 não conhecia a chave state.last_version. Sem outro sinal, a
+    primeira atualização dela pareceria uma instalação nova -- e seria a única
+    que não renovaria o yt-dlp, que é exatamente a que precisa.
+    """
+    from project_os import main
+    from project_os.core import updates
+
+    class _Cfg(object):
+        def __init__(self):
+            self.valores = {}
+
+        def get(self, chave, padrao=None):
+            return self.valores.get(chave, padrao)
+
+        def set(self, chave, valor):
+            self.valores[chave] = valor
+
+        def save(self):
+            pass
+
+    chamou = []
+    real, antigas = updates.refresh_extras, updates.previous_versions
+    updates.refresh_extras = lambda **k: chamou.append(1)
+    updates.previous_versions = lambda root=None: [{"version": "0.4.14", "path": "/x"}]
+    try:
+        main._renovar_extras_apos_atualizar(_Cfg())
+        assert chamou == [1], "com árvore anterior no disco, houve troca"
+    finally:
+        updates.refresh_extras, updates.previous_versions = real, antigas

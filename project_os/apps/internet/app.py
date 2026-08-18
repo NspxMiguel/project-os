@@ -141,14 +141,54 @@ class InternetApp(AppInstance):
             self._threads = None
 
     def status(self) -> Dict[str, Any]:
-        """O cartão da tela inicial: uma frase, não um despejo de campos."""
+        """O cartão da tela inicial: uma frase, não um despejo de campos.
+
+        A tela inicial não sabe traduzir chave de app nenhum, então quem manda a
+        frase pronta é o app -- é o mesmo caminho que o BirdTunes usa.
+        """
         panorama = self.panorama()
-        return {
-            "summary": panorama["state"],
-            "state": panorama["state"],
-            "since": panorama["since"],
-            "outages_24h": panorama["outages_24h"],
-        }
+        estado = panorama["state"]
+        cartao = dict(panorama)
+        cartao.update({
+            "state": estado,
+            "level": {probes.NO_AR: "ok", probes.SEM_DNS: "warn"}.get(estado, "danger"),
+            "summary": self._frase(panorama),
+            "fields": self._campos(panorama),
+        })
+        return cartao
+
+    def _frase(self, panorama: Dict[str, Any]) -> str:
+        estado = panorama["state"]
+        if estado == probes.SEM_ROTEADOR:
+            return "O roteador não responde. O problema é aqui dentro de casa, não no provedor."
+        if estado == probes.SEM_INTERNET:
+            return "Sem internet: o roteador está de pé e o provedor não está entregando."
+        if estado == probes.SEM_DNS:
+            return "Os nomes não estão resolvendo. A conexão funciona por endereço."
+        if not panorama["outages_24h"]:
+            return "Funcionando. Nenhuma queda nas últimas 24 horas."
+        quantas = panorama["outages_24h"]
+        return "Funcionando. %d %s nas últimas 24 horas, %s fora do ar." % (
+            quantas, "queda" if quantas == 1 else "quedas",
+            _duracao(panorama["downtime_24h_seconds"]))
+
+    def _campos(self, panorama: Dict[str, Any]) -> List[Dict[str, Any]]:
+        ultima = panorama.get("last") or {}
+
+        def _ms(valor):
+            return "%d ms" % round(valor) if valor is not None else "não respondeu"
+
+        campos = [
+            {"label": "Roteador", "value": _ms(ultima.get("gateway_ms")), "kind": "text"},
+            {"label": "Internet", "value": _ms(ultima.get("internet_ms")), "kind": "text"},
+            {"label": "Nomes (DNS)", "value": _ms(ultima.get("dns_ms")), "kind": "text"},
+        ]
+        if panorama["outages_24h"]:
+            campos.append({"label": "Quedas em 24h", "value": panorama["outages_24h"],
+                           "kind": "number"})
+            campos.append({"label": "Fora do ar em 24h",
+                           "value": panorama["downtime_24h_seconds"], "kind": "duration"})
+        return campos
 
     # -- o laço ----------------------------------------------------------
     @property
@@ -278,6 +318,18 @@ class InternetApp(AppInstance):
             "current_outage": aberta,
             "last_outage": recentes[0] if recentes else None,
         }
+
+
+def _duracao(segundos: Any) -> str:
+    """"8s", "12min", "2h5min" -- o mesmo formato que a tela do app usa."""
+    total = max(0, int(segundos or 0))
+    if total < 60:
+        return "%ds" % total
+    if total < 3600:
+        return "%dmin" % round(total / 60.0)
+    horas, resto = divmod(total, 3600)
+    minutos = int(round(resto / 60.0))
+    return "%dh%dmin" % (horas, minutos) if minutos else "%dh" % horas
 
 
 def _segundos_entre(comeco: str, fim: str) -> int:

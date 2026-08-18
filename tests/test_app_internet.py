@@ -447,3 +447,66 @@ def test_a_medida_roda_na_thread_do_app_e_nao_na_do_sistema():
     assert "run_in_executor(\n            self._threads" in fonte or \
            "run_in_executor(self._threads" in fonte
     assert "shutdown(wait=False)" in fonte
+
+
+# ------------------------------------------------------ o cartão da tela inicial
+
+
+def test_o_cartao_diz_uma_frase_e_nao_um_despejo_de_campos():
+    """A tela inicial não sabe traduzir chave de app nenhum: quem manda a frase
+    pronta é o app. Sem isso o cartão dumpava "state: roteador / gateway_ms:
+    None", que é saída de depuração e não tela de casa.
+    """
+    from project_os.apps.internet import probes
+
+    app = _app_falso()
+    app._estado = probes.SEM_ROTEADOR
+    app._ultima = {"gateway_ms": None, "internet_ms": 8.0, "dns_ms": 9.0}
+    cartao = app.status()
+    assert cartao["level"] == "danger"
+    assert "roteador não responde" in cartao["summary"]
+    assert "aqui dentro de casa" in cartao["summary"], "diz o que fazer, não só o que houve"
+    rotulos = [c["label"] for c in cartao["fields"]]
+    assert rotulos[:3] == ["Roteador", "Internet", "Nomes (DNS)"]
+    assert cartao["fields"][0]["value"] == "não respondeu"
+
+
+def test_o_cartao_sem_queda_nenhuma_e_curto():
+    app = _app_falso()
+    app._estado = "ok"
+    app._ultima = {"gateway_ms": 4.0, "internet_ms": 7.0, "dns_ms": 10.0}
+    cartao = app.status()
+    assert cartao["level"] == "ok"
+    assert cartao["summary"] == "Funcionando. Nenhuma queda nas últimas 24 horas."
+    assert len(cartao["fields"]) == 3, "sem queda, não há o que contar sobre quedas"
+
+
+def test_o_plural_e_de_gente_e_nao_de_programa():
+    """"1 queda(s)" é jeito de programador escrever; ninguém fala assim."""
+    app = _app_falso()
+    app._estado = "ok"
+    app.quedas = lambda limite=30: [
+        {"id": 1, "kind": "internet", "started_at": "2999-01-01T00:00:00Z",
+         "ended_at": "2999-01-01T00:00:30Z", "seconds": 30}]
+    frase = app.status()["summary"]
+    assert "1 queda nas" in frase, frase
+    app.quedas = lambda limite=30: [
+        {"id": i, "kind": "internet", "started_at": "2999-01-01T00:00:00Z",
+         "ended_at": "2999-01-01T00:00:30Z", "seconds": 30} for i in (1, 2)]
+    assert "2 quedas nas" in app.status()["summary"]
+
+
+def test_o_dns_e_amarelo_e_nao_vermelho():
+    """Nomes que não resolvem com a conexão de pé é chato, não é apagão -- e é o
+    único dos três que costuma dar para consertar sozinho."""
+    from project_os.apps.internet import probes
+
+    app = _app_falso()
+    app._estado = probes.SEM_DNS
+    assert app.status()["level"] == "warn"
+
+
+def test_a_duracao_sai_legivel():
+    from project_os.apps.internet.app import _duracao
+
+    assert [_duracao(v) for v in (0, 8, 95, 3600, 7530)] == ["0s", "8s", "2min", "1h", "2h6min"]

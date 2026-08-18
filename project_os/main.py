@@ -405,6 +405,41 @@ def _started_at_de(state: Any) -> Optional[str]:
 
 
 @contextlib.asynccontextmanager
+def _renovar_extras_apos_atualizar(config: Any) -> None:
+    """Quando a versão muda, renovar o que a imagem instalou e nada mais atualiza.
+
+    O yt-dlp entra pelo script da imagem e não pelo requirements.txt, então o
+    pip do updater nunca o alcança. Fazer isso *no updater* consertaria só a
+    próxima atualização, nunca a que está acontecendo: quem executa uma
+    atualização é sempre o código antigo. Aqui é o código novo, no primeiro boot
+    depois da troca -- que é o único momento em que dá para consertar a
+    atualização que já aconteceu.
+
+    Uma vez por versão, em melhor esforço, e nunca instalando o que não estava
+    instalado.
+    """
+    try:
+        anterior = str(config.get("state.last_version", "") or "")
+        if anterior == __version__:
+            return
+        from project_os.core import updates
+
+        # A chave não existe em caixa nenhuma que seja mais velha que ela, e a
+        # do Miguel é uma dessas: sem outro sinal, a primeira atualização dela
+        # seria lida como instalação nova e não renovaria nada -- justamente a
+        # atualização que precisa. O sinal que sobra é o que a troca deixa no
+        # disco: a árvore da versão anterior, guardada ao lado.
+        houve_troca = bool(anterior) or bool(updates.previous_versions())
+        if houve_troca:
+            log.info("versão mudou (%s -> %s): renovando os extras da imagem",
+                     anterior or "desconhecida", __version__)
+            updates.refresh_extras(on_line=lambda linha: log.info("extras: %s", linha))
+        config.set("state.last_version", __version__)
+        config.save()
+    except Exception:  # pragma: no cover - nunca derrubar um boot por isto
+        log.debug("renovação de extras ignorada", exc_info=True)
+
+
 def _settle_timezone(config: Any) -> None:
     """Ask the network what timezone this box is in, once, when nobody said.
 
@@ -430,6 +465,8 @@ async def lifespan(app: FastAPI):
     # Off the event loop: it is one HTTP request with a timeout, but boot should
     # not wait on someone else's server to answer.
     asyncio.get_running_loop().run_in_executor(None, _settle_timezone, config)
+    # Idem: uma chamada de pip que não pode segurar o boot.
+    asyncio.get_running_loop().run_in_executor(None, _renovar_extras_apos_atualizar, config)
 
     db = Database()
     db.connect()
