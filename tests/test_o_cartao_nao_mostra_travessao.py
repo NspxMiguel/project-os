@@ -96,3 +96,31 @@ def test_o_campo_do_birdtunes_diz_alguma_coisa(auth_client):
     assert campo is not None, "o cartão parou de dizer quando a agenda toca"
     assert isinstance(campo["value"], str) and campo["value"].strip()
     assert campo["value"] != "[object Object]"
+
+
+# ------------------------------------------- "nenhuma escolhida" que mentia
+
+
+def test_caixa_escolhida_e_desconectada_nao_vira_nenhuma_escolhida():
+    """No Pi dele: um Chromecast configurado, e o cartão dizendo que não havia
+    caixa nenhuma -- porque o campo lido só existe enquanto o tocador está
+    conectado. Manda escolher de novo o que já estava escolhido, quando o que
+    aconteceu foi a TV sair do ar."""
+    from project_os.apps.birdtunes.app import BirdTunesApp
+
+    valor = BirdTunesApp._nome_da_caixa(None, {"output": "chromecast", "device": ""})
+    assert valor != "Nenhuma escolhida"
+    assert "conexão" in valor
+
+
+def test_sem_saida_escolhida_continua_dizendo_que_nao_tem():
+    from project_os.apps.birdtunes.app import BirdTunesApp
+
+    assert BirdTunesApp._nome_da_caixa(None, {"output": "null", "device": ""}) == "Nenhuma escolhida"
+
+
+def test_conectada_mostra_o_nome_da_caixa():
+    from project_os.apps.birdtunes.app import BirdTunesApp
+
+    valor = BirdTunesApp._nome_da_caixa(None, {"output": "chromecast", "device": "TV Quarto Miguel"})
+    assert valor == "TV Quarto Miguel"

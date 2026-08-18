@@ -508,14 +508,54 @@ class BirdTunesApp(AppInstance):
             return str(proximo.get("message") or "")
         return "Parado, esperando o próximo horário da agenda."
 
+    def _nome_da_caixa(self, snapshot):
+        # type: (Dict[str, Any]) -> str
+        """Qual caixa de som está escolhida, mesmo sem conexão no momento.
+
+        O cartão lia só ``device``, que o tocador preenche quando está ligado na
+        caixa -- então uma TV desligada virava "Nenhuma escolhida". É o pedido
+        de ação errado: manda escolher de novo o que já estava escolhido,
+        enquanto o problema é a TV estar fora do ar. Medido no Pi dele, com um
+        Chromecast configurado e o cartão dizendo que não havia caixa nenhuma.
+        """
+        ao_vivo = snapshot.get("device") or snapshot.get("name") or ""
+        if ao_vivo:
+            return str(ao_vivo)
+        if str(snapshot.get("output", "null") or "null") == "null":
+            return "Nenhuma escolhida"
+
+        config = getattr(getattr(self, "ctx", None), "config", None)
+        device_id = ""
+        if config is not None:
+            try:
+                device_id = str(config.get("output.device_id", "") or "")
+            except Exception:  # pragma: no cover - config nunca está tão quebrada
+                device_id = ""
+        if not device_id:
+            return "Escolhida, mas sem conexão agora"
+
+        nome = device_id
+        try:
+            achado = self._resolve_device(device_id)
+            if isinstance(achado, dict):
+                nome = str(achado.get("name") or device_id)
+            else:
+                nome = str(getattr(achado, "name", "") or device_id)
+        except Exception:  # pragma: no cover - o registro pode não existir
+            pass
+        return "%s (sem conexão agora)" % nome
+
     def _status_fields(self, snapshot):
         # type: (Dict[str, Any]) -> List[Dict[str, Any]]
         track = snapshot.get("track") or {}
         title = (track.get("title") if isinstance(track, dict) else "") or "--"
         fields = [
+            # Chamada pela classe, não pela instância: os testes de cartão
+            # exercitam `_status_fields` com `self=None`, e um cartão que só
+            # sabe se montar com o app inteiro de pé é um cartão que ninguém
+            # testa sem subir o app inteiro.
             {"label": "Caixa de som",
-             "value": snapshot.get("device") or snapshot.get("name") or "Nenhuma escolhida",
-             "kind": "text"},
+             "value": BirdTunesApp._nome_da_caixa(self, snapshot), "kind": "text"},
             {"label": "Tocando agora", "value": title, "kind": "text"},
             {"label": "Volume", "value": float(snapshot.get("volume") or 0.0) * 100.0,
              "kind": "percent"},
