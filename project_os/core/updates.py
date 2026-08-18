@@ -263,17 +263,71 @@ def check_tarball(manifest_url: str) -> Dict[str, Any]:
     }
 
 
+def _ref_remota(where: str, branch: str) -> str:
+    """Onde está a ponta do ramo remoto, neste clone.
+
+    ``origin/<branch>`` é o nome normal, mas ele **não existe** num clone feito
+    com ``--branch <tag>`` ou ``--depth 1``: o refspec desse clone só traz a
+    tag, e o ``fetch`` seguinte deposita o resultado em ``FETCH_HEAD`` sem criar
+    o ramo. Sem esta segunda tentativa o ``rev-parse`` falha e a tela de
+    atualizações responde 500 em vez de dizer se há versão nova -- num clone
+    raso, que é o que sai de qualquer ``git clone --depth 1``.
+    """
+    for ref in ("origin/%s" % branch, "FETCH_HEAD"):
+        try:
+            achado = _git(["rev-parse", "--verify", "--quiet", "%s^{commit}" % ref], where)
+        except UpdateError:
+            continue
+        if achado:
+            return ref
+    raise UpdateError(
+        "Não deu para achar o ramo %s no repositório de origem." % branch,
+        code="branch_missing",
+    )
+
+
+def _e_raso(where: str) -> bool:
+    try:
+        return _git(["rev-parse", "--is-shallow-repository"], where) == "true"
+    except UpdateError:
+        return False
+
+
+def _buscar(where: str, branch: str) -> None:
+    """Traz o ramo remoto. As tags vêm junto, mas não mandam.
+
+    ``git fetch --tags`` sai com código **1** quando uma tag local aponta para
+    outro commit que a remota ("would clobber existing tag"). Como a conferida
+    era um ``--tags`` só, uma tag divergente -- coisa que acontece quando um
+    release é remarcado lá em cima -- derrubava a tela inteira com 500, sem
+    dizer nem que havia versão nova.
+
+    A resposta que a tela precisa depende do ramo, não das tags. Então as tags
+    vêm primeiro e podem falhar à vontade; o ramo vem depois e é ele que manda
+    (e é ele que deixa o ``FETCH_HEAD`` certo para o clone raso).
+    """
+    try:
+        _git(["fetch", "--quiet", "--tags", "origin", branch], where)
+    except UpdateError as exc:
+        log.info("tags não vieram (%s); a conferida segue pelo ramo", exc)
+    _git(["fetch", "--quiet", "origin", branch], where)
+
+
 def check_git(branch: str = "main", root: Optional[str] = None) -> Dict[str, Any]:
     where = root or root_dir()
-    _git(["fetch", "--quiet", "--tags", "origin", branch], where)
+    _buscar(where, branch)
     local = _git(["rev-parse", "HEAD"], where)
-    remote = _git(["rev-parse", "origin/%s" % branch], where)
+    ref = _ref_remota(where, branch)
+    remote = _git(["rev-parse", ref], where)
     behind = "0"
-    if local != remote:
-        behind = _git(["rev-list", "--count", "HEAD..origin/%s" % branch], where) or "0"
+    # Num clone raso o histórico não chega até a base comum, então a contagem
+    # sai como "tudo": 213 commits atrás de uma versão publicada hoje. Melhor
+    # não dizer número nenhum do que dizer um número errado.
+    if local != remote and not _e_raso(where):
+        behind = _git(["rev-list", "--count", "HEAD..%s" % ref], where) or "0"
     # A mensagem inteira, não só o assunto: numa instalação por git é ela que
     # responde "o que muda se eu atualizar agora".
-    corpo = _git(["log", "-1", "--pretty=%B", "origin/%s" % branch], where)
+    corpo = _git(["log", "-1", "--pretty=%B", ref], where)
     return {
         "method": METHOD_GIT,
         "current": __version__,
@@ -563,9 +617,13 @@ def apply_git(info: Dict[str, Any], root: Optional[str] = None,
     branch = info.get("branch") or "main"
     before = _git(["rev-parse", "HEAD"], where)
     say("fetching origin/%s" % branch)
-    _git(["fetch", "--quiet", "--tags", "origin", branch], where)
-    say("resetting to origin/%s" % branch)
-    _git(["reset", "--quiet", "--hard", "origin/%s" % branch], where)
+    _buscar(where, branch)
+    # Mesma história do check_git: num clone raso não existe origin/<branch>,
+    # e resetar para um ref que não existe deixaria a caixa na versão velha
+    # dizendo que atualizou.
+    ref = _ref_remota(where, branch)
+    say("resetting to %s" % ref)
+    _git(["reset", "--quiet", "--hard", ref], where)
     after = _git(["rev-parse", "HEAD"], where)
     say("now at %s" % after[:12])
     return {"previous": before, "root": where}
