@@ -411,6 +411,11 @@ class _BancoFalso(object):
 def test_cancelar_para_no_meio_do_download():
     """Entre itens não serve: um link só nunca chega ao 'entre'."""
     import pytest
+
+    # A exceção de verdade, e não uma cópia nossa: é o yt-dlp que a levanta e
+    # é ele quem decide o que ela significa. Numa máquina sem a biblioteca isto
+    # pula em vez de estourar -- e o CI a instala justamente para não pular.
+    pytest.importorskip("yt_dlp")
     from yt_dlp.utils import DownloadCancelled
 
     from project_os.apps.birdtunes.sources import _Andamento

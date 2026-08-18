@@ -44,6 +44,9 @@ devices = [
 system = ["psutil>=7.2"]
 # Home Assistant integration.
 ha = ["httpx>=0.28"]
+# YouTube import in BirdTunes. Not installed by default: it is a big dependency
+# for a feature not everyone uses, and the app says so when it is missing.
+youtube = ["yt-dlp>=2025.10"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -55,6 +58,7 @@ all = [
     "PyChromecast>=13.1",
     "psutil>=7.2",
     "httpx>=0.28",
+    "yt-dlp>=2025.10",
 ]
 
 [project.urls]

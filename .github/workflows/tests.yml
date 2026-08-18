@@ -20,5 +20,11 @@ jobs:
           python-version: ${{ matrix.python }}
       # The dev extra carries pytest and pytest-asyncio; four tests are async
       # and pytest skips straight past them without the plugin.
-      - run: pip install -r requirements.txt -e '.[dev]'
+      #
+      # 'youtube' is here so the two checks that talk to the real yt-dlp -- the
+      # SponsorBlock category names and the cancel exception -- actually run.
+      # They guard with importorskip, so without the package installed they go
+      # green by not running, which is the worst of both: the feature he uses
+      # most in BirdTunes would be covered by fakes only.
+      - run: pip install -r requirements.txt -e '.[dev,youtube]'
       - run: python -m pytest -q

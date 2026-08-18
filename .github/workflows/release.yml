@@ -19,7 +19,27 @@ permissions:
   contents: write
 
 jobs:
+  # A tag publica direto para a caixa dele pela rede: quem instala a atualização
+  # é o updater, sem ninguém olhando. Publicar de uma árvore vermelha é mandar o
+  # defeito por entrega automática, então a suíte aqui é portão e não relatório.
+  #
+  # O workflow 'tests' roda em push para o main e em pull request -- nunca em
+  # tag. Cinco versões saíram com a suíte vermelha antes desta trava existir.
+  #
+  # 3.11 é o Python da imagem publicada; o 'tests' cobre o 3.9 do Bullseye a
+  # cada commit, e repetir a matriz aqui dobraria o tempo entre a tag e o Pi.
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt -e '.[dev,youtube]'
+      - run: python -m pytest -q
+
   publish:
+    needs: pytest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
