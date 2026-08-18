@@ -422,7 +422,9 @@ export default {
       const dois = (n) => String(n).padStart(2, '0');
       return {
         hhmm: dois(d.getUTCHours()) + ':' + dois(d.getUTCMinutes()),
-        ss: dois(d.getUTCSeconds()),
+        // Com os dois-pontos junto: sem eles a tela mostrava "19:22 53", que se
+        // lê como qualquer coisa menos as 19:22:53.
+        ss: ':' + dois(d.getUTCSeconds()),
         data: d,
       };
     }

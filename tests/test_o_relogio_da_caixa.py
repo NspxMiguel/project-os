@@ -329,3 +329,10 @@ def test_subir_a_fatia_nao_abre_o_resto_da_configuracao(tmp_path, monkeypatch):
     cfg.set("security.allow_shell", True)
     fatia = cfg.app("birdtunes")
     assert fatia.get("security.allow_shell", "nada") == "nada"
+
+
+def test_os_segundos_nao_colam_na_hora():
+    """Na tela dele saiu "19:22 53", que não se lê como 19:22:53."""
+    fonte = open(os.path.join(RAIZ, "web", "views", "dashboard.js"), encoding="utf-8").read()
+    trecho = fonte.split("function horaDaCaixa()", 1)[1].split("function renderClock", 1)[0]
+    assert "ss: ':' + dois(" in trecho, "os segundos precisam vir com os dois-pontos"
