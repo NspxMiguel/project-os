@@ -41,6 +41,17 @@
       "default": 30,
       "label": "Guardar historico por",
       "help": "Dias de medidas guardadas. As quedas ficam guardadas para sempre; o que e apagado sao as medidas de rotina."
+    },
+    {
+      "key": "targets",
+      "type": "list",
+      "default": [
+        "1.1.1.1:53",
+        "9.9.9.9:53",
+        "8.8.8.8:53"
+      ],
+      "label": "Quem responde pela internet",
+      "help": "Enderecos numericos com porta, tentados nesta ordem. Troque se a sua rede bloqueia DNS publico."
     }
   ]
 }

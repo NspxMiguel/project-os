@@ -123,6 +123,22 @@ jobs:
           if os.path.exists(caminho):
               with open(caminho) as f:
                   dados = json.load(f)
+          # O image.yml já se protege disto na chave "system"; aqui faltava. Duas
+          # publicações próximas terminam em ordem qualquer, e a última a
+          # escrever ganhava -- sem esta comparação, a última podia ser a mais
+          # antiga, e o manifesto passaria a oferecer um downgrade como se fosse
+          # atualização. Quatro versões numa noite tornam isso provável, não
+          # teórico.
+          def como_tupla(texto):
+              partes = str(texto or "0").split(".")
+              return tuple(int(p) if p.isdigit() else 0 for p in partes[:3])
+
+          nova = "${{ steps.v.outputs.version }}"
+          atual = dados.get("version", "")
+          if atual and como_tupla(nova) < como_tupla(atual):
+              print("manifesto já anuncia %s; %s é mais antiga, não sobrescrevo" % (atual, nova))
+              raise SystemExit(0)
+
           dados["version"] = "${{ steps.v.outputs.version }}"
           dados["url"] = "https://github.com/${{ github.repository }}/releases/download/${{ steps.v.outputs.tag }}/${{ steps.pack.outputs.name }}"
           dados["sha256"] = "${{ steps.pack.outputs.sha }}"

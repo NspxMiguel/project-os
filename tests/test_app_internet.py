@@ -328,7 +328,7 @@ def test_o_manifesto_bate_com_o_codigo():
     assert os.path.isfile(os.path.join(APP, "web", dados["ui"]["panel"]))
     assert os.path.isfile(os.path.join(APP, "web", dados["ui"]["styles"]))
     chaves = set(c["key"] for c in dados["config_schema"])
-    assert {"interval_seconds", "timeout_seconds", "gateway", "keep_days"} == chaves
+    assert {"interval_seconds", "timeout_seconds", "gateway", "keep_days", "targets"} == chaves
 
 
 def test_o_app_nao_traz_dependencia_nova():
@@ -510,3 +510,32 @@ def test_a_duracao_sai_legivel():
     from project_os.apps.internet.app import _duracao
 
     assert [_duracao(v) for v in (0, 8, 95, 3600, 7530)] == ["0s", "8s", "2min", "1h", "2h6min"]
+
+
+# ---------------------------------------------- rede que bloqueia DNS público
+
+
+def test_os_alvos_vem_da_configuracao_quando_ela_diz_algo():
+    """Escola, empresa e portal cativo de hotel bloqueiam DNS público. Com os
+    três alvos padrão bloqueados, um app de alvo fixo acusaria queda para sempre
+    numa rede que funciona."""
+    app = _app_falso()
+    app.ctx.config.valores["targets"] = ["192.168.1.1:53", "10.0.0.1:80"]
+    assert app._alvos() == ["192.168.1.1:53", "10.0.0.1:80"]
+
+
+def test_e_do_padrao_quando_ela_nao_diz_nada():
+    from project_os.apps.internet import probes
+
+    app = _app_falso()
+    assert app._alvos() == list(probes.ALVOS_INTERNET)
+    for vazio in ([], "", None, ["", "  "]):
+        app.ctx.config.valores["targets"] = vazio
+        assert app._alvos() == list(probes.ALVOS_INTERNET), repr(vazio)
+
+
+def test_uma_linha_com_virgulas_tambem_serve():
+    """Quem digita num campo de texto escreve separado por vírgula, não JSON."""
+    app = _app_falso()
+    app.ctx.config.valores["targets"] = "1.0.0.1:53, 8.8.4.4:53"
+    assert app._alvos() == ["1.0.0.1:53", "8.8.4.4:53"]

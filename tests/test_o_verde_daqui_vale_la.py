@@ -178,3 +178,36 @@ def test_e_o_portao_roda_a_suite_inteira():
     portao = fluxo[fluxo.index("  pytest:"):fluxo.index("\n  publish:")]
     assert "python -m pytest -q" in portao
     assert "tests/" not in portao, "sem escolher arquivo: a suíte inteira"
+
+
+# ------------------------------------- o manifesto nunca anda para trás
+
+
+def test_nenhum_workflow_escreve_uma_versao_mais_antiga_no_manifesto():
+    """Duas publicações próximas terminam em ordem qualquer.
+
+    O manifesto é o que a caixa dele consulta para saber se há novidade. Se a
+    última a escrever for a mais antiga, a tela passa a oferecer um downgrade
+    chamando-o de atualização -- e o updater instala, porque a versão é
+    diferente da que está rodando.
+
+    O image.yml já se protegia na chave "system"; o release.yml não se protegia
+    na chave da aplicação, e numa noite de quatro versões isso deixa de ser
+    teórico.
+    """
+    for fluxo, chave in (("release.yml", 'dados.get("version", "")'),
+                         ("image.yml", '(dados.get("system") or {}).get("version", "")')):
+        texto = _ler(os.path.join(FLUXOS, fluxo))
+        assert "def como_tupla(" in texto, fluxo
+        assert chave in texto, fluxo
+        assert "não sobrescrevo" in texto, fluxo
+
+
+def test_so_a_imagem_mais_nova_e_construida():
+    """Uma imagem leva perto de uma hora; quatro tags numa noite punham quatro
+    no ar ao mesmo tempo, e as três primeiras já estavam obsoletas ao nascer."""
+    texto = _ler(os.path.join(FLUXOS, "image.yml"))
+    bloco = texto[texto.index("concurrency:"):]
+    bloco = bloco[:bloco.index("jobs:")]
+    assert "group: image" in bloco
+    assert "cancel-in-progress: true" in bloco

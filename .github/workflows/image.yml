@@ -17,6 +17,15 @@ on:
 permissions:
   contents: write
 
+# Uma imagem leva perto de uma hora. Publicar quatro versões numa noite punha
+# quatro builds no ar ao mesmo tempo, todos terminando juntos e todos escrevendo
+# a *sua* versão na mesma chave do manifesto -- o último a terminar ganhava, e o
+# último a terminar não é o mais novo. Só a imagem mais nova interessa; as
+# anteriores foram substituídas antes de existir.
+concurrency:
+  group: image
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest

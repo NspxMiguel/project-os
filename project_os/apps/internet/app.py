@@ -211,11 +211,26 @@ class InternetApp(AppInstance):
         prazo = float(self.ctx.config.get("timeout_seconds", probes.PRAZO_PADRAO)
                       or probes.PRAZO_PADRAO)
         roteador = str(self.ctx.config.get("gateway", "") or "") or None
+        alvos = self._alvos()
         laco = asyncio.get_event_loop()
         medida = await laco.run_in_executor(
-            self._threads, lambda: probes.medir(prazo=prazo, endereco_do_roteador=roteador))
+            self._threads,
+            lambda: probes.medir(prazo=prazo, endereco_do_roteador=roteador, alvos=alvos))
         self._registrar(medida)
         return medida
+
+    def _alvos(self) -> List[str]:
+        """Quem responde pela pergunta "a internet está de pé?".
+
+        Configurável porque rede que bloqueia DNS público existe -- escola,
+        empresa, portal cativo de hotel. Com os três alvos padrão bloqueados, um
+        app de alvo fixo acusaria queda para sempre numa rede que funciona.
+        """
+        crus = self.ctx.config.get("targets", None)
+        if isinstance(crus, str):
+            crus = [p.strip() for p in crus.split(",")]
+        lista = [str(a).strip() for a in (crus or []) if str(a).strip()]
+        return lista or list(probes.ALVOS_INTERNET)
 
     # -- banco -----------------------------------------------------------
     def _registrar(self, medida: Dict[str, Any]) -> None:
