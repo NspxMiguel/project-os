@@ -53,4 +53,8 @@
 .net-strip__tick--internet { background: var(--danger); }
 .net-strip__tick--roteador { background: color-mix(in srgb, var(--danger) 70%, #000); }
 
-.net-row { display: flex; align-items: center; gap: var(--space-2); }
+.net-row { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.net-row > .badge { flex: none; }
+/* A duração é curta e não pode quebrar no meio: "4" numa linha e "s" na outra
+   seria a única informação da linha ficando ilegível. */
+.net-row > :last-child { flex: none; white-space: nowrap; margin-left: auto; }

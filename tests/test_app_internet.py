@@ -539,3 +539,12 @@ def test_uma_linha_com_virgulas_tambem_serve():
     app = _app_falso()
     app.ctx.config.valores["targets"] = "1.0.0.1:53, 8.8.4.4:53"
     assert app._alvos() == ["1.0.0.1:53", "8.8.4.4:53"]
+
+
+def test_a_tela_tambem_fala_no_singular():
+    """O cartão do painel já falava; a tela do app dizia "1 queda(s)"."""
+    painel = _ler(APP, "web", "panel.js")
+    pt = _ler(RAIZ, "web", "lib", "strings-pt.js")
+    assert "'net.day.summary.one':" in painel and "'net.day.summary.one':" in pt
+    assert "s.outages_24h === 1" in painel
+    assert "queda(s)" not in pt and "outage(s)" not in painel

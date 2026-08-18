@@ -33,7 +33,8 @@ export default {
       'net.section.day': 'Last 24 hours',
       'net.outages.empty': 'No outage recorded yet.',
       'net.outages.open': 'still down',
-      'net.day.summary': '%s outage(s), %s off the air',
+      'net.day.summary': '%s outages, %s off the air',
+      'net.day.summary.one': 'one outage, %s off the air',
       'net.day.clean': 'No outage in the last 24 hours.',
       'net.day.empty': 'No measurement yet — the first one takes a minute.',
       'net.every': 'Measuring every %s s',
@@ -136,9 +137,13 @@ export default {
     function faixaDoDia() {
       const s = state.status || {};
       const amostras = state.samples || [];
+      // "1 queda(s)" é jeito de programador escrever; ninguém fala assim.
+      const fora = duracao(s.downtime_24h_seconds);
       const linha = amostras.length
         ? (s.outages_24h
-            ? fmtStr('net.day.summary', s.outages_24h, duracao(s.downtime_24h_seconds))
+            ? (s.outages_24h === 1
+                ? fmtStr('net.day.summary.one', fora)
+                : fmtStr('net.day.summary', s.outages_24h, fora))
             : t2('net.day.clean'))
         : t2('net.day.empty');
       return h('div', {class: 'card'},
