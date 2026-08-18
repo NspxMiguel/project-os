@@ -72,7 +72,7 @@ result of a download or a conversion stays on the machine that did it: there is
 no transport back, and the screen says so before you queue it. Nothing here
 pretends to be magic.
 
-**Hosts things.** The store lists 34 items and installs 9 of them today: two
+**Hosts things.** The store lists 35 items and installs 10 of them today: three
 built-in apps, two container apps, and five Debian packages, through the same
 apt job the Programs screen uses. The other 25 are listed with what they cost
 and a line saying why they do not install yet -- on the card, before the click,

@@ -227,6 +227,13 @@ esta máquina tem 1 GB" responde a pergunta antes dela ser feita.
 | **Syncthing** | service | ~80 MB | 8384 |
 | **Uptime Kuma** | service | ~120 MB | 3001 |
 | **BirdTunes** | builtin | ~12 MB | — |
+| **Internet** | builtin | ~6 MB | — |
+
+O **Internet** e o **Uptime Kuma** parecem o mesmo app e não são. O Kuma vigia
+*serviços que você hospeda* -- se o seu site responde, se a sua API está de pé --
+e custa 120 MB para isso. O Internet vigia *a conexão da casa* e, quando ela cai,
+diz qual das três coisas quebrou: o roteador, o provedor ou o DNS. É a diferença
+entre "meu servidor caiu" e "não consigo abrir nada, e a culpa é de quem?".
 
 ---
 

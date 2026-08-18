@@ -50,6 +50,21 @@
     wav, m4a) e importa do YouTube.
   tags: [áudio, airplay, chromecast, agenda]
 
+- id: internet
+  name: Internet
+  icon: wifi
+  kind: builtin
+  category: network
+  ram_mb: 6
+  disk_mb: 2
+  summary: Anota quando a internet caiu, por quanto tempo e de quem foi a culpa.
+  description: >-
+    Mede o roteador, a internet e o DNS separadamente, de minuto em minuto, e
+    guarda cada queda com hora e duração. Quando nada carrega, diz se o problema
+    foi o roteador da casa, o provedor ou só a resolução de nomes -- que são três
+    consertos diferentes e parecem a mesma coisa na tela.
+  tags: [rede, internet, quedas, diagnóstico]
+
 # --------------------------------------------------------------------- casa
 - id: kasa
   name: TP-Link Kasa

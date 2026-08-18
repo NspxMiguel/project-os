@@ -1,0 +1,56 @@
+/* A tela do app Internet. Só o que não existe no tema: o cartão de estado, a
+   fileira de medidas e a faixa das 24 horas. Cor, borda e espaçamento saem das
+   variáveis do sistema para o app acompanhar o tema claro e o escuro sozinho. */
+
+.net-now { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.net-now__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.net-now__state { font-size: var(--text-lg); font-weight: 600; }
+
+/* A cor da borda diz o estado antes de qualquer palavra ser lida. Quatro cores
+   para quatro estados, e o roteador não é cinza: ele é o mais grave dos três,
+   porque com ele fora nada mais funciona. */
+.net-now--ok { border-left: 3px solid var(--ok); }
+.net-now--dns { border-left: 3px solid var(--warn); }
+.net-now--internet { border-left: 3px solid var(--danger); }
+.net-now--roteador { border-left: 3px solid color-mix(in srgb, var(--danger) 70%, #000); }
+
+.net-lat {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.net-lat__item { min-width: 6rem; }
+.net-lat__value { font-family: var(--mono); }
+.net-lat__item--down .net-lat__value { color: var(--danger); }
+
+/* Uma marca por medida. Fica dentro de si mesma quando não cabe -- o mínimo
+   automático de um item de flex é o conteúdo, e 240 marcas esticariam a página
+   para o lado num celular. */
+.net-strip {
+  display: flex;
+  gap: 1px;
+  align-items: stretch;
+  height: 28px;
+  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+  scrollbar-width: none;
+  border-radius: var(--radius);
+  background: var(--bg-deep);
+  padding: 2px;
+}
+.net-strip::-webkit-scrollbar { display: none; }
+.net-strip__tick { flex: 1 0 2px; border-radius: 1px; }
+.net-strip__tick--ok { background: var(--ok); }
+.net-strip__tick--dns { background: var(--warn); }
+.net-strip__tick--internet { background: var(--danger); }
+.net-strip__tick--roteador { background: color-mix(in srgb, var(--danger) 70%, #000); }
+
+.net-row { display: flex; align-items: center; gap: var(--space-2); }

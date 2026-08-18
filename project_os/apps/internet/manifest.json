@@ -1,0 +1,46 @@
+{
+  "id": "internet",
+  "name": "Internet",
+  "version": "0.1.0",
+  "entrypoint": "app:setup",
+  "description": "Vigia a conexão da casa e anota as quedas com hora e duração, dizendo se o problema foi o roteador, o provedor ou o DNS.",
+  "author": "project-os",
+  "icon": "wifi",
+  "category": "network",
+  "min_project_os": "0.4.32",
+  "ui": {
+    "panel": "panel.js",
+    "styles": "panel.css"
+  },
+  "permissions": [],
+  "config_schema": [
+    {
+      "key": "interval_seconds",
+      "type": "number",
+      "default": 60,
+      "label": "Medir a cada",
+      "help": "Segundos entre uma medida e a proxima. Menos que 20 castiga o roteador sem melhorar a resposta."
+    },
+    {
+      "key": "timeout_seconds",
+      "type": "number",
+      "default": 3,
+      "label": "Prazo de cada tentativa",
+      "help": "Quantos segundos esperar antes de considerar que nao respondeu."
+    },
+    {
+      "key": "gateway",
+      "type": "string",
+      "default": "",
+      "label": "Endereco do roteador",
+      "help": "Vazio descobre sozinho pela rota padrao. Preencha so se a descoberta errar."
+    },
+    {
+      "key": "keep_days",
+      "type": "number",
+      "default": 30,
+      "label": "Guardar historico por",
+      "help": "Dias de medidas guardadas. As quedas ficam guardadas para sempre; o que e apagado sao as medidas de rotina."
+    }
+  ]
+}
