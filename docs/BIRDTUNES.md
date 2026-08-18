@@ -184,6 +184,17 @@ Rules:
 - A window crossing midnight (`start > end`) is valid and spans the day boundary.
 - `quiet_hours` always beats a window: entering quiet hours **stops** playback in
   progress, it does not merely refuse to start.
+- Because it always wins, a window that sits inside quiet hours is **reported, never
+  silently dropped**. `quiet_conflicts()` measures how much of each window is muted
+  (`full` / `partial`) and ships in every `GET /schedule`; `next_change()` returns
+  `event: "quiet_blocked"` instead of "nothing scheduled", the app card says the same,
+  and the schedule screen marks each affected window where it is edited. With the
+  default 20:00-07:00, a dawn window is entirely inside quiet hours — the case that
+  made this necessary.
+- `quiet_suggestion()` offers a one-click shrink of the quiet window so a given window
+  fits. Among the candidates that clear the conflict it picks the one that **keeps the
+  most quiet time**, and it refuses any that would collapse quiet hours to zero:
+  disabling the protection is not a schedule adjustment.
 - `playback.max_session_minutes` still caps a single continuous run inside a long window.
 - Presets the UI offers with one click — they only prefill the editor, they are not
   special-cased in the backend: *While I'm out (weekdays 09:00–17:00)*,
