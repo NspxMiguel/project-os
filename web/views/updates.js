@@ -259,11 +259,11 @@ export default {
             h('span', {class: 'field-row__value muted small'},
               info.method === 'git' ? (info.branch || 'main') : (info.manifest_url || '—')),
           ),
-          info.enabled === false ? h('div', {class: 'notice notice--warning'}, t('updates.disabled')) : null,
+          info.enabled === false ? h('div', {class: 'notice notice--warn'}, t('updates.disabled')) : null,
           // A conferida automática falhar em silêncio devolveria a tela ao que
           // ela era: um número de versão e nenhuma notícia.
           state.checkError
-            ? h('div', {class: 'notice notice--warning'}, t('updates.error.check') + ' ' + state.checkError)
+            ? h('div', {class: 'notice notice--warn'}, t('updates.error.check') + ' ' + state.checkError)
             : null,
         ),
         footer: h('div', {class: 'row'},

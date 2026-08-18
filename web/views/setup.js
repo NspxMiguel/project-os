@@ -299,7 +299,7 @@ export default {
         return h('p', {class: 'auth__foot'},
           t('setup.ssh.ready'));
       }
-      return h('div', {class: 'notice notice--warning'},
+      return h('div', {class: 'notice notice--warn'},
         h('div', {class: 'notice__body'},
           t('setup.ssh.failed', {reason: sshProblem})));
     }

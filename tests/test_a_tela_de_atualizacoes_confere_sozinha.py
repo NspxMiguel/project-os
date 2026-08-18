@@ -79,7 +79,10 @@ def test_o_carimbo_de_hora_e_lido_no_formato_que_o_servidor_manda():
 def test_a_conferida_automatica_que_falha_aparece():
     fonte = _ler(VIEW)
     assert "state.checkError" in fonte
-    assert "notice notice--warning'}, t('updates.error.check')" in fonte
+    # notice--warn, e não notice--warning: o tema define a primeira e a segunda
+    # não existe em lugar nenhum. Este teste guardava o nome errado, então o
+    # aviso saía sem cor e a suíte dizia que estava tudo certo.
+    assert "notice notice--warn'}, t('updates.error.check')" in fonte
 
 
 # --------------------------------------------------------------------------- a premissa

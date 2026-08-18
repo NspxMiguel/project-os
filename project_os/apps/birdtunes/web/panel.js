@@ -495,7 +495,7 @@ export default {
       return [
         scheduleWarnings(),
         status.quiet_hours_active
-          ? h('div', {class: 'notice notice--warning'}, t2('bt.quiet_hours'))
+          ? h('div', {class: 'notice notice--warn'}, t2('bt.quiet_hours'))
           : null,
         h('div', {class: 'bt-hero'},
           art(track || {title: 'BirdTunes'}, 'lg'),
@@ -610,7 +610,7 @@ export default {
                 icon('plus', {size: 14}), ' ', t2('bt.playlists.add.youtube')),
             ]),
           h('div', {class: 'bt-toolbar'}, search, sort),
-          incompatible > 0 ? h('div', {class: 'notice notice--warning'},
+          incompatible > 0 ? h('div', {class: 'notice notice--warn'},
             h('div', {class: 'notice__body'},
               h('span', null, fmtStr('bt.compat.warn', incompatible, compat.total || 0)),
               compat.ffmpeg_available
@@ -800,7 +800,7 @@ export default {
         h('p', {class: 'field__hint'}, fmtStr('bt.adblock.what', categorias)),
         estado.available
           ? null
-          : h('div', {class: 'notice notice--warning'},
+          : h('div', {class: 'notice notice--warn'},
               h('div', {class: 'notice__body'}, h('span', null, estado.reason))),
         h('p', {class: 'field__hint'}, t2('bt.adblock.tv')),
       );
@@ -814,7 +814,7 @@ export default {
       const est = state.compat && state.compat.ytdlp;
       if (!est || !est.stale || !est.available) return null;
       const meses = Math.max(1, Math.round(est.age_days / 30));
-      return h('div', {class: 'notice notice--warning'},
+      return h('div', {class: 'notice notice--warn'},
         h('div', {class: 'notice__body'},
           h('span', null, fmtStr('bt.import.ytdlp.old', meses, est.version)),
           h('span', null, ' ' + t2('bt.import.ytdlp.old.why')),
@@ -833,7 +833,7 @@ export default {
       return [
         h('div', {class: 'bt-section'},
           sectionHead(t2('bt.section.import')),
-          podeImportar ? null : h('div', {class: 'notice notice--warning'},
+          podeImportar ? null : h('div', {class: 'notice notice--warn'},
             h('div', {class: 'notice__body'},
               h('span', null, t2('bt.import.no_ytdlp') + ' ' + t2('bt.import.no_ytdlp.cast')))),
           baixadorVelho(),

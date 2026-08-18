@@ -225,7 +225,7 @@ export default {
           state.backends.filter((b) => !b.can_install && b.reason).map(
             (b) => h('p', {class: 'muted small'}, b.reason),
           ),
-          !state.enabled ? h('div', {class: 'notice notice--warning'},
+          !state.enabled ? h('div', {class: 'notice notice--warn'},
             h('div', {class: 'notice__body'},
               h('span', null, t('packages.disabled')),
               h('a', {class: 'btn btn--sm btn--outline', href: '#/settings/developer'},
