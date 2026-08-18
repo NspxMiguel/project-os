@@ -113,6 +113,23 @@ async def stats(user: Dict[str, Any] = Depends(auth.require_auth)) -> Dict[str, 
     return await loop.run_in_executor(None, sysinfo.stats)
 
 
+@router.get("/clock")
+async def clock_state(
+    browser_epoch: Optional[float] = Query(None, description="Date.now()/1000 de quem está olhando"),
+    config: Any = Depends(get_config),
+    user: Dict[str, Any] = Depends(auth.require_auth),
+) -> Dict[str, Any]:
+    """Que horas a caixa acha que são, e se dá para confiar nisso.
+
+    O fuso pode estar escolhido na configuração e mesmo assim não valer, quando
+    falta a base de fusos no sistema -- e nesse caso tudo que depende de hora
+    (a agenda do BirdTunes, principalmente) roda em UTC sem avisar. Esta rota é
+    o que permite a tela mostrar isso em vez de deixar o dono descobrir porque
+    a música não tocou.
+    """
+    return clock.state(config, browser_epoch)
+
+
 @router.get("/processes")
 async def processes(
     limit: int = Query(20, ge=1, le=100),

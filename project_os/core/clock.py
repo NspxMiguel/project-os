@@ -149,6 +149,145 @@ def ensure(config: Any) -> Dict[str, Any]:
 # é certa mesmo que o relógio dê um salto de onze horas no meio.
 
 
+# ---------------------------------------------------------------------------
+# que horas são nesta caixa, e se dá para confiar nisso
+# ---------------------------------------------------------------------------
+# O fuso estava certo na configuração dele -- ``America/Sao_Paulo`` -- e mesmo
+# assim o BirdTunes calculava tudo em UTC, três horas à frente da vida dele.
+# ``zoneinfo`` lê a base de fusos do sistema, a imagem instala com
+# ``--no-install-recommends`` e ninguém pediu ``tzdata``. Sem a base,
+# ``ZoneInfo("America/Sao_Paulo")`` levanta, o app cai no relógio do sistema e
+# segue em UTC -- avisando num ``log.warning`` que ninguém lê.
+#
+# O estrago passa despercebido porque *parece* funcionar: a caixa mostra uma
+# hora, a agenda tem horários, tudo responde. Só que o horário de silêncio
+# começava às 17:00 dele e a rotina do meio-dia tocava às 09:30.
+#
+# Daí estas funções: uma só maneira de perguntar as horas, e um estado que diz
+# **quando não deu** em vez de fingir que deu.
+
+#: Diferença a partir da qual o relógio de quem olha e o da caixa discordam de
+#: verdade. Um minuto é deriva normal de NTP; cinco já é outra história.
+DERIVA_TOLERADA_S = 300
+
+
+def zona(config: Any = None) -> Dict[str, Any]:
+    """Qual fuso esta caixa consegue mesmo aplicar.
+
+    Devolve o que foi pedido (``name``), o que vai valer de fato
+    (``effective``) e por que eles diferem, quando diferem. Nunca levanta: é
+    chamada de dentro de laço de agenda e de rota de status.
+    """
+    pedido = ""
+    if config is not None:
+        try:
+            pedido = str(config.get("system.timezone", "") or "").strip()
+        except Exception:  # pragma: no cover - config nunca está tão quebrada
+            pedido = ""
+
+    if not pedido:
+        return {"name": "", "effective": "", "resolved": False, "problem": "unset",
+                "detail": ""}
+
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError as exc:
+        return {"name": pedido, "effective": "", "resolved": False,
+                "problem": "no_zoneinfo", "detail": str(exc)}
+
+    try:
+        ZoneInfo(pedido)
+    except Exception as exc:
+        # Duas falhas bem diferentes chegam aqui, e a tela precisa dizer coisas
+        # diferentes: a base de fusos não está instalada (o caso do Pi, onde a
+        # imagem instala com --no-install-recommends), ou o nome é que não
+        # existe. Quem separa as duas é uma zona que qualquer base tem: se nem
+        # ela resolve, o que falta é a base.
+        try:
+            ZoneInfo("America/Sao_Paulo")
+            ZoneInfo("Europe/Lisbon")
+            falta_base = False
+        except Exception:
+            falta_base = True
+        return {"name": pedido, "effective": "", "resolved": False,
+                "problem": "tz_unavailable" if falta_base else "tz_unknown",
+                "detail": "%s: %s" % (type(exc).__name__, exc)}
+
+    return {"name": pedido, "effective": pedido, "resolved": True, "problem": "",
+            "detail": ""}
+
+
+def now(config: Any = None) -> datetime:
+    """A hora local da casa, sem fuso pendurado.
+
+    Um só lugar decide isto. Antes cada app tinha a sua cópia do ``try/except``,
+    e a cópia do BirdTunes engolia a falha num aviso de log.
+    """
+    estado = zona(config)
+    if not estado["resolved"]:
+        return datetime.now()
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo(estado["effective"])).replace(tzinfo=None)
+
+
+def _frase(estado: Dict[str, Any], desligado: bool) -> str:
+    """A frase pronta em português. O painel não traduz chave de núcleo."""
+    if estado["problem"] == "unset":
+        return ("Nenhum fuso escolhido: a caixa está contando as horas em UTC, "
+                "que quase nunca é a hora daqui.")
+    if estado["problem"] == "tz_unavailable":
+        return ("A caixa não tem a base de fusos instalada, então %s não pôde ser "
+                "aplicado e tudo está rodando em UTC. Atualize a caixa para "
+                "instalar a base." % estado["name"])
+    if estado["problem"] == "tz_unknown":
+        return ("O fuso %s não existe na lista de fusos, então a caixa ficou em "
+                "UTC. Escolha um em Ajustes." % estado["name"])
+    if estado["problem"] == "no_zoneinfo":
+        return ("Este Python não sabe ler fusos, então a caixa está em UTC mesmo "
+                "com %s escolhido." % estado["name"])
+    if desligado:
+        return "O relógio da caixa está diferente do seu; um dos dois está errado."
+    return "Relógio certo."
+
+
+def state(config: Any = None, browser_epoch: Optional[float] = None) -> Dict[str, Any]:
+    """Tudo que a tela precisa para mostrar o relógio e desconfiar dele.
+
+    ``browser_epoch`` é o ``Date.now()/1000`` de quem está olhando: é ele que
+    transforma "a caixa diz 21:41" em "a caixa está três horas à frente de
+    você", que é a forma em que o problema fica óbvio.
+    """
+    estado = zona(config)
+    agora_utc = datetime.now(timezone.utc)
+    local = now(config)
+
+    deriva = None
+    desligado = False
+    if browser_epoch is not None:
+        try:
+            deriva = float(browser_epoch) - agora_utc.timestamp()
+            desligado = abs(deriva) > DERIVA_TOLERADA_S
+        except (TypeError, ValueError):
+            deriva = None
+
+    offset = round((local - agora_utc.replace(tzinfo=None)).total_seconds() / 60.0)
+    return {
+        "local": local.isoformat(timespec="seconds"),
+        "utc": agora_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "epoch": agora_utc.timestamp(),
+        "timezone": estado["name"],
+        "effective": estado["effective"] or "UTC",
+        "resolved": estado["resolved"],
+        "problem": estado["problem"],
+        "detail": estado["detail"],
+        "offset_minutes": offset,
+        "drift_seconds": deriva,
+        "clock_disagrees": desligado,
+        "ok": estado["resolved"] and not desligado,
+        "message": _frase(estado, desligado),
+    }
+
+
 def mark_start(state: Any) -> None:
     """Guarda o começo de duas formas: monotônica (que vale) e de parede."""
     state.started_monotonic = time.monotonic()
@@ -178,4 +317,5 @@ def started_at(state: Any) -> Optional[str]:
     return quando.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-__all__ = ["DEFAULT_LOOKUP_URL", "ensure", "lookup", "mark_start", "started_at", "uptime"]
+__all__ = ["DEFAULT_LOOKUP_URL", "DERIVA_TOLERADA_S", "ensure", "lookup", "mark_start",
+           "now", "started_at", "state", "uptime", "zona"]
