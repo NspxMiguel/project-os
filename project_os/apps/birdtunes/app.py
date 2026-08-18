@@ -500,6 +500,12 @@ class BirdTunesApp(AppInstance):
             return "Horário de silêncio: nada toca até ele acabar."
         if snapshot.get("output", "null") == "null":
             return "Nenhuma caixa de som escolhida. Escolha uma no app para começar."
+        # "esperando o próximo horário" com todos os horários calados pelo
+        # silêncio é a frase que fez a agenda parecer viva enquanto estava
+        # morta. Se não há próximo horário, o cartão diz por quê.
+        proximo = snapshot.get("next_change") or {}
+        if proximo.get("event") == "quiet_blocked":
+            return str(proximo.get("message") or "")
         return "Parado, esperando o próximo horário da agenda."
 
     def _status_fields(self, snapshot):
@@ -516,8 +522,18 @@ class BirdTunesApp(AppInstance):
         ]
         if snapshot.get("queue_len"):
             fields.append({"label": "Na fila", "value": snapshot["queue_len"], "kind": "number"})
-        if snapshot.get("next_change"):
-            fields.append({"label": "Próxima mudança", "value": snapshot["next_change"], "kind": "relative"})
+        # O dicionário inteiro ia num campo "relative", que faz
+        # `new Date(String(valor))` -- e String de um objeto é "[object
+        # Object]". O cartão mostrava "Próxima mudança: —" desde sempre. Vai a
+        # frase, que já vem pronta em português e é mais útil que "em 3 horas".
+        proximo = snapshot.get("next_change") or {}
+        if not isinstance(proximo, dict):
+            # Um `next_change` que não é dicionário só aparece em estado velho
+            # ou em teste: derrubar a rota de status por causa dele apagaria o
+            # cartão inteiro para esconder um campo.
+            proximo = {}
+        if proximo.get("message"):
+            fields.append({"label": "Próxima mudança", "value": proximo["message"], "kind": "text"})
         return fields
 
     # -- config helpers ------------------------------------------------
@@ -840,7 +856,7 @@ class BirdTunesApp(AppInstance):
         self._queue = [by_id[t] for t in track_ids if t in by_id]
 
     # -- schedule ----------------------------------------------------------
-    def schedule_blocked(self) -> Optional[Dict[str, str]]:
+    def schedule_blocked(self) -> Optional[Dict[str, Any]]:
         """O que já dá para saber, agora, que vai impedir o próximo horário de tocar.
 
         A agenda toca sozinha, sem ninguém olhando -- então o único momento útil
@@ -848,6 +864,7 @@ class BirdTunesApp(AppInstance):
         mostra "Toca às 08:00", às 08:00 não sai som nenhum, e não há onde
         perguntar por quê: o app sabia desde o começo e não disse.
         """
+        cfg = self.ctx.config.get("schedule", {}) or {}
         if str(self.ctx.config.get("output.type", "null") or "null") == "null":
             return {
                 "code": "no_output",
@@ -860,6 +877,21 @@ class BirdTunesApp(AppInstance):
         )
         if not candidatos:
             return {"code": motivo or "no_tracks", "message": _empty_reason_message(motivo)}
+        # O silêncio ganha da agenda de propósito (safety.check_can_play), e é
+        # justamente por isso que ele precisa aparecer aqui: uma janela dentro
+        # dele não toca e, sem este aviso, não havia onde ler o motivo -- nem
+        # antes da hora, nem depois.
+        conflitos = scheduler.quiet_conflicts(cfg)
+        if conflitos:
+            aviso = {
+                "code": "quiet_hours",
+                "message": scheduler.quiet_conflict_message(conflitos),
+                "conflicts": conflitos,
+            }
+            sugestao = next((c["suggestion"] for c in conflitos if c.get("suggestion")), None)
+            if sugestao is not None:
+                aviso["suggestion"] = sugestao
+            return aviso
         return None
 
     def schedule_status(self) -> Dict[str, Any]:
@@ -869,6 +901,11 @@ class BirdTunesApp(AppInstance):
             "next_change": scheduler.next_change(_now(self.ctx.config), cfg),
             "active_window": scheduler.active_window(_now(self.ctx.config), cfg),
             "blocked": self.schedule_blocked(),
+            # Sempre presente, mesmo quando outro impedimento (sem caixa de som,
+            # sem faixa) ganha a vez no aviso de cima: a lista de horários marca
+            # cada janela calada uma por uma, e não pode depender de qual aviso
+            # o servidor escolheu mostrar primeiro.
+            "quiet_conflicts": scheduler.quiet_conflicts(cfg),
             "last_attempt": self._last_schedule_attempt,
         }
 

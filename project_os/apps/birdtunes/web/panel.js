@@ -170,6 +170,10 @@ export default {
       'bt.schedule.window.on': 'On',
       'bt.schedule.window.off': 'Off',
       'bt.schedule.days.short': 'Mon Tue Wed Thu Fri Sat Sun',
+      'bt.schedule.quiet_fix': 'Adjust quiet hours',
+      'bt.schedule.quiet_fix.hint': 'Quiet hours become {0} to {1}, which leaves this window free to play.',
+      'bt.schedule.window.muted': 'quiet hours: will not play',
+      'bt.schedule.window.clipped': 'stops when quiet hours start',
       'bt.schedule.quiet.hint': 'BirdTunes never plays between these two times, whatever the windows say.',
       'bt.save.ok': 'Saved',
       'bt.save.failed': 'Could not save',
@@ -929,6 +933,8 @@ export default {
 
     function windowRow(sched, windows, index) {
       const w = windows[index];
+      const conflito = ((state.schedule || {}).quiet_conflicts || [])
+        .filter((c) => c.window_id === w.id)[0];
       const days = Array.isArray(w.days) ? w.days : [0, 1, 2, 3, 4, 5, 6];
       const patch = (changes) => {
         const next = windows.slice();
@@ -956,6 +962,16 @@ export default {
           iconBtn('trash', t2('bt.schedule.remove'), () => saveSchedule(
             Object.assign({}, sched, {windows: windows.filter((_, i) => i !== index)}))),
         ),
+        // Marcar a janela onde ela é editada: quem acabou de digitar 05:00
+        // descobre ali mesmo que aquele horário não vai sair, sem depender de
+        // ler um aviso no topo da tela.
+        conflito
+          ? h('div', {class: 'bt-window__quiet', dataset: {kind: conflito.kind}},
+              icon('warning', {size: 14}),
+              h('span', {class: 'small'}, conflito.kind === 'full'
+                ? t2('bt.schedule.window.muted')
+                : t2('bt.schedule.window.clipped')))
+          : null,
         h('div', {class: 'bt-days'}, DAY_LABELS().map((label, day) => h('button', {
           class: 'bt-day', type: 'button', dataset: {on: days.indexOf(day) === -1 ? 'false' : 'true'},
           title: t2('bt.schedule.window.days'),
@@ -997,6 +1013,19 @@ export default {
                 class: 'btn btn--sm',
                 onClick: () => { state.outputOpen = true; renderSheet(); },
               }, t2('bt.schedule.pick_output'))
+            : null,
+          // O conserto de um clique só existe quando o servidor mandou um: ele
+          // já testou que essa troca resolve, então o botão não promete nada
+          // que o aviso do lado não sustente.
+          blocked.code === 'quiet_hours' && blocked.suggestion
+            ? h('button', {
+                class: 'btn btn--sm',
+                title: fmtStr('bt.schedule.quiet_fix.hint',
+                  blocked.suggestion.start, blocked.suggestion.end),
+                onClick: () => saveSchedule(Object.assign(
+                  {}, (state.schedule && state.schedule.schedule) || {},
+                  {quiet_hours: blocked.suggestion})),
+              }, t2('bt.schedule.quiet_fix'))
             : null,
         ));
       }

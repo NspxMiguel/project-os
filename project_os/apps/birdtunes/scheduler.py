@@ -289,10 +289,186 @@ def next_change(moment: dt.datetime, schedule_cfg: Dict[str, Any]) -> Dict[str, 
                 "window_id": current.get("id") if current else None,
                 "message": "Para às %s" % when,
             }
+    # Chegar aqui com janelas marcadas significa que o silêncio comeu todas
+    # elas. Responder "nada marcado" seria a mentira mais cara desta tela: foi
+    # exatamente ela que fez um horário das 05:00 parecer inexistente.
+    conflitos = quiet_conflicts(schedule_cfg)
+    if conflitos:
+        return {
+            "event": "quiet_blocked", "at": None,
+            "window_id": conflitos[0].get("window_id") or None,
+            "message": quiet_conflict_message(conflitos),
+            "conflicts": conflitos,
+        }
     return {
         "event": "none", "at": None, "window_id": None,
         "message": "Nada marcado para a próxima semana.",
     }
+
+
+# -- o silêncio contra os horários -------------------------------------------
+#
+# O horário de silêncio ganha de tudo, inclusive de um "tocar agora" (ver
+# ``safety.check_can_play`` e docs/BIRDTUNES.md seção 5) -- é a regra que
+# protege o bicho de música às 2 da manhã, e ela não muda. O problema é outro:
+# uma janela marcada dentro do silêncio era engolida **sem dizer nada**. A
+# pessoa marcava 05:00, o padrão do silêncio é 20:00-07:00, e a tela ainda
+# respondia "Nada marcado para a próxima semana". As funções abaixo existem
+# para que isso vire aviso antes da hora, em vez de silêncio depois dela.
+
+
+def _minutos_da_janela(window: Dict[str, Any]) -> List[int]:
+    """Os minutos do dia cobertos pela janela, já virando a meia-noite.
+
+    Uma janela de comprimento zero não cobre minuto nenhum -- é a mesma leitura
+    de :func:`active_window`, onde ``start == end`` nunca casa.
+    """
+    inicio = _parse_hhmm(window.get("start"), _DEFAULT_TIME)
+    fim = _parse_hhmm(window.get("end"), _DEFAULT_TIME)
+    de = inicio.hour * 60 + inicio.minute
+    ate = fim.hour * 60 + fim.minute
+    if de == ate:
+        return []
+    if de < ate:
+        return list(range(de, ate))
+    return list(range(de, 24 * 60)) + list(range(0, ate))
+
+
+def quiet_overlap(window: Dict[str, Any], schedule_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Quanto desta janela o horário de silêncio cala.
+
+    O silêncio só olha a hora do dia, nunca o dia da semana, então basta varrer
+    os minutos da janela uma vez: o resultado vale para todos os dias dela.
+    """
+    minutos = _minutos_da_janela(window)
+    total = len(minutos)
+    if not total:
+        return {"kind": "none", "quiet_minutes": 0, "total_minutes": 0}
+    base = dt.datetime(2001, 1, 1)
+    calados = sum(
+        1 for minuto in minutos
+        if safety.is_quiet_hours(base + dt.timedelta(minutes=minuto), schedule_cfg)
+    )
+    if calados == 0:
+        kind = "none"
+    elif calados >= total:
+        kind = "full"
+    else:
+        kind = "partial"
+    return {"kind": kind, "quiet_minutes": calados, "total_minutes": total}
+
+
+def _hhmm(window: Dict[str, Any], field: str) -> str:
+    return _parse_hhmm(window.get(field), _DEFAULT_TIME).strftime("%H:%M")
+
+
+def quiet_suggestion(window: Dict[str, Any], schedule_cfg: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """Como encolher o silêncio para esta janela caber, ou ``None``.
+
+    Em vez de deduzir qual das duas pontas mexer, testa as duas com a mesma
+    função que mede o problema -- assim a sugestão não pode discordar do aviso
+    que a acompanha.
+
+    Entre as que resolvem, vence a que **preserva mais silêncio**. Não é
+    detalhe: com o padrão 20:00-07:00 e uma janela às 21:00, encurtar o fim
+    também livra a janela, só que reduz o silêncio de onze horas para uma e
+    deixa a madrugada inteira desprotegida. Resolver o conflito destruindo a
+    proteção que causou o conflito não é conserto.
+
+    Uma sugestão que zeraria o silêncio (``start == end``, que
+    :func:`safety.is_quiet_hours` lê como "nunca") é recusada pelo mesmo
+    motivo, levado ao limite: desligar a proteção inteira não sai de um clique.
+    """
+    quiet = (schedule_cfg or {}).get("quiet_hours") or {}
+    atual = {
+        "start": str(quiet.get("start") or "20:00"),
+        "end": str(quiet.get("end") or "07:00"),
+    }
+    candidatos = []
+    for campo, valor in (("end", _hhmm(window, "start")), ("start", _hhmm(window, "end"))):
+        proposto = dict(atual)
+        proposto[campo] = valor
+        if proposto["start"] == proposto["end"]:
+            continue
+        teste = dict(schedule_cfg or {})
+        teste["quiet_hours"] = proposto
+        if quiet_overlap(window, teste)["kind"] == "none":
+            candidatos.append(proposto)
+    if not candidatos:
+        return None
+    candidatos.sort(key=_minutos_de_silencio, reverse=True)
+    return candidatos[0]
+
+
+def _minutos_de_silencio(quiet: Dict[str, str]) -> int:
+    """Quantos minutos do dia este horário de silêncio cobre."""
+    inicio = _parse_hhmm(quiet.get("start"), "20:00")
+    fim = _parse_hhmm(quiet.get("end"), "07:00")
+    de = inicio.hour * 60 + inicio.minute
+    ate = fim.hour * 60 + fim.minute
+    if de == ate:
+        return 0
+    if de < ate:
+        return ate - de
+    return (24 * 60 - de) + ate
+
+
+def quiet_conflicts(schedule_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """As janelas ligadas que o silêncio cala, no todo ou em parte."""
+    schedule_cfg = schedule_cfg or {}
+    if not schedule_cfg.get("enabled", True):
+        return []
+    conflitos = []
+    for window in schedule_cfg.get("windows") or []:
+        if not isinstance(window, dict) or not window.get("enabled", True):
+            continue
+        medida = quiet_overlap(window, schedule_cfg)
+        if medida["kind"] == "none":
+            continue
+        conflitos.append({
+            "window_id": str(window.get("id", "")),
+            "window_name": str(window.get("name", "")),
+            "start": _hhmm(window, "start"),
+            "end": _hhmm(window, "end"),
+            "kind": medida["kind"],
+            "quiet_minutes": medida["quiet_minutes"],
+            "total_minutes": medida["total_minutes"],
+            "suggestion": quiet_suggestion(window, schedule_cfg),
+        })
+    return conflitos
+
+
+def _nome_da_janela(conflito: Dict[str, Any]) -> str:
+    nome = (conflito.get("window_name") or "").strip()
+    if nome:
+        return '"%s"' % nome
+    return "O horário das %s" % conflito.get("start", "?")
+
+
+def quiet_conflict_message(conflitos: List[Dict[str, Any]]) -> str:
+    """A frase pronta, em português, que as duas telas mostram.
+
+    Vem montada daqui porque o painel do app não sabe conjugar isto sozinho e
+    o cartão do painel principal não traduz chave de app nenhuma.
+    """
+    calados = [c for c in conflitos if c.get("kind") == "full"]
+    cortados = [c for c in conflitos if c.get("kind") == "partial"]
+    if len(calados) == 1 and not cortados:
+        c = calados[0]
+        return "%s (%s às %s) está inteiro dentro do horário de silêncio, então não vai tocar." % (
+            _nome_da_janela(c), c.get("start", "?"), c.get("end", "?"))
+    if calados and not cortados:
+        return "%d horários estão dentro do horário de silêncio, então não vão tocar." % len(calados)
+    if len(cortados) == 1 and not calados:
+        c = cortados[0]
+        return "%s (%s às %s) entra no horário de silêncio e vai parar antes do fim." % (
+            _nome_da_janela(c), c.get("start", "?"), c.get("end", "?"))
+    if cortados and not calados:
+        return "%d horários entram no horário de silêncio e vão parar antes do fim." % len(cortados)
+    return "%d horários batem com o horário de silêncio: %d %s tocar e %d %s parar antes do fim." % (
+        len(calados) + len(cortados),
+        len(calados), "não vai" if len(calados) == 1 else "não vão",
+        len(cortados), "vai" if len(cortados) == 1 else "vão")
 
 
 async def _maybe_call(callback: Optional[Callable[..., Any]], *args: Any) -> None:
@@ -389,4 +565,8 @@ __all__ = [
     "SchedulerLoop",
     "active_window",
     "next_change",
+    "quiet_conflicts",
+    "quiet_conflict_message",
+    "quiet_overlap",
+    "quiet_suggestion",
 ]

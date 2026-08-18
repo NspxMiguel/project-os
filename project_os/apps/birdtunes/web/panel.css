@@ -660,3 +660,23 @@
   max-width: 100%;
   user-select: all;
 }
+
+/* A janela que o silêncio cala, marcada onde ela é editada. Mesma receita do
+   .bt-warn acima (color-mix sobre --warn) para não inventar cor fora do tema. */
+.bt-window__quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  color: var(--warn);
+}
+.bt-window__quiet > svg { flex: none; }
+/* Cortada pela metade é menos grave do que calada por inteiro: fica em tom
+   neutro para o olho achar primeiro a que não vai tocar de jeito nenhum. */
+.bt-window__quiet[data-kind="partial"] {
+  background: color-mix(in srgb, var(--text-dim) 10%, transparent);
+  color: var(--text-dim);
+}

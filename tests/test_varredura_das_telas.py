@@ -113,8 +113,18 @@ def test_o_resumo_do_birdtunes_esta_em_portugues():
 def test_os_campos_do_cartao_tambem():
     from project_os.apps.birdtunes.app import BirdTunesApp
 
-    campos = BirdTunesApp._status_fields(None, {"queue_len": 2, "next_change": 60})
+    campos = BirdTunesApp._status_fields(None, {
+        "queue_len": 2,
+        # A forma de verdade: `next_change` é o dicionário que o scheduler
+        # devolve, não um número de segundos.
+        "next_change": {"event": "starts", "at": "2026-08-18T17:00:00",
+                        "window_id": "tarde", "message": "Toca às 17:00"},
+    })
     rotulos = [c["label"] for c in campos]
     assert "Caixa de som" in rotulos and "Tocando agora" in rotulos
     for proibido in ("Speaker", "Now playing", "Next change"):
         assert proibido not in rotulos, "campo em inglês no cartão: %s" % proibido
+    proximo = [c for c in campos if c["label"] == "Próxima mudança"]
+    assert proximo and proximo[0]["value"] == "Toca às 17:00", (
+        "o cartão mandava o dicionário inteiro e a tela mostrava um travessão"
+    )
