@@ -4,12 +4,12 @@
   "sha256": "cf5cb109425bbd561f6c7eedff57d82acd42f1a4c10b6af535a90fa994205479",
   "notes": "birdtunes: a chosen speaker that is offline is not 'none chosen'\n\nThe card read snapshot.device, which the player fills only while it is\nconnected, so a switched-off TV rendered as \"Nenhuma escolhida\". That is the\nwrong call to action: it tells the owner to pick a speaker that is already\npicked, while the actual problem is the device being unreachable. Measured on a\nbox with a Chromecast configured and the card claiming no speaker existed.\n\nThe label now falls back to the configured output.device_id, resolved through\nthe device registry for its friendly name, and says the connection is missing\nrather than the choice. It is called through the class so the card still\nrenders without a live app instance, which is how the card tests exercise it.",
   "system": {
-    "version": "0.4.37",
-    "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.37/project-os-rootfs-0.4.37.tar.gz",
-    "sha256": "c468be999f33121c130dbace6ad642f90ce43409c3c5981519df914e49367e56",
-    "size": 885223897,
-    "notes": "Telas: nove avisos usavam uma classe de aviso que o tema n\u00e3o define\n\nO tema define .notice--warn e .notice--error. O c\u00f3digo escrevia\n.notice--warning, que n\u00e3o existe em lugar nenhum. CSS n\u00e3o reclama de classe\ndesconhecida -- ela simplesmente n\u00e3o pinta, e o aviso sai com a borda cinza de\numa caixa qualquer.\n\nOs nove: gerenciamento de pacotes desligado, atualiza\u00e7\u00f5es desligadas, falha ao\nconferir atualiza\u00e7\u00e3o, senha do SSH n\u00e3o configurada, hor\u00e1rio de sil\u00eancio, faixas\nincompat\u00edveis, sem yt-dlp em duas telas, e o baixador velho.\n\nUm teste guardava o nome errado -- ele documentava o defeito em vez de peg\u00e1-lo,\ne por isso a su\u00edte dizia que estava tudo certo enquanto nenhum desses avisos\ntinha cor. O que faltava era comparar as classes que o c\u00f3digo usa com as que o\ntema define; test_aviso_pintado_de_aviso.py compara, para qualquer modificador\nde aviso, hoje e nos pr\u00f3ximos.\n\nMedido depois do conserto: borda em color(srgb 0.775 0.700 0.507) no lugar do\ncinza #dde3e6 de antes.\n\nSu\u00edte: 1211 passando, 7 pulando.",
-    "notes_url": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.37"
+    "version": "0.4.43",
+    "url": "https://github.com/NspxMiguel/project-os/releases/download/v0.4.43/project-os-rootfs-0.4.43.tar.gz",
+    "sha256": "58191bbbbd654bca1bb506e18040e45761e98b6b3a236df2b51f1304fd17b793",
+    "size": 885377386,
+    "notes": "birdtunes: a chosen speaker that is offline is not 'none chosen'\n\nThe card read snapshot.device, which the player fills only while it is\nconnected, so a switched-off TV rendered as \"Nenhuma escolhida\". That is the\nwrong call to action: it tells the owner to pick a speaker that is already\npicked, while the actual problem is the device being unreachable. Measured on a\nbox with a Chromecast configured and the card claiming no speaker existed.\n\nThe label now falls back to the configured output.device_id, resolved through\nthe device registry for its friendly name, and says the connection is missing\nrather than the choice. It is called through the class so the card still\nrenders without a live app instance, which is how the card tests exercise it.",
+    "notes_url": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.43"
   },
   "notes_url": "https://github.com/NspxMiguel/project-os/releases/tag/v0.4.43"
 }
