@@ -11,7 +11,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from project_os import __version__, paths
 
@@ -37,6 +37,55 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-level", dest="log_level", help="DEBUG, INFO, WARNING, ERROR")
     parser.add_argument("--version", action="version", version="project_os %s" % __version__)
     return parser
+
+
+#: Os endereços que significam "atenda em tudo". Só nesses a escuta é trocada
+#: por um soquete de pilha dupla; um endereço específico é uma escolha e
+#: continua valendo como foi escrita.
+_EM_TUDO = ("0.0.0.0", "::", "*", "")
+
+
+def soquete_de_pilha_dupla(host: str, port: int) -> Any:
+    """Um soquete que atende IPv4 **e** IPv6, ou ``None`` para deixar como está.
+
+    ``--host 0.0.0.0`` abre só IPv4. Numa caixa que perdeu o endereço IPv4 da
+    rede e ficou só com IPv6, isso é a diferença entre a caixa existir e não
+    existir — e não é hipótese: medido no Pi dele em 21/08, o SSH (que escuta
+    nas duas famílias) respondia normalmente pelo IPv6 e a porta 80 dava
+    ``connection refused``, o que se lê como "o serviço morreu" quando o
+    serviço estava vivo e surdo de um ouvido.
+
+    Um soquete ``AF_INET6`` com ``IPV6_V6ONLY`` desligado atende as duas
+    famílias no mesmo descritor. O Linux já vem assim por padrão
+    (``net.ipv6.bindv6only=0``), mas depender de um sysctl que qualquer um pode
+    mudar é o mesmo tipo de aposta: aqui a opção é desligada explicitamente.
+
+    Devolve ``None`` -- e o chamador segue pelo caminho antigo -- quando a
+    máquina não tem IPv6, quando a opção não pode ser desligada, ou quando o
+    endereço pedido é específico.
+    """
+    import socket
+
+    if host not in _EM_TUDO or not socket.has_ipv6:
+        return None
+    try:
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    except OSError:
+        return None
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        if sock.getsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY):
+            # macOS recusa desligar em algumas versões. Melhor voltar para o
+            # IPv4 de sempre do que subir atendendo só metade da rede.
+            sock.close()
+            return None
+        sock.bind(("::", port))
+        sock.listen(2048)
+    except OSError:
+        sock.close()
+        return None
+    return sock
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -86,8 +135,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.dev:
         options["reload_dirs"] = [str(paths.package_dir())]
 
+    escuta = soquete_de_pilha_dupla(host, port)
     try:
-        uvicorn.run("project_os.main:create_app", **options)
+        if escuta is None:
+            uvicorn.run("project_os.main:create_app", **options)
+        else:
+            # `uvicorn.run` não aceita soquete pronto; o Server aceita, e é o
+            # mesmo caminho por dentro.
+            options.pop("host", None)
+            options.pop("port", None)
+            servidor = uvicorn.Server(uvicorn.Config("project_os.main:create_app", **options))
+            servidor.run(sockets=[escuta])
     except KeyboardInterrupt:  # pragma: no cover
         return 0
     return 0
